@@ -9,8 +9,8 @@ setup(
     author = "OpenNode Developers",
     author_email = "developers@opennodecloud.com",
     packages = find_packages(),
-    namespace_packages = ['opennode', 'opennode.oms'],
-    entry_points = {'oms.plugins': ['onc = opennode.oms.knot:KnotPlugin']},
+    namespace_packages = ['opennode'],
+    entry_points = {'oms.plugins': ['knot = opennode.knot:KnotPlugin']},
     install_requires = [
         "setuptools", # Redundant but removes a warning
         ],
