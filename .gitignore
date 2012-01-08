@@ -1,3 +1,8 @@
 *.pyc
 RELEASE-VERSION
 *.egg-info
+bin
+.installed.cfg
+develop-eggs
+eggs
+parts

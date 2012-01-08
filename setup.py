@@ -13,6 +13,7 @@ setup(
     entry_points = {'oms.plugins': ['knot = opennode.knot:KnotPlugin']},
     install_requires = [
         "setuptools", # Redundant but removes a warning
+        "opennode.oms.core",
         ],
 
 )
