@@ -15,6 +15,8 @@ setup(
     install_requires = [
         "setuptools", # Redundant but removes a warning
         "opennode.oms.core",
+        "certmaster==0.28",
+        "func==0.28",
         ],
 
 )
