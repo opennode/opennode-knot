@@ -37,7 +37,7 @@ class SyncDaemonProcess(DaemonProcess):
 
         @db.transact
         def ensure_machine(host):
-            machines = db.get_root()['oms_root'].machines
+            machines = db.get_root()['oms_root']['machines']
             existing_machine = follow_symlinks(machines['by-name'][host])
             if not existing_machine:
                 machine = Compute(unicode(host), u'active')
@@ -57,7 +57,7 @@ class SyncDaemonProcess(DaemonProcess):
             res = []
 
             oms_root = db.get_root()['oms_root']
-            for i in [follow_symlinks(i) for i in oms_root.machines.listcontent()]:
+            for i in [follow_symlinks(i) for i in oms_root['machines'].listcontent()]:
                 res.append(i)
 
             return res

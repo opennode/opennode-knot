@@ -40,7 +40,7 @@ class MetricsDaemonProcess(DaemonProcess):
             res = []
 
             oms_root = db.get_root()['oms_root']
-            for i in [follow_symlinks(i) for i in oms_root.computes.listcontent()]:
+            for i in [follow_symlinks(i) for i in oms_root['computes'].listcontent()]:
                 adapter = queryAdapter(i, IMetricsGatherer)
                 if adapter:
                     res.append(adapter)
