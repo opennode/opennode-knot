@@ -5,11 +5,11 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from .actions import ActionsContainerExtension
-from .base import Container
-from .byname import ByNameContainerExtension
-from .compute import Compute, IInCompute
-from .search import ModelTags
+from opennode.oms.model.model.actions import ActionsContainerExtension
+from opennode.oms.model.model.base import Container
+from opennode.oms.model.model.byname import ByNameContainerExtension
+from opennode.knot.model.compute import Compute, IInCompute
+from opennode.oms.model.model.search import ModelTags
 
 
 class IVirtualizationContainer(Interface):

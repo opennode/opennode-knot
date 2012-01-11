@@ -1,11 +1,13 @@
 from __future__ import absolute_import
 
 from zope.component import provideSubscriptionAdapter
+from grokcore.component import context
 
-from .base import Container
-from .byname import ByNameContainerExtension
-from .compute import Compute
-from .hangar import Hangar
+from opennode.oms.model.model.base import  Container, ContainerInjector
+from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.model.model.byname import ByNameContainerExtension
+from opennode.knot.model.compute import Compute
+from opennode.knot.model.hangar import Hangar
 
 
 class Machines(Container):
@@ -18,6 +20,11 @@ class Machines(Container):
 
     def __str__(self):
         return 'Machines list'
+
+
+class MachinesRootInjector(ContainerInjector):
+    context(OmsRoot)
+    __class__ = Machines
 
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Machines, ))

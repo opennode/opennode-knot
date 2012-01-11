@@ -3,8 +3,8 @@ from __future__ import absolute_import
 from zope import schema
 from zope.interface import Interface, implements
 
-from .base import ReadonlyContainer, Container, Model
-from .symlink import Symlink
+from opennode.oms.model.model.base import ReadonlyContainer, Container, Model
+from opennode.oms.model.model.symlink import Symlink
 
 
 class INetworkInterface(Interface):

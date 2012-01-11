@@ -62,7 +62,7 @@ class SyncDaemonProcess(DaemonProcess):
 
             return res
 
-        from opennode.oms.backend.func.compute import SyncAction
+        from opennode.knot.backend.func.compute import SyncAction
         for i in (yield get_machines()):
             if ICompute.providedBy(i):
                 action = SyncAction(i)

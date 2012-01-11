@@ -7,8 +7,8 @@ from xml.etree import ElementTree
 from twisted.internet import defer
 from zope.interface import alsoProvides
 
-from opennode.oms.backend.func import FuncGetComputeInfo
-from opennode.oms.backend.operation import IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IListVMS
+from opennode.knot.backend.func import FuncGetComputeInfo
+from opennode.knot.backend.operation import IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IListVMS
 from opennode.oms.model.form import ApplyRawData
 from opennode.knot.model.compute import Compute
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer

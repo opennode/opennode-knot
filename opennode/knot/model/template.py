@@ -5,9 +5,9 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from .base import Model, Container, IDisplayName
-from .byname import ByNameContainerExtension
-from .search import ModelTags
+from opennode.oms.model.model.base import Model, Container, IDisplayName
+from opennode.oms.model.model.byname import ByNameContainerExtension
+from opennode.oms.model.model.search import ModelTags
 
 
 class ITemplate(Interface):

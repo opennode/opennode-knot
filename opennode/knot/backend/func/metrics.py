@@ -1,9 +1,9 @@
 from grokcore.component import Adapter, implements, context
 from twisted.internet import defer
 
-from .virtualizationcontainer import IVirtualizationContainerSubmitter
-from opennode.oms.backend.metrics import IMetricsGatherer
-from opennode.oms.backend.operation import IFuncInstalled, IGetGuestMetrics, IGetHostMetrics
+from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter
+from opennode.knot.backend.metrics import IMetricsGatherer
+from opennode.knot.backend.operation import IFuncInstalled, IGetGuestMetrics, IGetHostMetrics
 from opennode.oms.model.model.stream import IStream
 from opennode.oms.zodb import db
 import time

@@ -2,10 +2,11 @@ import json
 
 from grokcore.component import context
 
-from opennode.knot.model import Machines, Compute
-from opennode.knot.model.actions import ActionsContainer
+from opennode.knot.model.compute import Compute
+from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
+from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.form import ApplyRawData
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView

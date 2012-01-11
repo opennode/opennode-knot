@@ -6,7 +6,7 @@ from grokcore.component import Adapter, context, baseclass
 from twisted.internet import defer, reactor
 from zope.interface import classImplements
 
-from opennode.oms.backend.operation import (IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM,
+from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM,
                                             ISuspendVM, IResumeVM, IRebootVM, IListVMS, IHostInterfaces, IDeployVM,
                                             IUndeployVM, IGetGuestMetrics, IGetHostMetrics, IGetLocalTemplates,
                                             IFuncMinion, IGetSignedCertificateNames, IGetVirtualizationContainers,

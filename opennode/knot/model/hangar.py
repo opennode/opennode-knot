@@ -2,8 +2,8 @@ from __future__ import absolute_import
 
 from zope.interface import Interface, implements
 
-from .base import Container
-from .compute import ICompute, IInCompute
+from opennode.oms.model.model.base import Container
+from opennode.knot.model.compute import ICompute, IInCompute
 
 
 class IHangar(Interface):

@@ -6,16 +6,17 @@ from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements, alsoProvides
 from opennode.oms.security.directives import permissions
 
-from .actions import ActionsContainerExtension
-from .base import IContainer, Container, AddingContainer, IIncomplete, IDisplayName
-from .byname import ByNameContainerExtension
-from .console import Consoles
-from .network import NetworkInterfaces, NetworkRoutes
-from .search import ModelTags
-from .template import Templates
-from .stream import MetricsContainerExtension, IMetrics
-from .symlink import Symlink
-from opennode.oms.backend.operation import IFuncInstalled
+from opennode.oms.model.model.actions import ActionsContainerExtension
+from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IIncomplete, IDisplayName, ContainerInjector
+from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.model.model.byname import ByNameContainerExtension
+from opennode.knot.model.console import Consoles
+from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
+from opennode.oms.model.model.search import ModelTags
+from opennode.knot.model.template import Templates
+from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
+from opennode.oms.model.model.symlink import Symlink
+from opennode.knot.backend.operation import IFuncInstalled
 from opennode.oms.model.schema import Path
 from opennode.oms.util import adapter_value
 
@@ -284,7 +285,7 @@ class ComputeTags(ModelTags):
             for i in self.context.architecture:
                 res.append(u'arch:' + i)
 
-        from .virtualizationcontainer import IVirtualizationContainer
+        from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
         if IVirtualCompute.providedBy(self.context) and IVirtualizationContainer.providedBy(self.context.__parent__):
             res.append(u'virt_type:' + self.context.__parent__.backend)
 
@@ -332,6 +333,10 @@ class Computes(AddingContainer):
         if isinstance(item, Symlink):
             del item.target.__parent__[item.target.__name__]
 
+
+class ComputesRootInjector(ContainerInjector):
+    context(OmsRoot)
+    __class__ = Computes
 
 provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']), adapts=(Compute,), provides=(IMetrics))
 

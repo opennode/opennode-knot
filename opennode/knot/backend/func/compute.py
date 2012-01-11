@@ -2,11 +2,11 @@ from __future__ import absolute_import
 
 import netaddr
 
-from .virtualizationcontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
+from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
 
 from grokcore.component import context, subscribe, baseclass, Adapter
 
-from opennode.oms.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, ISuspendVM, IResumeVM, IListVMS,
+from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, ISuspendVM, IResumeVM, IListVMS,
                                             IRebootVM, IGetComputeInfo, IFuncInstalled, IDeployVM, IUndeployVM,
                                             IGetLocalTemplates, IFuncMinion, IGetVirtualizationContainers,
                                             IGetDiskUsage, IGetRoutes)

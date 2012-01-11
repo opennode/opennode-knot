@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from .base import Model
+from opennode.oms.model.model.base import Model
 
 
 class Storage(Model):

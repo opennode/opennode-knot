@@ -9,8 +9,8 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from .actions import ActionsContainerExtension, Action, action
-from .base import Container, ReadonlyContainer
+from opennode.oms.model.model.actions import ActionsContainerExtension, Action, action
+from opennode.oms.model.model.base import Container, ReadonlyContainer
 from opennode.oms.endpoint.ssh.terminal import RESET_COLOR
 from opennode.oms.endpoint.webterm.ssh import ssh_connect_interactive_shell
 

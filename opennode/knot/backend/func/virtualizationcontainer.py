@@ -2,7 +2,7 @@ from grokcore.component import Adapter, context, implements
 from twisted.internet import defer
 from zope.interface import Interface, alsoProvides, noLongerProvides
 
-from opennode.oms.backend.operation import IListVMS, IHostInterfaces
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed
 from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, BridgeInterface
@@ -136,7 +136,7 @@ class SyncVmsAction(Action):
             self.context[vm_uuid].state = u'inactive'
 
         # sync each vm
-        from opennode.oms.backend.func.compute import SyncAction
+        from opennode.knot.backend.func.compute import SyncAction
         for action in [SyncAction(i) for i in self.context.listcontent() if IVirtualCompute.providedBy(i)]:
             matching = [i for i in remote_vms if i['uuid'] == action.context.__name__]
             if not matching:
