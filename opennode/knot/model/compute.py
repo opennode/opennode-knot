@@ -300,6 +300,7 @@ class IVirtualCompute(Interface):
 
 class Computes(AddingContainer):
     __contains__ = Compute
+    __name__ = 'computes'
 
     def __str__(self):
         return 'Compute list'
@@ -308,7 +309,7 @@ class Computes(AddingContainer):
     def _items(self):
         # break an import cycle
         from opennode.oms.zodb import db
-        machines = db.get_root()['oms_root'].machines
+        machines = db.get_root()['oms_root']['machines']
 
         computes = {}
 
@@ -325,7 +326,7 @@ class Computes(AddingContainer):
     def _add(self, item):
         # break an import cycle
         from opennode.oms.zodb import db
-        machines = db.get_root()['oms_root'].machines
+        machines = db.get_root()['oms_root']['machines']
         return (machines.hangar if IVirtualCompute.providedBy(item) else machines).add(item)
 
     def __delitem__(self, key):

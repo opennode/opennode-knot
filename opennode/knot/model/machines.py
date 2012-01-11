@@ -12,6 +12,7 @@ from opennode.knot.model.hangar import Hangar
 
 class Machines(Container):
     __contains__ = Compute
+    __name__ = 'machines'
 
     def __init__(self):
         super(Machines, self).__init__()
