@@ -5,7 +5,8 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from opennode.oms.model.model.base import Model, Container, IDisplayName
+from opennode.oms.model.model.base import Model, Container, IDisplayName, ContainerInjector
+from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.model.model.search import ModelTags
 
@@ -13,7 +14,7 @@ from opennode.oms.model.model.search import ModelTags
 class ITemplate(Interface):
     name = schema.TextLine(title=u"Template name", min_length=2)
     base_type = schema.Choice(title=u"Template type", values=(u'xen', u'kvm', u'openvz'))
-    
+
     cores = schema.Tuple(
         title=u"Number of virtual cores", description=u"Minimal, suggested and maximal number of cores",
         value_type=schema.Int(),
@@ -34,11 +35,12 @@ class ITemplate(Interface):
         title=u"CPU usage limits", description=u"Minimal, suggested and maximal cpu_limit",
         value_type=schema.Int(),
         required=False)
-    
+
     password = schema.TextLine(title=u"Default password", required=False)
     ip = schema.TextLine(title=u"Default password", required=False)
     nameserver = schema.TextLine(title=u"Default password", required=False)
-    
+
+
 class Template(Model):
     implements(ITemplate, IDisplayName)
 
@@ -63,8 +65,15 @@ class TemplateTags(ModelTags):
 
 class Templates(Container):
     __contains__ = Template
+    __name__ = 'templates'
 
     def __str__(self):
         return 'Template list'
+
+
+class TemplatesRootInjector(ContainerInjector):
+    context(OmsRoot)
+    __class__ = Templates
+
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Templates, ))
