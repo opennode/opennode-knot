@@ -21,7 +21,7 @@ from opennode.oms.model.schema import Path
 from opennode.oms.util import adapter_value
 
 
-M = 10**6
+M = 10 ** 6
 
 
 class ICompute(Interface):
@@ -218,12 +218,12 @@ class Compute(Container):
         return 'compute%s' % self.__name__
 
     def get_consoles(self):
-        if not self._items.has_key('consoles'):
+        if 'consoles' not in self._items:
             self._add(Consoles())
         return self._items['consoles']
 
     def set_consoles(self, value):
-        if self._items.has_key('consoles'):
+        if 'consoles' in self._items:
             del self._items['consoles']
         self._add(value)
 
@@ -243,24 +243,24 @@ class Compute(Container):
         return do_it()
 
     def get_interfaces(self):
-        if not self._items.has_key('interfaces'):
+        if 'interfaces' not in self._items:
             self._add(NetworkInterfaces())
         return self._items['interfaces']
 
     def set_interfaces(self, value):
-        if self._items.has_key('interfaces'):
+        if 'interfaces' in self._items:
             del self._items['interfaces']
         self._add(value)
 
     interfaces = property(get_interfaces, set_interfaces)
 
     def get_routes(self):
-        if not self._items.has_key('routes'):
+        if 'routes' not in self._items:
             self._add(NetworkRoutes())
         return self._items['routes']
 
     def set_routes(self, value):
-        if self._items.has_key('routes'):
+        if 'routes' in self._items:
             del self._items['routes']
         self._add(value)
 
@@ -268,7 +268,7 @@ class Compute(Container):
 
     @property
     def ipv4_address(self):
-        if not self._items.has_key('interfaces'):
+        if 'interfaces' not in self._items:
             return self._ipv4_address
         addresses = [i.ipv4_address for i in self._items['interfaces'] if i.ipv4_address]
         if not addresses:
@@ -338,6 +338,7 @@ class Computes(AddingContainer):
 class ComputesRootInjector(ContainerInjector):
     context(OmsRoot)
     __class__ = Computes
+
 
 provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']), adapts=(Compute,), provides=(IMetrics))
 

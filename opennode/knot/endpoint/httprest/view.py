@@ -55,8 +55,8 @@ class VirtualizationContainerView(ContainerView):
         autostart = data['start_on_boot']
 
         for k in ['dns1', 'dns2', 'root_password', 'root_password_repeat', 'network-type', 'start_on_boot']:
-             if data.has_key(k):
-                 del data[k]
+            if k in data:
+                del data[k]
 
         form = ApplyRawData(data, model=Compute)
         if form.errors or not data.get('template'):
@@ -91,4 +91,3 @@ class ComputeView(ContainerView):
             'startup_timestamp': self.context.startup_timestamp,
         })
         return ret
-

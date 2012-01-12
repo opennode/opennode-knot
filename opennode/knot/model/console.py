@@ -90,14 +90,14 @@ class VncConsole(ReadonlyContainer):
         self._ensure_proxy()
 
     def _ensure_proxy(self):
-        if self.proxy_processes.has_key(self.hostname):
+        if self.hostname in self.proxy_processes:
             # check if the proxy process has matching vnc port
             # otherwise kills it
             if self.proxy_processes[self.hostname].port != self.port:
                 self.proxy_processes[self.hostname].kill()
                 del self.proxy_processes[self.hostname]
 
-        if not self.proxy_processes.has_key(self.hostname):
+        if self.hostname not in self.proxy_processes:
             self.proxy_processes[self.hostname] = VncProxyProcess(self.hostname, self.port)
 
     @property

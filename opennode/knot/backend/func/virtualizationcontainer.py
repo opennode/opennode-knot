@@ -161,7 +161,7 @@ class SyncVmsAction(Action):
 
             iface_node = cls(interface['name'], None, interface.get('mac', None), 'active')
 
-            if interface.has_key('ip'):
+            if 'ip' in interface:
                 iface_node.ipv4_address = interface['ip']
             if interface['type'] == 'bridge':
                 iface_node.members = interface['members']

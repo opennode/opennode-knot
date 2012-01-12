@@ -128,7 +128,7 @@ class SyncAction(Action):
         self.context.interfaces = NetworkInterfaces()
         for interface in vm['interfaces']:
             iface = NetworkInterface(interface['name'], None, interface['mac'], 'active')
-            if interface.has_key('ipv4_address'):
+            if 'ipv4_address' in interface:
                 iface.ipv4_address = interface['ipv4_address']
             self.context.interfaces.add(iface)
 
@@ -153,7 +153,7 @@ class SyncAction(Action):
         disk_usage = yield IGetDiskUsage(self.context).run()
 
         def disk_info(aspect):
-            res = dict((unicode(k), round(float(v[aspect])/1024, 2)) for k, v in disk_usage.items() if v['device'].startswith('/dev/'))
+            res = dict((unicode(k), round(float(v[aspect]) / 1024, 2)) for k, v in disk_usage.items() if v['device'].startswith('/dev/'))
             res[u'total'] = sum([0] + res.values())
             return res
 
