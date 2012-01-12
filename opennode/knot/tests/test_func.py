@@ -41,7 +41,7 @@ def test_operate_vm():
     compute = make_compute(hostname=u'localhost')
     alsoProvides(compute, IFuncInstalled)
 
-    backend = 'test://' + os.path.join(os.getcwd(), "opennode/oms/tests/u1.xml")
+    backend = 'test://' + os.path.join(os.getcwd(), "opennode/knot/tests/u1.xml")
 
     job = IStartVM(compute)
     res = yield job.run(backend, '4dea22b31d52d8f32516782e98ab3fa0')
