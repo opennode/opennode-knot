@@ -89,18 +89,18 @@ class ICompute(Interface):
     cpu_usage = schema.Tuple(
         title=u"CPU Load", description=u"CPU load during the past 1, 5 and 15 minutes",
         value_type=schema.Float(),
-        required=False)
+        required=False, readonly=True)
     memory_usage = schema.Float(
         title=u"Memory Usage", description=u"Memory usage in MB",
-        required=False)
+        required=False, readonly=True)
     diskspace_usage = schema.Dict(
         title=u"Diskspace Utilization", description=u"List of disk partition usages",
         key_type=schema.TextLine(), value_type=schema.Float(),
-        required=False)
+        required=False, readonly=True)
     network_usage = schema.Tuple(
         title=u"Network Load", description=u"Network load in B/s (incoming and outgoing)",
         value_type=schema.Float(),
-        required=False)
+        required=False, readonly=True)
 
     # VM only
     template = Path(title=u"Template", required=False, base_path='../../templates/by-name/')
