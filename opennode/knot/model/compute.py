@@ -4,7 +4,7 @@ from grokcore.component import context
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements, alsoProvides
-from opennode.oms.security.directives import permissions
+
 
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IIncomplete, IDisplayName, ContainerInjector
@@ -18,6 +18,7 @@ from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.model.symlink import Symlink
 from opennode.knot.backend.operation import IFuncInstalled
 from opennode.oms.model.schema import Path
+from opennode.oms.security.directives import permissions
 from opennode.oms.util import adapter_value
 
 
@@ -123,7 +124,32 @@ class Compute(Container):
     """A compute node."""
 
     implements(ICompute, IDisplayName)
-    permissions(dict(architecture='read'))
+    permissions(dict(hostname = ('read', 'modify'),
+                     ipv4_address = ('read', 'modify'),
+                     ipv6_address = ('read', 'modify'),
+                     nameservers = ('read', 'modify'),
+                     dns_domains = ('read', 'modify'),
+                     architecture = ('read', 'modify'),
+                     cpu_info = ('read', 'modify'),
+                     os_release = ('read', 'modify'),
+                     kernel = ('read', 'modify'),
+                     disk_info = ('read', 'modify'),
+                     memory_info = ('read', 'modify'),
+                     state = ('read', 'modify'),
+                     effective_state = ('read', 'modify'),
+                     num_cores = ('read', 'modify'),
+                     memory = ('read', 'modify'),
+                     diskspace = ('read', 'modify'),
+                     network = ('read', 'modify'),
+                     swap_size = ('read', 'modify'),
+                     cpu_usage = ('read'),
+                     memory_usage = ('read'),
+                     diskspace_usage = ('read'),
+                     network_usage = ('read'),
+                     cpu_limit = ('read', 'modify'),
+                     template = ('read', 'modify'),
+                     autostart = ('read', 'modify'),
+                     ))
 
     __contains__ = IInCompute
 
