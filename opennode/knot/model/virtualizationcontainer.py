@@ -10,6 +10,7 @@ from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.knot.model.compute import Compute, IInCompute
 from opennode.oms.model.model.search import ModelTags
+from opennode.oms.security.directives import permissions
 
 
 class IVirtualizationContainer(Interface):
@@ -18,6 +19,7 @@ class IVirtualizationContainer(Interface):
 
 class VirtualizationContainer(Container):
     implements(IVirtualizationContainer, IInCompute)
+    permissions(dict(backend=('read', 'modify')))
 
     __contains__ = Compute
 

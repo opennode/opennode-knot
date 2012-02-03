@@ -13,6 +13,7 @@ from opennode.oms.model.model.actions import ActionsContainerExtension, Action, 
 from opennode.oms.model.model.base import Container, ReadonlyContainer
 from opennode.oms.endpoint.ssh.terminal import RESET_COLOR
 from opennode.oms.endpoint.webterm.ssh import ssh_connect_interactive_shell
+from opennode.oms.security.directives import permissions
 
 
 class IConsole(Interface):
@@ -53,6 +54,7 @@ class TtyConsole(ReadonlyContainer):
 
 class TtyConsole(ReadonlyContainer):
     implements(ITtyConsole, ITextualConsole)
+    permissions(dict(pty=('read', 'modify')))
 
     def __init__(self, name, pty):
         self.__name__ = name
@@ -61,6 +63,10 @@ class TtyConsole(ReadonlyContainer):
 
 class SshConsole(ReadonlyContainer):
     implements(ISshConsole, ITextualConsole)
+    permissions(dict(user=('read', 'modify'),
+                     hostname=('read', 'modify'),
+                     port=('read', 'modify'),
+                     ))
 
     def __init__(self, name, user, hostname, port):
         self.__name__ = name
@@ -71,6 +77,7 @@ class SshConsole(ReadonlyContainer):
 
 class OpenVzConsole(ReadonlyContainer):
     implements(IOpenVzConsole, ITextualConsole)
+    permissions(dict(cid=('read', 'modify')))
 
     def __init__(self, name, cid):
         self.__name__ = name
@@ -79,6 +86,9 @@ class OpenVzConsole(ReadonlyContainer):
 
 class VncConsole(ReadonlyContainer):
     implements(IVncConsole, IGraphicalConsole)
+    permissions(dict(hostname=('read', 'modify'),
+                     port=('read', 'modify'),
+                     ))
 
     proxy_processes = {}
 
