@@ -7,6 +7,7 @@ from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainer
+from opennode.oms.model.model.stream import Metrics
 from opennode.oms.model.form import ApplyRawData
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView
@@ -91,3 +92,8 @@ class ComputeView(ContainerView):
             'startup_timestamp': self.context.startup_timestamp,
         })
         return ret
+
+    def blacklisted(self, item):
+        return (super(ComputeView, self).blacklisted(item)
+                or isinstance(item, ActionsContainer)
+                or isinstance(item, Metrics))
