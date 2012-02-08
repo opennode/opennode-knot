@@ -1,9 +1,14 @@
 from __future__ import absolute_import
 
+from certmaster import certmaster
+
 from zope.component import provideSubscriptionAdapter
+from zope import schema
+from zope.interface import Interface, implements
 from grokcore.component import context
 
-from opennode.oms.model.model.base import  Container, ContainerInjector
+from opennode.oms.security.directives import permissions
+from opennode.oms.model.model.base import  Model, Container, ContainerInjector, ReadonlyContainer
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.knot.model.compute import Compute
@@ -27,5 +32,34 @@ class MachinesRootInjector(ContainerInjector):
     context(OmsRoot)
     __class__ = Machines
 
+
+class IIncomingMachine(Interface):
+    hostname = schema.TextLine(title=u"Hostname", min_length=3)
+
+
+class IncomingMachine(Model):
+    implements(IIncomingMachine)
+    permissions(dict(hostname='read'))
+
+    def __init__(self, hostname):
+        self.__name__ = hostname
+        self.hostname = hostname
+
+
+class IncomingMachines(ReadonlyContainer):
+    __name__ = 'incoming'
+
+    @property
+    def _items(self):
+        cm = certmaster.CertMaster()
+        pending = {}
+        for h in cm.get_csrs_waiting():
+            pending[h] = IncomingMachine(h)
+        return pending
+
+
+class IncomingMachinesInjector(ContainerInjector):
+    context(Machines)
+    __class__ = IncomingMachines
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Machines, ))
