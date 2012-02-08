@@ -2,6 +2,8 @@ from __future__ import absolute_import
 
 import netaddr
 
+from certmaster import certmaster
+
 from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
 
 from grokcore.component import context, subscribe, baseclass, Adapter
@@ -15,6 +17,7 @@ from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IMo
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed
 from opennode.knot.model.template import Template
+from opennode.knot.model.machines import IncomingMachine
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 from opennode.knot.model.console import Consoles, TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, NetworkRoutes, NetworkRoute
@@ -33,6 +36,25 @@ class ComputeMinion(Adapter):
 
     def hostname(self):
         return self.context.hostname
+
+
+class AcceptHostRequestAction(Action):
+    """Accept request of the host for joining OMS/certmaster"""
+    context(IncomingMachine)
+
+    action('accept')
+
+    @db.transact
+    def execute(self, cmd, args):
+        blocking_yield(self._execute(cmd, args))
+
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        try:
+            cm = certmaster.CertMaster()
+            yield cm.sign_this_csr("%s.csr" % self.context.hostname)
+        except Exception as e:
+            cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
 
 
 class SyncAction(Action):
@@ -403,6 +425,12 @@ def create_virtual_compute(model, event):
         return
 
     DeployAction(model).execute(DetachedProtocol(), object())
+
+
+@subscribe(ICompute, IModelDeletedEvent)
+def delete_physical_compute(model, event):
+    blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()))
+    blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()))
 
 
 @subscribe(ICompute, IModelModifiedEvent)

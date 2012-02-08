@@ -8,7 +8,8 @@ from zope.interface import Interface, implements
 from grokcore.component import context
 
 from opennode.oms.security.directives import permissions
-from opennode.oms.model.model.base import  Model, Container, ContainerInjector, ReadonlyContainer
+from opennode.oms.model.model.actions import ActionsContainerExtension
+from opennode.oms.model.model.base import  Container, ContainerInjector, ReadonlyContainer
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.knot.model.compute import Compute
@@ -37,7 +38,7 @@ class IIncomingMachine(Interface):
     hostname = schema.TextLine(title=u"Hostname", min_length=3)
 
 
-class IncomingMachine(Model):
+class IncomingMachine(ReadonlyContainer):
     implements(IIncomingMachine)
     permissions(dict(hostname='read'))
 
@@ -63,3 +64,5 @@ class IncomingMachinesInjector(ContainerInjector):
     __class__ = IncomingMachines
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Machines, ))
+provideSubscriptionAdapter(ActionsContainerExtension, adapts=(IncomingMachine, ))
+
