@@ -93,3 +93,15 @@ class IRebootVM(IJob):
 
 class IGetSignedCertificateNames(IJob):
     """Contact certmaster."""
+
+
+class IGetIncomingHosts(IJob):
+    """Retrieve requests for new managed servers"""
+
+
+class IAcceptIncomingHost(IJob):
+    """Accept request a new managed server"""
+
+
+class ICleaupHost(IJob):
+    """Cleanup server leftovers"""
