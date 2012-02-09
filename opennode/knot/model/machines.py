@@ -34,12 +34,12 @@ class MachinesRootInjector(ContainerInjector):
     __class__ = Machines
 
 
-class IIncomingMachine(Interface):
+class IIncomingMachineRequest(Interface):
     hostname = schema.TextLine(title=u"Hostname", min_length=3)
 
 
-class IncomingMachine(ReadonlyContainer):
-    implements(IIncomingMachine)
+class IncomingMachineRequest(ReadonlyContainer):
+    implements(IIncomingMachineRequest)
     permissions(dict(hostname='read'))
 
     def __init__(self, hostname):
@@ -55,7 +55,7 @@ class IncomingMachines(ReadonlyContainer):
         cm = certmaster.CertMaster()
         pending = {}
         for h in cm.get_csrs_waiting():
-            pending[h] = IncomingMachine(h)
+            pending[h] = IncomingMachineRequest(h)
         return pending
 
 
@@ -64,5 +64,4 @@ class IncomingMachinesInjector(ContainerInjector):
     __class__ = IncomingMachines
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Machines, ))
-provideSubscriptionAdapter(ActionsContainerExtension, adapts=(IncomingMachine, ))
-
+provideSubscriptionAdapter(ActionsContainerExtension, adapts=(IncomingMachineRequest, ))

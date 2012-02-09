@@ -17,7 +17,7 @@ from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IMo
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed
 from opennode.knot.model.template import Template
-from opennode.knot.model.machines import IIncomingMachine
+from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 from opennode.knot.model.console import Consoles, TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, NetworkRoutes, NetworkRoute
@@ -40,7 +40,7 @@ class ComputeMinion(Adapter):
 
 class AcceptHostRequestAction(Action):
     """Accept request of the host for joining OMS/certmaster"""
-    context(IIncomingMachine)
+    context(IIncomingMachineRequest)
 
     action('accept')
 
@@ -57,11 +57,11 @@ class AcceptHostRequestAction(Action):
             cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
 
 
-class RemoveHostRequestAction(Action):
+class RejectHostRequestAction(Action):
     """Remove request of the host for joining OMS/certmaster"""
-    context(IIncomingMachine)
+    context(IIncomingMachineRequest)
 
-    action('remove')
+    action('reject')
 
     @db.transact
     def execute(self, cmd, args):
@@ -71,9 +71,15 @@ class RemoveHostRequestAction(Action):
     def _execute(self, cmd, args):
         try:
             cm = certmaster.CertMaster()
-            yield cm.remove_this_cert("%s.csr" % self.context.hostname)
+            yield cm.remove_this_cert(self.context.hostname)
         except Exception as e:
             cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
+
+
+@subscribe(ICompute, IModelDeletedEvent)
+def delete_func_compute(model, event):
+    if IFuncInstalled.providedBy(model):
+        blocking_yield(RejectHostRequestAction(IncomingMachineRequest(model.hostname)).execute(DetachedProtocol(), object()))
 
 
 class SyncAction(Action):
@@ -428,13 +434,6 @@ class RebootAction(ComputeAction):
     action('reboot')
 
     job = IRebootVM
-
-
-@subscribe(ICompute, IModelDeletedEvent)
-def delete_func_compute(model, event):
-    if IFuncInstalled.providedBy(model):
-        cm = certmaster.CertMaster()
-        yield cm.remove_this_csr("%s.csr" % model.hostname)
 
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
