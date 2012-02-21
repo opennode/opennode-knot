@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import threading
+
 from func import jobthing
 from func.overlord.client import Overlord
 from grokcore.component import Adapter, context, baseclass
@@ -94,8 +96,19 @@ class SyncFuncExecutor(FuncExecutor):
         self.func_action = func_action
 
     def run(self, *args, **kwargs):
-        @db.ro_transact
         def spawn_func():
+            deferred = defer.Deferred()
+            def spawn_thread():
+                try:
+                    res = spawn_func_real()
+                    deferred.callback(res)
+                except Exception as e:
+                    deferred.errback(e)
+
+            threading.Thread(target=spawn_thread).start()
+            return deferred
+
+        def spawn_func_real():
             client = self._get_client()
             # we assume that all of the func actions are in the form of 'module.action'
             module_action, action_name = self.func_action.rsplit('.', 1)
