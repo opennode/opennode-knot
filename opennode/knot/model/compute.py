@@ -44,23 +44,23 @@ class ICompute(Interface):
     architecture = schema.Tuple(
         title=u"Architecture", description=u"OS arch, OS type, OS distribution/flavour",
         value_type=schema.TextLine(), max_length=3, min_length=3,
-        required=False)
+        required=False, readonly=True)
     cpu_info = schema.TextLine(
         title=u"CPU Info", description=u"Info about the CPU such as model, speed in Hz, cache size",
-        required=False)
+        required=False, readonly=True)
     os_release = schema.TextLine(
         title=u"OS Release", description=u"OS version info",
-        required=False)
+        required=False, readonly=True)
     kernel = schema.TextLine(
         title=u"Kernel", description=u"Kernel version (if applicable)",
-        required=False)
+        required=False, readonly=True)
     disk_info = schema.TextLine(
         title=u"Disk Info", description=u"Info about the physical installed disk(s)",
-        required=False)
+        required=False, readonly=True)
     memory_info = schema.TextLine(
         title=u"Memory Info", description=(u"Info about the physical installed memory "
                      "banks such as model, make, speed, latency"),
-        required=False)
+        required=False, readonly=True)
 
     # State
     state = schema.Choice(
@@ -78,10 +78,10 @@ class ICompute(Interface):
     diskspace = schema.Dict(
         title=u"Disk size", description=u"List of disk partition sizes",
         key_type=schema.TextLine(), value_type=schema.Float(),
-        required=False)
+        required=False, readonly=True)
     network = schema.Float(
         title=u"Network", description=u"Network bandwidth in Bps",
-        required=False)
+        required=False, readonly=True)
     swap_size = schema.Int(
         title=u"Swap Size", description=u"Swap size",
         required=False)
@@ -104,7 +104,7 @@ class ICompute(Interface):
         required=False, readonly=True)
 
     # VM only
-    template = Path(title=u"Template", required=False, base_path='../../templates/by-name/')
+    template = Path(title=u"Template", base_path='../../templates/by-name/')
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
 
 
