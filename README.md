@@ -5,6 +5,7 @@ OpenNode Knot is a plugin for [OpenNode Management Service](https://github.com/o
 allows to monitor and manage virtualized data center. Primary target are servers running OpenNode6 OS.
 
 Functionality includes:
+
  * auto-discovery of existing infrastructure setup;
  * life-cycle management of virtual machines;
  * management of networks, templates and storage.
