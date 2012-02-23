@@ -22,7 +22,7 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.knot.model.console import Consoles, TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, NetworkRoutes, NetworkRoute
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
-from opennode.oms.util import blocking_yield, get_u, get_uptime_rfc2822
+from opennode.oms.util import blocking_yield, get_u
 from opennode.oms.zodb import db
 
 from twisted.internet import defer
