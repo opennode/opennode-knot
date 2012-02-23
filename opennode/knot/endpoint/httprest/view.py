@@ -89,7 +89,7 @@ class ComputeView(ContainerView):
 
         ret.update({
             'features': [i.__name__ for i in self.context.implemented_interfaces()],
-            'startup_timestamp': self.context.startup_timestamp,
+            'uptime': self.context.uptime,
         })
         return ret
 

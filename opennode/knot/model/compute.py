@@ -54,13 +54,6 @@ class ICompute(Interface):
     kernel = schema.TextLine(
         title=u"Kernel", description=u"Kernel version (if applicable)",
         required=False, readonly=True)
-    disk_info = schema.TextLine(
-        title=u"Disk Info", description=u"Info about the physical installed disk(s)",
-        required=False, readonly=True)
-    memory_info = schema.TextLine(
-        title=u"Memory Info", description=(u"Info about the physical installed memory "
-                     "banks such as model, make, speed, latency"),
-        required=False, readonly=True)
 
     # State
     state = schema.Choice(
@@ -133,8 +126,6 @@ class Compute(Container):
                      cpu_info = ('read', 'modify'),
                      os_release = ('read', 'modify'),
                      kernel = ('read', 'modify'),
-                     disk_info = ('read', 'modify'),
-                     memory_info = ('read', 'modify'),
                      state = ('read', 'modify'),
                      effective_state = ('read', 'modify'),
                      num_cores = ('read', 'modify'),
@@ -158,24 +149,20 @@ class Compute(Container):
     nameservers = []
     dns_domains = []
 
-    type = 'unknown'  # XXX: how should this be determined?
-                      # and how do we differentiate for ONC physical and virtual computes?
     architecture = (u'x86_64', u'linux', u'centos')
-    cpu_info = u"Intel Xeon 12.2GHz"
-    disk_info = u"Seagate Barracuda SuperSaver 2000TB BuyNow!"
-    memory_info = u"1333MHz DDR SuperGoodMemory!"
+    cpu_info = u"unknown"
 
     os_release = u"build 35"
-    kernel = u"2.6.18-238.9.1.el5.028stab089.1"
+    kernel = u"unknown"
 
     num_cores = 1
     memory = 2048,
     network = 12.5 * M  # bytes
     diskspace = {
         u'total': 2000.0,
-        u'root': 500.0,
-        u'boot': 100.0,
-        u'storage': 1000.0,
+        u'/': 500.0,
+        u'/boot': 100.0,
+        u'/storage': 1000.0,
     }
     swap_size = 4192
 
@@ -191,7 +178,6 @@ class Compute(Container):
     cpu_limit = 1.0
 
     autostart = False
-    startup_timestamp = "2011-07-06 01:23:45"
 
     def __init__(self, hostname, state, memory=None, template=None, ipv4_address=None):
         super(Compute, self).__init__()

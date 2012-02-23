@@ -103,5 +103,9 @@ class IAcceptIncomingHost(IJob):
     """Accept request a new managed server"""
 
 
-class ICleaupHost(IJob):
+class ICleanupHost(IJob):
     """Cleanup server leftovers"""
+
+
+class IGetHWUptime(IJob):
+    """Return uptime of a physical host"""

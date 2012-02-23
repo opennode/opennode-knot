@@ -12,8 +12,8 @@ from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IS
                                             ISuspendVM, IResumeVM, IRebootVM, IListVMS, IHostInterfaces, IDeployVM,
                                             IUndeployVM, IGetGuestMetrics, IGetHostMetrics, IGetLocalTemplates,
                                             IFuncMinion, IGetSignedCertificateNames, IGetVirtualizationContainers,
-                                            IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleaupHost,
-                                            IAcceptIncomingHost)
+                                            IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleanupHost,
+                                            IAcceptIncomingHost, IGetHWUptime)
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import Proc
 from opennode.oms.zodb import db
@@ -174,10 +174,11 @@ FUNC_ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
                 IGetLocalTemplates: 'onode.vm.get_local_templates',
                 IGetSignedCertificateNames: 'certmastermod.get_signed_certs',
                 IGetIncomingHosts: 'certmastermod.get_hosts_to_sign',
-                ICleaupHost: 'certmastermod.cleanup_hosts',
+                ICleanupHost: 'certmastermod.cleanup_hosts',
                 IAcceptIncomingHost: 'certmastermod.sign_hosts',
                 IGetDiskUsage: 'disk.usage', IGetRoutes: 'onode.network.show_routing_table',
-                IHostInterfaces: 'onode.host.interfaces'}
+                IHostInterfaces: 'onode.host.interfaces',
+                IGetHWUptime: 'onode.host.uptime'}
 
 
 # Avoid polluting the global namespace with temporary variables:

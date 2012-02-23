@@ -11,7 +11,7 @@ from grokcore.component import context, subscribe, baseclass, Adapter
 from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, ISuspendVM, IResumeVM, IListVMS,
                                             IRebootVM, IGetComputeInfo, IFuncInstalled, IDeployVM, IUndeployVM,
                                             IGetLocalTemplates, IFuncMinion, IGetVirtualizationContainers,
-                                            IGetDiskUsage, IGetRoutes)
+                                            IGetDiskUsage, IGetRoutes, IGetHWUptime)
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent
 from opennode.oms.model.model.actions import Action, action
@@ -22,7 +22,7 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.knot.model.console import Consoles, TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, NetworkRoutes, NetworkRoute
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
-from opennode.oms.util import blocking_yield, get_u
+from opennode.oms.util import blocking_yield, get_u, get_uptime_rfc2822
 from opennode.oms.zodb import db
 
 from twisted.internet import defer
@@ -189,7 +189,9 @@ class SyncAction(Action):
             self.context.diskspace[i] = round(self.context.diskspace[i], 2)
 
         if self.context.effective_state != 'active':
-            self.context.startup_timestamp = None
+            self.context.uptime = None
+        else:
+            self.context.uptime = vm['uptime']
 
     @defer.inlineCallbacks
     def sync_hw(self):
@@ -197,6 +199,7 @@ class SyncAction(Action):
             return
 
         info = yield IGetComputeInfo(self.context).run()
+        uptime = yield IGetHWUptime(self.context).run()
         disk_usage = yield IGetDiskUsage(self.context).run()
 
         def disk_info(aspect):
@@ -206,10 +209,10 @@ class SyncAction(Action):
 
         routes = yield IGetRoutes(self.context).run()
 
-        self._sync_hw(info, disk_info('total'), disk_info('used'), routes)
+        self._sync_hw(info, disk_info('total'), disk_info('used'), routes, uptime)
 
     @db.transact
-    def _sync_hw(self, info, disk_space, disk_usage, routes):
+    def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
         if IVirtualCompute.providedBy(self.context):
             self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
         else:
@@ -223,6 +226,8 @@ class SyncAction(Action):
         self.context.swap_size = float(info['systemSwap'])
         self.context.diskspace = disk_space
         self.context.diskspace_usage = disk_usage
+        self.context.template = u'Hardware node'
+        self.context.uptime = float(uptime)
 
         # routes
 
