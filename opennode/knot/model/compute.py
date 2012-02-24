@@ -80,6 +80,9 @@ class ICompute(Interface):
         required=False)
 
     # Resource utilization/load:
+    uptime = schema.Float(
+        title=u"Uptime", description=u"Uptime in seconds",
+        required=False, readonly=True)
     cpu_usage = schema.Tuple(
         title=u"CPU Load", description=u"CPU load during the past 1, 5 and 15 minutes",
         value_type=schema.Float(),
@@ -132,6 +135,7 @@ class Compute(Container):
                      memory = ('read', 'modify'),
                      diskspace = ('read', 'modify'),
                      network = ('read', 'modify'),
+                     uptime = ('read', 'modify'),
                      swap_size = ('read', 'modify'),
                      cpu_usage = ('read'),
                      memory_usage = ('read'),
@@ -166,6 +170,7 @@ class Compute(Container):
     }
     swap_size = 4192
 
+    uptime = None
     cpu_usage = (0.1, 0.11, 0.14)
     memory_usage = 773.2
     network_usage = (5.2 * M, 1.9 * M)
