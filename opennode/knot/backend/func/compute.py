@@ -144,7 +144,6 @@ class SyncAction(Action):
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
 
-    @db.assert_transact
     @defer.inlineCallbacks
     def _sync_virtual(self):
         submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
