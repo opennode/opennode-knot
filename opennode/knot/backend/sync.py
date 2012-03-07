@@ -75,7 +75,7 @@ class SyncDaemonProcess(DaemonProcess):
             try:
                 yield deferred
             except Exception as e:
-                print "[sync] Got exception when syncing compute '%s': %s" % e
+                print "[sync] Got exception when syncing compute '%s': %s" % (c, e)
             print "[sync] Syncing was ok for compute: '%s'" % c
 
         print "[sync] synced"
