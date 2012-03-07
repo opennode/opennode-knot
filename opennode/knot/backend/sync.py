@@ -67,15 +67,16 @@ class SyncDaemonProcess(DaemonProcess):
         for i in (yield get_machines()):
             if ICompute.providedBy(i):
                 action = SyncAction(i)
-                sync_actions.append(action.execute(DetachedProtocol(), object()))
+                sync_actions.append((i.hostname, action.execute(DetachedProtocol(), object())))
 
         print "[sync] waiting for background sync tasks"
         # wait for all async synchronization tasks to finish
-        for i in sync_actions:
+        for c, deferred in sync_actions:
             try:
-                yield i
+                yield deferred
             except Exception as e:
-                print '[sync] Got exception when syncing a func compute: %s' % e
+                print "[sync] Got exception when syncing compute '%s': %s" % e
+            print "[sync] Syncing was ok for compute: '%s'" % c
 
         print "[sync] synced"
 
