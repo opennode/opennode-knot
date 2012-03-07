@@ -98,7 +98,8 @@ class SyncAction(Action):
 
         try:
             self.sync_consoles()
-            self.sync_hw()
+            yield self.sync_hw()
+
             if IFuncInstalled.providedBy(self.context):
                 yield self.ensure_vms()
                 yield self.sync_templates()
