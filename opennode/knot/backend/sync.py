@@ -62,11 +62,20 @@ class SyncDaemonProcess(DaemonProcess):
 
             return res
 
+        sync_actions = []
         from opennode.knot.backend.func.compute import SyncAction
         for i in (yield get_machines()):
             if ICompute.providedBy(i):
                 action = SyncAction(i)
-                action.execute(DetachedProtocol(), object())
+                sync_actions.append(action.execute(DetachedProtocol(), object()))
+
+        print "[sync] waiting for background sync tasks"
+        # wait for all async synchronization tasks to finish
+        for i in sync_actions:
+            try:
+                yield i
+            except Exception as e:
+                print '[sync] Got exception when syncing a func compute: %s' % e
 
         print "[sync] synced"
 
