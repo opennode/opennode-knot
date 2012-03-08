@@ -88,16 +88,12 @@ class SyncAction(Action):
 
     action('sync')
 
-    @db.transact
-    def execute(self, cmd, args):
-        blocking_yield(self._execute(cmd, args))
-
     @defer.inlineCallbacks
-    def _execute(self, cmd, args):
-        default = self.default_console()
+    def execute(self, cmd, args):
+        default = yield self.default_console()
 
         try:
-            self.sync_consoles()
+            yield self.sync_consoles()
             yield self.sync_hw()
 
             if IFuncInstalled.providedBy(self.context):
@@ -114,8 +110,13 @@ class SyncAction(Action):
         except Exception as e:
             cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
 
-    @db.assert_transact
+
+    @db.transact
     def default_console(self):
+        return self._default_console
+
+    @db.assert_transact
+    def _default_console(self):
         default = self.context.consoles['default']
         if default:
             return default.target.__name__
@@ -133,8 +134,12 @@ class SyncAction(Action):
                 default = 'ssh'
         self.context.consoles.add(Symlink('default', self.context.consoles[default]))
 
-    @db.assert_transact
+    @db.transact
     def sync_consoles(self):
+        return self._sync_consoles()
+
+    @db.assert_transact
+    def _sync_consoles(self):
         self.context.consoles = Consoles()
         address = self.context.hostname
         try:

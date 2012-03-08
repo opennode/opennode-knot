@@ -144,8 +144,8 @@ class SyncVmsAction(Action):
             remote_vm = matching[0]
 
             # todo delegate all this into the action itself
-            default_console = action.default_console()
-            action.sync_consoles()
+            default_console = action._default_console()
+            action._sync_consoles()
             action.sync_vm(remote_vm)
             action.create_default_console(default_console)
 
