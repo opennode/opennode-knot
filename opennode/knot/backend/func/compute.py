@@ -209,7 +209,7 @@ class SyncAction(Action):
 
         routes = yield IGetRoutes(self.context).run()
 
-        self._sync_hw(info, disk_info('total'), disk_info('used'), routes, uptime)
+        yield self._sync_hw(info, disk_info('total'), disk_info('used'), routes, uptime)
 
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
