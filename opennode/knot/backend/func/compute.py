@@ -248,7 +248,7 @@ class SyncAction(Action):
             route.metrics = int(i['metrics'])
             route.__name__ = route.destination.replace('/', '_')
 
-            interface = self.context['interfaces'][i['interface']]
+            interface = self.context.interfaces[i['interface']]
             if interface:
                 route.add(Symlink('interface', interface))
 
