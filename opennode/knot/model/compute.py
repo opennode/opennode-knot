@@ -100,7 +100,7 @@ class ICompute(Interface):
         required=False, readonly=True)
 
     # VM only
-    template = Path(title=u"Template", base_path='../templates/by-name/')
+    template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
 
 
