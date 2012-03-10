@@ -5,7 +5,7 @@ from zope.interface import Interface, alsoProvides, noLongerProvides
 from opennode.knot.backend.operation import IListVMS, IHostInterfaces
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed
-from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, BridgeInterface
+from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.util import blocking_yield
@@ -153,8 +153,11 @@ class SyncVmsAction(Action):
     def _sync_ifaces(self, ifaces):
         host_compute = self.context.__parent__
 
-        host_compute.interfaces = NetworkInterfaces()
+        # XXX TODO: handle when the interface changes type or gets removed
         for interface in ifaces:
+            if host_compute.interfaces[interface['name']]:
+                continue
+
             cls = NetworkInterface
             if interface['type'] == 'bridge':
                 cls = BridgeInterface

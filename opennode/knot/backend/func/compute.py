@@ -19,8 +19,8 @@ from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, 
 from opennode.knot.model.template import Template
 from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
-from opennode.knot.model.console import Consoles, TtyConsole, SshConsole, OpenVzConsole, VncConsole
-from opennode.knot.model.network import NetworkInterfaces, NetworkInterface, NetworkRoutes, NetworkRoute
+from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
+from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.util import blocking_yield, get_u
 from opennode.oms.zodb import db
@@ -132,7 +132,8 @@ class SyncAction(Action):
                 default = 'tty0'
             else:
                 default = 'ssh'
-        self.context.consoles.add(Symlink('default', self.context.consoles[default]))
+
+            self.context.consoles.add(Symlink('default', self.context.consoles[default]))
 
     @db.transact
     def sync_consoles(self):
@@ -140,7 +141,10 @@ class SyncAction(Action):
 
     @db.assert_transact
     def _sync_consoles(self):
-        self.context.consoles = Consoles()
+        if self.context.consoles['ssh']:
+            print "No need to sync ssh console"
+            return
+
         address = self.context.hostname
         try:
             if self.context.ipv4_address:
@@ -168,21 +172,25 @@ class SyncAction(Action):
         self.context.effective_state = self.context.state
 
         for idx, console in enumerate(vm['consoles']):
-            if console['type'] == 'pty':
+            if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
                 self.context.consoles.add(TtyConsole('tty%s' % idx, console['pty']))
-            if console['type'] == 'openvz':
+            if console['type'] == 'openvz' and not self.context.consoles['tty%s' % idx]:
                 self.context.consoles.add(OpenVzConsole('tty%s' % idx, console['cid']))
-            if console['type'] == 'vnc':
+            if console['type'] == 'vnc'  and not self.context.consoles['vnc']:
                 self.context.consoles.add(VncConsole(self.context.__parent__.__parent__.hostname, int(console['port'])))
+
+        # XXX TODO: handle removal of consoles when they are no longer reported from upstream
 
         # networks
 
-        self.context.interfaces = NetworkInterfaces()
         for interface in vm['interfaces']:
-            iface = NetworkInterface(interface['name'], None, interface['mac'], 'active')
-            if 'ipv4_address' in interface:
-                iface.ipv4_address = interface['ipv4_address']
-            self.context.interfaces.add(iface)
+            if not self.context.interfaces[interface['name']]:
+                iface = NetworkInterface(interface['name'], None, interface['mac'], 'active')
+                if 'ipv4_address' in interface:
+                    iface.ipv4_address = interface['ipv4_address']
+                self.context.interfaces.add(iface)
+
+        # XXX TODO: handle removal of interfaces when they are no longer reported from upstream
 
         # XXX hack, openvz specific
         self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
@@ -236,9 +244,15 @@ class SyncAction(Action):
 
         # routes
 
-        self.context.routes = NetworkRoutes()
+        # XXX TODO: handle removal of routes
+
         for i in routes:
             destination = netaddr.IPNetwork('%s/%s' % (i['destination'], i['netmask']))
+            route_name = str(destination.cidr).replace('/', '_')
+
+            if self.context.routes[route_name]:
+                continue
+
             gateway = netaddr.IPAddress(i['router'])
 
             route = NetworkRoute()
@@ -246,7 +260,7 @@ class SyncAction(Action):
             route.gateway = str(gateway)
             route.flags = i['flags']
             route.metrics = int(i['metrics'])
-            route.__name__ = route.destination.replace('/', '_')
+            route.__name__ = route_name
 
             interface = self.context.interfaces[i['interface']]
             if interface:
@@ -331,6 +345,10 @@ class DeployAction(Action):
         if not self.context.template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
             return
+
+        # XXX: TODO resolve template object from the template name
+        # and take the template name from the object
+        #template = cmd.traverse(self.context.template)
 
         vm_parameters = dict(template_name=self.context.template,
                              hostname=self.context.hostname,
