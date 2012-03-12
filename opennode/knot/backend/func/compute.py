@@ -13,7 +13,7 @@ from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, 
                                             IGetLocalTemplates, IFuncMinion, IGetVirtualizationContainers,
                                             IGetDiskUsage, IGetRoutes, IGetHWUptime)
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
-from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent
+from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent, TmpObj
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed
 from opennode.knot.model.template import Template
@@ -167,8 +167,10 @@ class SyncAction(Action):
 
     @db.assert_transact
     def sync_vm(self, vm):
-        self.context.state = unicode(vm['state'])
-        self.context.effective_state = self.context.state
+        compute = TmpObj(self.context)
+
+        compute.state = unicode(vm['state'])
+        compute.effective_state = compute.state
 
         for idx, console in enumerate(vm['consoles']):
             if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
@@ -192,8 +194,8 @@ class SyncAction(Action):
         # XXX TODO: handle removal of interfaces when they are no longer reported from upstream
 
         # XXX hack, openvz specific
-        self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
-        self.context.memory = vm['memory']
+        compute.cpu_info = self.context.__parent__.__parent__.cpu_info
+        compute.memory = vm['memory']
 
         diskspace = dict((unicode(k), v) for k, v in vm['diskspace'].items())
         diskspace[u'total'] = sum([0] + vm['diskspace'].values())
@@ -201,12 +203,14 @@ class SyncAction(Action):
         for i in self.context.diskspace:
             diskspace[i] = round(self.context.diskspace[i], 2)
 
-        self.context.diskspace = diskspace
+        compute.diskspace = diskspace
 
-        if self.context.effective_state != 'active':
-            self.context.uptime = None
+        if compute.effective_state != 'active':
+            compute.uptime = None
         else:
-            self.context.uptime = vm['uptime']
+            compute.uptime = vm['uptime']
+
+        compute.apply()
 
     @defer.inlineCallbacks
     def sync_hw(self):
