@@ -75,12 +75,8 @@ class SyncVmsAction(Action):
 
     action('sync')
 
-    @db.transact
-    def execute(self, cmd, args):
-        blocking_yield(self._execute(cmd, args))
-
     @defer.inlineCallbacks
-    def _execute(self, cmd, args):
+    def execute(self, cmd, args):
         # sync host interfaces (this is not the right place, but ...)
         host_compute = self.context.__parent__
         job = IHostInterfaces(host_compute)
