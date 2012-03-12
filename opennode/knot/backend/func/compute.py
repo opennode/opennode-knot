@@ -121,9 +121,18 @@ class SyncAction(Action):
         if default:
             return default.target.__name__
 
-    @db.transact
+    @defer.inlineCallbacks
     def _create_default_console(self, default):
-        self.create_default_console(default)
+        @db.ro_transact
+        def check():
+            return not default or not self.context.consoles[default]
+
+        @db.transact
+        def create():
+            self.create_default_console(default)
+
+        if (yield check()):
+            yield create()
 
     @db.assert_transact
     def create_default_console(self, default):
