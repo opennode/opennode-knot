@@ -194,11 +194,14 @@ class SyncAction(Action):
         # XXX hack, openvz specific
         self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
         self.context.memory = vm['memory']
-        self.context.diskspace = dict((unicode(k), v) for k, v in vm['diskspace'].items())
-        self.context.diskspace[u'total'] = sum([0] + vm['diskspace'].values())
+
+        diskspace = dict((unicode(k), v) for k, v in vm['diskspace'].items())
+        diskspace[u'total'] = sum([0] + vm['diskspace'].values())
         # round diskspace values
         for i in self.context.diskspace:
-            self.context.diskspace[i] = round(self.context.diskspace[i], 2)
+            diskspace[i] = round(self.context.diskspace[i], 2)
+
+        self.context.diskspace = diskspace
 
         if self.context.effective_state != 'active':
             self.context.uptime = None
