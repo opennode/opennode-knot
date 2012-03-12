@@ -142,7 +142,6 @@ class SyncAction(Action):
     @db.assert_transact
     def _sync_consoles(self):
         if self.context.consoles['ssh']:
-            print "No need to sync ssh console"
             return
 
         address = self.context.hostname
