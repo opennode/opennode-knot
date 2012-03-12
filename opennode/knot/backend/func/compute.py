@@ -117,6 +117,9 @@ class SyncAction(Action):
 
     @db.assert_transact
     def _default_console(self):
+        if self.context['consoles']:
+            return None
+
         default = self.context.consoles['default']
         if default:
             return default.target.__name__
@@ -145,7 +148,7 @@ class SyncAction(Action):
             self.context.consoles.add(Symlink('default', self.context.consoles[default]))
 
     def sync_consoles(self):
-        if self.context.consoles['ssh']:
+        if self.context['consoles'] and self.context.consoles['ssh']:
             return
 
         return db.transact(self._sync_consoles)()
