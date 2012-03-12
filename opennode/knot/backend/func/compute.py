@@ -113,7 +113,7 @@ class SyncAction(Action):
 
     @db.transact
     def default_console(self):
-        return self._default_console
+        return self._default_console()
 
     @db.assert_transact
     def _default_console(self):
