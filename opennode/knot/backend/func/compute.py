@@ -111,7 +111,7 @@ class SyncAction(Action):
             cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
 
 
-    @db.transact
+    @db.ro_transact
     def default_console(self):
         return self._default_console()
 
@@ -144,9 +144,11 @@ class SyncAction(Action):
 
             self.context.consoles.add(Symlink('default', self.context.consoles[default]))
 
-    @db.transact
     def sync_consoles(self):
-        return self._sync_consoles()
+        if self.context.consoles['ssh']:
+            return
+
+        return db.transact(self._sync_consoles)()
 
     @db.assert_transact
     def _sync_consoles(self):

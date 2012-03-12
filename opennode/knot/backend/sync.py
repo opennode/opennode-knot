@@ -35,14 +35,23 @@ class SyncDaemonProcess(DaemonProcess):
     def sync(self):
         print "[sync] syncing"
 
-        @db.transact
+        @defer.inlineCallbacks
         def ensure_machine(host):
-            machines = db.get_root()['oms_root']['machines']
-            existing_machine = follow_symlinks(machines['by-name'][host])
-            if not existing_machine:
+            @db.ro_transact
+            def check():
+                machines = db.get_root()['oms_root']['machines']
+                return follow_symlinks(machines['by-name'][host])
+
+            @db.transact
+            def update():
+                machines = db.get_root()['oms_root']['machines']
+
                 machine = Compute(unicode(host), u'active')
                 machine.__name__ = str(uuid5(NAMESPACE_DNS, host))
                 machines.add(machine)
+
+            if not (yield check()):
+                yield update()
 
         @defer.inlineCallbacks
         def import_machines():
@@ -52,7 +61,7 @@ class SyncDaemonProcess(DaemonProcess):
 
         yield import_machines()
 
-        @db.transact
+        @db.ro_transact
         def get_machines():
             res = []
 
