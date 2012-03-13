@@ -23,7 +23,9 @@ class SyncDaemonProcess(DaemonProcess):
         while True:
             try:
                 if not self.paused:
+                    self.log("yielding sync")
                     yield self.sync()
+                    self.log("sync yielded")
             except Exception:
                 import traceback
                 traceback.print_exc()
@@ -31,9 +33,13 @@ class SyncDaemonProcess(DaemonProcess):
 
             yield async_sleep(10)
 
+    def log(self, msg):
+        import threading
+        print "[sync] (%s) %s" % (threading.current_thread(), msg)
+
     @defer.inlineCallbacks
     def sync(self):
-        print "[sync] syncing"
+        self.log("syncing")
 
         @defer.inlineCallbacks
         def ensure_machine(host):
@@ -78,15 +84,15 @@ class SyncDaemonProcess(DaemonProcess):
                 action = SyncAction(i)
                 sync_actions.append((i.hostname, action.execute(DetachedProtocol(), object())))
 
-        print "[sync] waiting for background sync tasks"
+        self.log("waiting for background sync tasks")
         # wait for all async synchronization tasks to finish
         for c, deferred in sync_actions:
             try:
                 yield deferred
             except Exception as e:
-                print "[sync] Got exception when syncing compute '%s': %s" % (c, e)
-            print "[sync] Syncing was ok for compute: '%s'" % c
+                self.log("Got exception when syncing compute '%s': %s" % (c, e))
+            self.log("Syncing was ok for compute: '%s'" % c)
 
-        print "[sync] synced"
+        self.log("synced")
 
 provideSubscriptionAdapter(subscription_factory(SyncDaemonProcess), adapts=(Proc,))
