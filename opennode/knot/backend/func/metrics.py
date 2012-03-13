@@ -18,8 +18,11 @@ class VirtualComputeMetricGatherer(Adapter):
 
     @defer.inlineCallbacks
     def gather(self):
+        print '[metrics] gathering vms', self.context
         yield self.gather_vms()
+        print '[metrics] gathering phy', self.context
         yield self.gather_phy()
+        print '[metrics] finished gathering', self.context
 
     @defer.inlineCallbacks
     def gather_vms(self):

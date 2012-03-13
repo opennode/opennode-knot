@@ -40,6 +40,9 @@ class MetricsDaemonProcess(DaemonProcess):
                 traceback.print_exc()
                 pass
 
+    def log(self, msg):
+        print "[metrics] %s" % (msg, )
+
     @defer.inlineCallbacks
     def gather_machines(self):
         @db.ro_transact
@@ -55,7 +58,13 @@ class MetricsDaemonProcess(DaemonProcess):
             return res
 
         for i in (yield get_gatherers()):
-            yield i.gather()
+            try:
+                yield i.gather()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.log("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
+            self.log("metrics ok for: '%s'" % i.context)
 
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
