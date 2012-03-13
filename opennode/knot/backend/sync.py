@@ -4,6 +4,7 @@ from uuid import uuid5, NAMESPACE_DNS
 from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 
+from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.knot.model.compute import ICompute
 from opennode.oms.util import subscription_factory, async_sleep
@@ -18,6 +19,12 @@ class SyncDaemonProcess(DaemonProcess):
 
     __name__ = "sync"
 
+    def __init__(self):
+        super(SyncDaemonProcess, self).__init__()
+
+        config = get_config()
+        self.interval = config.getint('sync', 'interval')
+
     @defer.inlineCallbacks
     def run(self):
         while True:
@@ -31,7 +38,7 @@ class SyncDaemonProcess(DaemonProcess):
                 traceback.print_exc()
                 pass
 
-            yield async_sleep(10)
+            yield async_sleep(self.interval)
 
     def log(self, msg):
         import threading

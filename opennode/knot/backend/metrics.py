@@ -2,6 +2,7 @@ from twisted.internet import defer
 from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
 
+from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
@@ -18,10 +19,16 @@ class MetricsDaemonProcess(DaemonProcess):
 
     __name__ = "metrics"
 
+    def __init__(self):
+        super(MetricsDaemonProcess, self).__init__()
+
+        config = get_config()
+        self.interval = config.getint('metrics', 'interval')
+
     @defer.inlineCallbacks
     def run(self):
         while True:
-            yield async_sleep(1)
+            yield async_sleep(self.interval)
             try:
                 # Currently we have special codes for gathering info about machines
                 # hostinginv VM, in future here we'll traverse the whole zodb and search for gatherers
