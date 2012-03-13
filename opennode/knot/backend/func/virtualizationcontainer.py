@@ -2,7 +2,7 @@ from grokcore.component import Adapter, context, implements
 from twisted.internet import defer
 from zope.interface import Interface, alsoProvides, noLongerProvides
 
-from opennode.knot.backend.operation import IListVMS, IHostInterfaces
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IFuncInstalled
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
@@ -120,6 +120,9 @@ class SyncVmsAction(Action):
                 new_compute.template = unicode(remote_vm['template'])
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
+
+                # for now let's foce synced computes to not have func installed
+                noLongerProvides(new_compute, IFuncInstalled)
                 self.context.add(new_compute)
 
         for vm_uuid in remote_uuids.intersection(local_uuids):
