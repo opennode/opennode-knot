@@ -4,6 +4,7 @@ from twisted.internet import defer
 from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter
 from opennode.knot.backend.metrics import IMetricsGatherer
 from opennode.knot.backend.operation import IFuncInstalled, IGetGuestMetrics, IGetHostMetrics
+from opennode.oms.config import get_config
 from opennode.oms.model.model.stream import IStream
 from opennode.oms.zodb import db
 import time
@@ -76,5 +77,5 @@ class VirtualComputeMetricGatherer(Adapter):
                 stream.add(data_point)
 
         except Exception as e:
-            if False:
+            if get_config().getboolean('debug', 'print_exceptions'):
                 print "[metrics] cannot gather phy metrics", e
