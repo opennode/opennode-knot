@@ -212,10 +212,10 @@ class SyncAction(Action):
         compute.memory = vm['memory']
 
         diskspace = dict((unicode(k), v) for k, v in vm['diskspace'].items())
-        diskspace[u'total'] = sum([0] + vm['diskspace'].values())
+        diskspace[u'total'] = sum([0.0] + vm['diskspace'].values())
         # round diskspace values
-        for i in self.context.diskspace:
-            diskspace[i] = round(self.context.diskspace[i], 2)
+        for i in diskspace:
+            diskspace[i] = round(diskspace[i], 2)
 
         compute.diskspace = diskspace
 
@@ -237,7 +237,7 @@ class SyncAction(Action):
 
         def disk_info(aspect):
             res = dict((unicode(k), round(float(v[aspect]) / 1024, 2)) for k, v in disk_usage.items() if v['device'].startswith('/dev/'))
-            res[u'total'] = sum([0] + res.values())
+            res[u'total'] = sum([0.0] + res.values())
             return res
 
         routes = yield IGetRoutes(self.context).run()
