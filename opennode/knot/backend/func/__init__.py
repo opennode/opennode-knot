@@ -100,9 +100,13 @@ class SyncFuncExecutor(FuncExecutor):
             deferred = defer.Deferred()
             def spawn_thread():
                 try:
-                    res = spawn_func_real()
-                    deferred.callback(res)
-                except Exception as e:
+                    try:
+                        res = spawn_func_real()
+                        deferred.callback(res)
+                    except Exception as e:
+                        deferred.errback(e)
+                except BaseException as e:
+                    print "[func] Got BaseException", e
                     deferred.errback(e)
 
             threading.Thread(target=spawn_thread).start()
