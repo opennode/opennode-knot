@@ -7,7 +7,7 @@ from zope.interface import Interface, implements, alsoProvides
 
 
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IIncomplete, IDisplayName, ContainerInjector
+from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IDisplayName, ContainerInjector
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.knot.model.console import Consoles
@@ -199,7 +199,6 @@ class Compute(Container):
         else:
             alsoProvides(self, IFuncInstalled)
 
-        alsoProvides(self, IIncomplete)
         alsoProvides(self, IUndeployed)
 
         assert self.hostname
