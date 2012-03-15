@@ -1,25 +1,28 @@
 from __future__ import absolute_import
 
+import netaddr
+
 from grokcore.component import context
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements, alsoProvides
 
-
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IDisplayName, ContainerInjector
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
-from opennode.knot.model.console import Consoles
-from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
-from opennode.oms.model.model.search import ModelTags
-from opennode.knot.model.template import Templates
-from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
-from opennode.oms.model.model.symlink import Symlink
-from opennode.knot.backend.operation import IFuncInstalled
-from opennode.oms.model.schema import Path
 from opennode.oms.security.directives import permissions
 from opennode.oms.util import adapter_value
+from opennode.oms.config import get_config
+from opennode.oms.model.model.search import ModelTags
+from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
+from opennode.oms.model.model.symlink import Symlink
+from opennode.oms.model.schema import Path
+
+from opennode.knot.model.console import Consoles
+from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
+from opennode.knot.model.template import Templates
+from opennode.knot.backend.operation import IFuncInstalled
 
 
 M = 10 ** 6
@@ -305,6 +308,11 @@ class ComputeTags(ModelTags):
         if IVirtualCompute.providedBy(self.context) and IVirtualizationContainer.providedBy(self.context.__parent__):
             res.append(u'virt_type:' + self.context.__parent__.backend)
 
+        config = get_config()
+        if config.has_section('netenv-tags'):
+            for tag, nets in config.items('netenv-tags'):
+                if len(netaddr.all_matching_cidrs(self.context.ipv4_address.split('/')[0], nets.split(','))) > 0:
+                    res.append(u'env:' + tag)
         return res
 
 
