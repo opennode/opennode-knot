@@ -1,9 +1,12 @@
 from grokcore.component import Adapter, context, implements
 from twisted.internet import defer
+from zope.component import handle
 from zope.interface import Interface, alsoProvides, noLongerProvides
 
+from opennode.oms.config import get_config
 from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IFuncInstalled
 from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.form import ModelDeletedEvent
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
@@ -133,6 +136,12 @@ class SyncVmsAction(Action):
             noLongerProvides(self.context[vm_uuid], IDeployed)
             alsoProvides(self.context[vm_uuid], IUndeployed)
             self.context[vm_uuid].state = u'inactive'
+
+            if get_config().getboolean('sync', 'delete_on_sync'):
+                print "[sync] Deleting compute", vm_uuid
+                compute = self.context[vm_uuid]
+                del self.context[vm_uuid]
+                handle(compute, ModelDeletedEvent(self.context))
 
         # sync each vm
         from opennode.knot.backend.func.compute import SyncAction

@@ -486,8 +486,12 @@ class RebootAction(ComputeAction):
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
 def delete_virtual_compute(model, event):
-    blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()))
-    blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()))
+    if IDeployed.providedBy(model):
+        print '[compute_backend] deleting compute %s which is ion IDeployed state, shutting down and undeploying first' % model.hostname
+        blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()))
+        blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()))
+    else:
+        print '[compute_backend] deleting compute %s which is already in the IUndeployed state' % model.hostname
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
