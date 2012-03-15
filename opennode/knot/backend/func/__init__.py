@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import threading
+import time
 
 from func import jobthing
 from func.overlord.client import Overlord
@@ -16,6 +17,7 @@ from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IS
                                             IAcceptIncomingHost, IGetHWUptime)
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import Proc
+from opennode.oms.util import timeout, TimeoutException
 from opennode.oms.zodb import db
 
 
@@ -91,11 +93,29 @@ class AsyncFuncExecutor(FuncExecutor):
 
 class SyncFuncExecutor(FuncExecutor):
 
+    # Contains a blacklist of host which had strange problems with func
+    # so we temporarily avoid calling them again until the blacklist TTL expires
+    func_host_blacklist = {}
+
     def __init__(self, hostname, func_action):
         self.hostname = hostname
         self.func_action = func_action
 
     def run(self, *args, **kwargs):
+        hard_timeout = get_config().getint('func', 'hard_timeout')
+        blacklist_enabled = get_config().getboolean('func', 'timeout_blacklist')
+        blacklist_ttl = get_config().getint('func', 'timeout_blacklist_ttl')
+        whitelist = [i.strip() for i in get_config().get('func', 'timeout_whitelist').split(',')]
+
+        now = time.time()
+        until = self.func_host_blacklist.get(self.hostname, 0) + blacklist_ttl
+        if until > now :
+            raise Exception("Host %s was temporarily blacklisted. %s s to go" % (self.hostname, until - now))
+        if self.hostname in self.func_host_blacklist:
+            print "[func] removing %s from blacklist" % self.hostname
+            del self.func_host_blacklist[self.hostname]
+
+        @timeout(hard_timeout)
         def spawn_func():
             deferred = defer.Deferred()
             def spawn_thread():
@@ -133,7 +153,22 @@ class SyncFuncExecutor(FuncExecutor):
             else:
                 return res
 
-        self.deferred = spawn_func()
+        @defer.inlineCallbacks
+        def spawn_func_handle_timeout():
+            try:
+                res = yield spawn_func()
+                defer.returnValue(res)
+            except TimeoutException as e:
+                print "[func] Got timeout while executing %s on %s (%s)" % (self.func_action, self.hostname, e)
+                if blacklist_enabled:
+                    if self.hostname not in whitelist:
+                        print "[func] blacklisting %s for %s s" % (self.hostname, blacklist_ttl)
+                        self.func_host_blacklist[self.hostname] = time.time()
+                    else:
+                        print "[func] host %s not blacklisted because in 'timeout_whitelist'" % self.hostname
+                raise
+
+        self.deferred = spawn_func_handle_timeout()
         # XXX: after switching to the 'synchronous' func execute, this is broken, TODO check why!
         # Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
         #                                                             self.func_action,
