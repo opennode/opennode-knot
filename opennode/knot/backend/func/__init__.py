@@ -1,12 +1,11 @@
 from __future__ import absolute_import
 
-import threading
 import time
 
 from func import jobthing
 from func.overlord.client import Overlord
 from grokcore.component import Adapter, context, baseclass
-from twisted.internet import defer, reactor
+from twisted.internet import defer, reactor, threads
 from zope.interface import classImplements
 
 from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM,
@@ -117,20 +116,7 @@ class SyncFuncExecutor(FuncExecutor):
 
         @timeout(hard_timeout)
         def spawn_func():
-            deferred = defer.Deferred()
-            def spawn_thread():
-                try:
-                    try:
-                        res = spawn_func_real()
-                        deferred.callback(res)
-                    except Exception as e:
-                        deferred.errback(e)
-                except BaseException as e:
-                    print "[func] Got BaseException", e
-                    deferred.errback(e)
-
-            threading.Thread(target=spawn_thread).start()
-            return deferred
+            return threads.deferToThread(spawn_func_real)
 
         def spawn_func_real():
             client = self._get_client()
