@@ -149,7 +149,7 @@ class SyncAction(Action):
 
     def sync_consoles(self):
         if self.context['consoles'] and self.context.consoles['ssh']:
-            return
+            return self.fixup_console_ip(self.context.consoles['ssh'])
 
         return db.transact(self._sync_consoles)()
 
@@ -166,6 +166,15 @@ class SyncAction(Action):
             pass
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
+
+    def fixup_console_ip(self, console):
+        if self.context.ipv4_address:
+            address = self.context.ipv4_address.split('/')[0]
+            if console.hostname != address:
+                @db.transact
+                def set_address():
+                    console.hostname = address
+                return set_address()
 
     @defer.inlineCallbacks
     def _sync_virtual(self):
