@@ -342,11 +342,17 @@ class Computes(AddingContainer):
         computes = {}
 
         def collect(container):
+            from opennode.knot.model.machines import Machines
+            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+
+            seen = set()
             for item in container.listcontent():
                 if ICompute.providedBy(item):
                     computes[item.__name__] = Symlink(item.__name__, item)
-                if IContainer.providedBy(item):
-                    collect(item)
+                if isinstance(item, Machines) or isinstance(item, Computes) or ICompute.providedBy(item) or IVirtualizationContainer.providedBy(item):
+                    if item.__name__ not in seen:
+                        seen.add(item.__name__)
+                        collect(item)
 
         collect(machines)
         return computes
