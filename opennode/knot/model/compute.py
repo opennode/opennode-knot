@@ -289,6 +289,13 @@ class Compute(Container):
     def ipv4_address(self):
         if 'interfaces' not in self._items:
             return self._ipv4_address
+
+        primaries = [i.ipv4_address for i in self._items['interfaces'] if i.ipv4_address and getattr(i, 'primary', False)]
+        if primaries:
+            return unicode(primaries[0])
+
+        # No interface has been marked as primary, so let's just pick one
+
         addresses = [i.ipv4_address for i in self._items['interfaces'] if i.ipv4_address]
         if not addresses:
             return self._ipv4_address

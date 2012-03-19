@@ -177,4 +177,7 @@ class SyncVmsAction(Action):
             if interface['type'] == 'bridge':
                 iface_node.members = interface['members']
 
+            if interface.get('primary'):
+                iface_node.primary = True
+
             host_compute.interfaces.add(iface_node)

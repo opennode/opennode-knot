@@ -20,6 +20,8 @@ class INetworkInterface(Interface):
     rx = schema.TextLine(title=u"RX bytes")
     tx = schema.TextLine(title=u"TX bytes")
 
+    primary = schema.Bool(title=u"Primary interface")
+
 
 class IBridgeInterface(INetworkInterface):
     members = schema.List(title=u"Bridge members", required=False, readonly=True)
@@ -42,6 +44,8 @@ class NetworkInterface(ReadonlyContainer):
 
         self.ipv6_address = ''
         self.ipv4_address = ''
+
+        self.primary = False
 
     @property
     def _items(self):
