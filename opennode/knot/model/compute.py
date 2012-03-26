@@ -314,6 +314,9 @@ class ComputeTags(ModelTags):
         from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
         if IVirtualCompute.providedBy(self.context) and IVirtualizationContainer.providedBy(self.context.__parent__):
             res.append(u'virt_type:' + self.context.__parent__.backend)
+            res.append(u'virt:yes')
+        else:
+            res.append(u'virt:no')
 
         config = get_config()
         if config.has_section('netenv-tags'):
