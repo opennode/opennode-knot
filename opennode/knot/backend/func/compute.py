@@ -262,10 +262,10 @@ class SyncAction(Action):
 
         self.context.architecture = (unicode(info['platform']), u'linux', self.distro(info))
         self.context.kernel = unicode(info['kernelVersion'])
-        self.context.memory = float(info['systemMemory'])
+        self.context.memory = int(info['systemMemory'])
         self.context.num_cores = int(info['numCpus'])
         self.context.os_release = unicode(info['os'])
-        self.context.swap_size = float(info['systemSwap'])
+        self.context.swap_size = int(info['systemSwap'])
         self.context.diskspace = disk_space
         self.context.diskspace_usage = disk_usage
         self.context.template = u'Hardware node'
