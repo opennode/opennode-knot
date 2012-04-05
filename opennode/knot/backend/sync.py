@@ -1,3 +1,5 @@
+import traceback
+
 from certmaster import certmaster
 from twisted.internet import defer
 from uuid import uuid5, NAMESPACE_DNS
@@ -34,9 +36,8 @@ class SyncDaemonProcess(DaemonProcess):
                     yield self.sync()
                     self.log("sync yielded")
             except Exception:
-                import traceback
-                traceback.print_exc()
-                pass
+                if get_config().getboolean('debug', 'print_exceptions'):
+                    traceback.print_exc()
 
             yield async_sleep(self.interval)
 
@@ -98,6 +99,8 @@ class SyncDaemonProcess(DaemonProcess):
                 yield deferred
             except Exception as e:
                 self.log("Got exception when syncing compute '%s': %s" % (c, e))
+                if get_config().getboolean('debug', 'print_exceptions'):
+                    traceback.print_exc()
             else:
                 self.log("Syncing was ok for compute: '%s'" % c)
 
