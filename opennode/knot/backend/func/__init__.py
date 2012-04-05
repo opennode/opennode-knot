@@ -183,10 +183,13 @@ class FuncBase(Adapter):
                         'async': AsyncFuncExecutor,
                         }
 
+    @defer.inlineCallbacks
     def run(self, *args, **kwargs):
         executor_class = self.executor_classes[get_config().get('func', 'executor_class')]
-        executor = executor_class(IFuncMinion(self.context).hostname(), self.func_action)
-        return executor.run(*args, **kwargs)
+        hostname = yield IFuncMinion(self.context).hostname()
+        executor = executor_class(hostname, self.func_action)
+        res = yield executor.run(*args, **kwargs)
+        defer.returnValue(res)
 
 
 FUNC_ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',

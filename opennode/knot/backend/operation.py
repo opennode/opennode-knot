@@ -16,7 +16,7 @@ class IFuncInstalled(Interface):
 
 class IFuncMinion(Interface):
     def hostname():
-        """Return the hostname of the minion"""
+        """Return a (possibly deferred) hostname of the minion"""
 
 
 class IBotoManageable(Interface):

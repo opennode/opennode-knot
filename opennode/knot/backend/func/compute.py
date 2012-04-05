@@ -34,6 +34,7 @@ class ComputeMinion(Adapter):
     implements(IFuncMinion)
     context(ICompute)
 
+    @db.ro_transact
     def hostname(self):
         return self.context.hostname
 
@@ -142,11 +143,12 @@ class SyncAction(Action):
 
             self.context.consoles.add(Symlink('default', self.context.consoles[default]))
 
+    @db.transact
     def sync_consoles(self):
         if self.context['consoles'] and self.context.consoles['ssh']:
             return self.fixup_console_ip(self.context.consoles['ssh'])
 
-        return db.transact(self._sync_consoles)()
+        return self._sync_consoles()
 
     @db.assert_transact
     def _sync_consoles(self):
@@ -166,10 +168,9 @@ class SyncAction(Action):
         if self.context.ipv4_address:
             address = self.context.ipv4_address.split('/')[0]
             if console.hostname != address:
-                @db.transact
-                def set_address():
-                    console.hostname = address
-                return set_address()
+                console.hostname = address
+            else:
+                raise db.RollbackException()
 
     @defer.inlineCallbacks
     def _sync_virtual(self):
