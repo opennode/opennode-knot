@@ -199,10 +199,9 @@ class Compute(Container):
 
         if self.template:
             alsoProvides(self, IVirtualCompute)
+            alsoProvides(self, IUndeployed)
         else:
             alsoProvides(self, IFuncInstalled)
-
-        alsoProvides(self, IUndeployed)
 
         assert self.hostname
 
