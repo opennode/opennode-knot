@@ -81,16 +81,16 @@ class SyncDaemonProcess(DaemonProcess):
 
             oms_root = db.get_root()['oms_root']
             for i in [follow_symlinks(i) for i in oms_root['machines'].listcontent()]:
-                res.append(i)
+                if ICompute.providedBy(i):
+                    res.append((i, i.hostname))
 
             return res
 
         sync_actions = []
         from opennode.knot.backend.func.compute import SyncAction
-        for i in (yield get_machines()):
-            if ICompute.providedBy(i):
-                action = SyncAction(i)
-                sync_actions.append((i.hostname, action.execute(DetachedProtocol(), object())))
+        for i, hostname in (yield get_machines()):
+            action = SyncAction(i)
+            sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 
         self.log("waiting for background sync tasks")
         # wait for all async synchronization tasks to finish
