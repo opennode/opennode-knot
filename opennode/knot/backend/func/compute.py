@@ -92,24 +92,19 @@ class SyncAction(Action):
     def execute(self, cmd, args):
         default = yield self.default_console()
 
-        try:
-            yield self.sync_consoles()
-            yield self.sync_hw()
+        yield self.sync_consoles()
+        yield self.sync_hw()
 
-            if IFuncInstalled.providedBy(self.context):
-                yield self.ensure_vms()
-                yield self.sync_templates()
+        if IFuncInstalled.providedBy(self.context):
+            yield self.ensure_vms()
+            yield self.sync_templates()
 
-            if IVirtualCompute.providedBy(self.context):
-                yield self._sync_virtual()
+        if IVirtualCompute.providedBy(self.context):
+            yield self._sync_virtual()
 
-            yield self._create_default_console(default)
+        yield self._create_default_console(default)
 
-            yield self.sync_vms()
-
-        except Exception as e:
-            cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
-
+        yield self.sync_vms()
 
     @db.ro_transact
     def default_console(self):
