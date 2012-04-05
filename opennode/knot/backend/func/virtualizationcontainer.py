@@ -11,7 +11,6 @@ from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUn
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
-from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
@@ -30,11 +29,19 @@ class FuncVirtualizationContainerSubmitter(Adapter):
     implements(IVirtualizationContainerSubmitter)
     context(IVirtualizationContainer)
 
-    @db.ro_transact
+    @defer.inlineCallbacks
     def submit(self, job_interface, *args):
-        job = job_interface(self.context.__parent__)
-        backend_uri = backends.get(self.context.backend, self.context.backend)
-        return job.run(backend_uri, *args)
+
+        # we cannot return a deferred from a db.transact
+        @db.ro_transact
+        def get_job():
+            job = job_interface(self.context.__parent__)
+            backend_uri = backends.get(self.context.backend, self.context.backend)
+            return (job, backend_uri)
+
+        job, backend_uri = yield get_job()
+        res = yield job.run(backend_uri, *args)
+        defer.returnValue(res)
 
 
 class ListVirtualizationContainerAction(Action):
