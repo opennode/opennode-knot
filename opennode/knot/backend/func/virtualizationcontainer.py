@@ -30,6 +30,7 @@ class FuncVirtualizationContainerSubmitter(Adapter):
     implements(IVirtualizationContainerSubmitter)
     context(IVirtualizationContainer)
 
+    @db.ro_transact
     def submit(self, job_interface, *args):
         job = job_interface(self.context.__parent__)
         backend_uri = backends.get(self.context.backend, self.context.backend)
