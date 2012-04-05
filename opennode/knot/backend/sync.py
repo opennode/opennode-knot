@@ -98,7 +98,8 @@ class SyncDaemonProcess(DaemonProcess):
                 yield deferred
             except Exception as e:
                 self.log("Got exception when syncing compute '%s': %s" % (c, e))
-            self.log("Syncing was ok for compute: '%s'" % c)
+            else:
+                self.log("Syncing was ok for compute: '%s'" % c)
 
         self.log("synced")
 
