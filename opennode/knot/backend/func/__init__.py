@@ -204,7 +204,7 @@ FUNC_ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
                 IGetIncomingHosts: 'certmastermod.get_hosts_to_sign',
                 ICleanupHost: 'certmastermod.cleanup_hosts',
                 IAcceptIncomingHost: 'certmastermod.sign_hosts',
-                IGetDiskUsage: 'disk.usage', IGetRoutes: 'onode.network.show_routing_table',
+                IGetDiskUsage: 'onode.host.disk_usage', IGetRoutes: 'onode.network.show_routing_table',
                 IHostInterfaces: 'onode.host.interfaces',
                 IGetHWUptime: 'onode.host.uptime'}
 
