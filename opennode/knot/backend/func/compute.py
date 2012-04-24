@@ -22,7 +22,7 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
-from opennode.oms.util import blocking_yield, get_u
+from opennode.oms.util import blocking_yield, get_u, exception_logger
 from opennode.oms.zodb import db
 
 from twisted.internet import defer
@@ -506,7 +506,7 @@ def create_virtual_compute(model, event):
     if IDeployed.providedBy(model):
         return
 
-    DeployAction(model).execute(DetachedProtocol(), object())
+    exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
 
 
 @subscribe(ICompute, IModelModifiedEvent)
