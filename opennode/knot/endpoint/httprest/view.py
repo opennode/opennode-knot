@@ -91,7 +91,7 @@ class ComputeView(ContainerView):
             'features': [i.__name__ for i in self.context.implemented_interfaces()],
             'uptime': self.context.uptime,
         })
-        return ret
+        return self.filter_attributes(request, ret)
 
     def blacklisted(self, item):
         return (super(ComputeView, self).blacklisted(item)
