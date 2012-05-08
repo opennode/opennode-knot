@@ -155,10 +155,10 @@ class SyncFuncExecutor(FuncExecutor):
                 raise
 
         self.deferred = spawn_func_handle_timeout()
-        # XXX: after switching to the 'synchronous' func execute, this is broken, TODO check why!
-        # Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
-        #                                                             self.func_action,
-        #                                                             ' '.join(str(i) for i in args)))
+
+        Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
+                                                                    self.func_action,
+                                                                    ' '.join(str(i) for i in args)))
 
         return self.deferred
 
