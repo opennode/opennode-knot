@@ -16,6 +16,7 @@ from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IS
                                             IAcceptIncomingHost, IGetHWUptime)
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import Proc
+from opennode.oms.security.principals import effective_principals
 from opennode.oms.util import timeout, TimeoutException
 from opennode.oms.zodb import db
 
@@ -27,9 +28,10 @@ class FuncExecutor(object):
 class AsyncFuncExecutor(FuncExecutor):
     interval = 0.1
 
-    def __init__(self, hostname, func_action):
+    def __init__(self, hostname, func_action, interaction):
         self.hostname = hostname
         self.func_action = func_action
+        self.interaction = interaction
 
     def run(self, *args, **kwargs):
         self.deferred = defer.Deferred()
@@ -96,9 +98,11 @@ class SyncFuncExecutor(FuncExecutor):
     # so we temporarily avoid calling them again until the blacklist TTL expires
     func_host_blacklist = {}
 
-    def __init__(self, hostname, func_action):
+
+    def __init__(self, hostname, func_action, interaction):
         self.hostname = hostname
         self.func_action = func_action
+        self.interaction = interaction
 
     def run(self, *args, **kwargs):
         hard_timeout = get_config().getint('func', 'hard_timeout')
@@ -156,9 +160,14 @@ class SyncFuncExecutor(FuncExecutor):
 
         self.deferred = spawn_func_handle_timeout()
 
-        Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
+        if self.interaction:
+            principals = effective_principals(self.interaction)
+            if principals:
+                principal = principals[0]
+                Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
                                                                     self.func_action,
-                                                                    ' '.join(str(i) for i in args)))
+                                                                    ' '.join(str(i) for i in args)),
+                              principal=principal)
 
         return self.deferred
 
@@ -187,7 +196,8 @@ class FuncBase(Adapter):
     def run(self, *args, **kwargs):
         executor_class = self.executor_classes[get_config().get('func', 'executor_class')]
         hostname = yield IFuncMinion(self.context).hostname()
-        executor = executor_class(hostname, self.func_action)
+        interaction = db.context(self.context).get('interaction', None)
+        executor = executor_class(hostname, self.func_action, interaction)
         res = yield executor.run(*args, **kwargs)
         defer.returnValue(res)
 
