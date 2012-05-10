@@ -336,13 +336,13 @@ class SyncAction(Action):
 
                 template = template_container['by-name'][name].target
                 template.cores = (get_i(i, 'vcpu_min'),
-                                  get_i(i, 'vcpu_normal'),
+                                  max(get_i(i, 'vcpu_min'), get_i(i, 'vcpu_normal')),
                                   get_i(i, 'vcpu'))
                 template.memory = (get_f(i, 'memory_min'),
-                                   get_f(i, 'memory_normal'),
+                                   max(get_f(i, 'memory_min'), get_f(i, 'memory_normal')),
                                    get_f(i, 'memory'))
                 template.swap = (get_f(i, 'swap_min'),
-                                 get_f(i, 'swap_normal'),
+                                 max(get_f(i, 'swap_min'), get_f(i, 'swap_normal')),
                                  get_f(i, 'swap'))
                 template.disk = (get_f(i, 'disk_min'),
                                  get_f(i, 'disk'))
