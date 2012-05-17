@@ -367,8 +367,13 @@ class DeployAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
-        if not self.context.template:
+        parent = yield db.ro_transact(proxy=False)(lambda: self.context.__parent__)()
+
+        submitter = IVirtualizationContainerSubmitter(parent)
+
+        template = yield db.ro_transact(lambda: self.context.template)()
+
+        if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
             return
 
@@ -376,13 +381,17 @@ class DeployAction(Action):
         # and take the template name from the object
         #template = cmd.traverse(self.context.template)
 
-        vm_parameters = dict(template_name=self.context.template,
-                             hostname=self.context.hostname,
-                             vm_type='openvz',
-                             uuid=self.context.__name__,
-                             nameservers=self.context.nameservers,
-                             autostart=self.context.autostart,
-                             ip_address=self.context.ipv4_address.split('/')[0],)
+        @db.ro_transact(proxy=False)
+        def get_parameters():
+            return dict(template_name=self.context.template,
+                        hostname=self.context.hostname,
+                        vm_type='openvz',
+                        uuid=self.context.__name__,
+                        nameservers=db.remove_persistent_proxy(self.context.nameservers),
+                        autostart=self.context.autostart,
+                        ip_address=self.context.ipv4_address.split('/')[0],)
+
+        vm_parameters = yield get_parameters()
         res = yield submitter.submit(IDeployVM, vm_parameters)
         cmd.write('%s\n' % (res,))
 
