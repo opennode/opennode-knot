@@ -402,8 +402,11 @@ class UndeployAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
-        res = yield submitter.submit(IUndeployVM, self.context.__name__)
+        name = yield db.ro_transact(lambda: self.context.__name__)()
+        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+
+        submitter = IVirtualizationContainerSubmitter(parent)
+        res = yield submitter.submit(IUndeployVM, name)
         cmd.write('%s\n' % (res,))
 
         @db.transact
@@ -423,11 +426,14 @@ class InfoAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
+        name = yield db.ro_transact(lambda: self.context.__name__)()
+        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+
+        submitter = IVirtualizationContainerSubmitter(parent)
         try:
             # TODO: not efficient but for now it's not important to add an ad-hoc func method for this.
             for vm in (yield submitter.submit(IListVMS)):
-                if vm['uuid'] == self.context.__name__:
+                if vm['uuid'] == name:
                     max_key_len = max(len(key) for key in vm)
                     for key, value in vm.items():
                         cmd.write("%s %s\n" % ((key + ':').ljust(max_key_len), value))
@@ -444,10 +450,13 @@ class ComputeAction(Action):
     def execute(self, cmd, args):
         action_name = getattr(self, 'action_name', self._name + "ing")
 
-        cmd.write("%s %s\n" % (action_name, self.context.__name__))
-        submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
+        name = yield db.ro_transact(lambda: self.context.__name__)()
+        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+
+        cmd.write("%s %s\n" % (action_name, name))
+        submitter = IVirtualizationContainerSubmitter(parent)
         try:
-            yield submitter.submit(self.job, self.context.__name__)
+            yield submitter.submit(self.job, name)
         except Exception as e:
             cmd.write("%s\n" % (": ".join(msg for msg in e.args if not msg.startswith('  File "/'))))
 
