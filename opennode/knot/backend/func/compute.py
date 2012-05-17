@@ -227,7 +227,7 @@ class SyncAction(Action):
         if compute.effective_state != 'active':
             compute.uptime = None
         else:
-            compute.uptime = vm['uptime']
+            compute.uptime = get_f(vm, 'uptime')
 
         compute.apply()
 
