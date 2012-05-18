@@ -54,6 +54,8 @@ class ListVirtualizationContainerAction(Action):
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         cmd.write("listing virtual machines\n")
+        db.assert_proxy(self.context)
+
         submitter = IVirtualizationContainerSubmitter(self.context)
 
         try:
