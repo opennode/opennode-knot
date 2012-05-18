@@ -102,6 +102,12 @@ class ICompute(Interface):
         value_type=schema.Float(),
         required=False, readonly=True)
 
+
+class IVirtualCompute(Interface):
+    """A virtual compute."""
+
+    autostart = schema.Bool(title=u"Autostart", description=u"Start on boot", required=False)
+
     # VM only
     template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
@@ -150,6 +156,8 @@ class Compute(Container):
                      ))
 
     __contains__ = IInCompute
+
+    __markers__ = [IVirtualCompute]
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
@@ -329,14 +337,8 @@ class ComputeTags(ModelTags):
         return res
 
 
-class IVirtualCompute(Interface):
-    """A virtual compute."""
-
-    autostart = schema.Bool(title=u"Autostart", description=u"Start on boot", required=False)
-
-
 class Computes(AddingContainer):
-    __contains__ = Compute
+    __contains__ = IVirtualCompute
     __name__ = 'computes'
 
     def __str__(self):

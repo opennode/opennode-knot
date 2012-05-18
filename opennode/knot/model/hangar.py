@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from zope.interface import Interface, implements
 
 from opennode.oms.model.model.base import Container
-from opennode.knot.model.compute import ICompute, IInCompute
+from opennode.knot.model.compute import IVirtualCompute, IInCompute
 
 
 class IHangar(Interface):
@@ -13,7 +13,7 @@ class IHangar(Interface):
 class Hangar(Container):
     implements(IHangar, IInCompute)
 
-    __contains__ = ICompute
+    __contains__ = IVirtualCompute
 
     def __init__(self):
         super(Hangar, self).__init__()

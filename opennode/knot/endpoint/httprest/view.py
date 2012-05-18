@@ -2,7 +2,7 @@ import json
 
 from grokcore.component import context
 
-from opennode.knot.model.compute import Compute
+from opennode.knot.model.compute import Compute, IVirtualCompute
 from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
@@ -59,7 +59,7 @@ class VirtualizationContainerView(ContainerView):
             if k in data:
                 del data[k]
 
-        form = ApplyRawData(data, model=Compute)
+        form = ApplyRawData(data, model=Compute, marker=IVirtualCompute)
         if form.errors or not data.get('template'):
             template_error = [dict(id='template', msg="missing value")] if not data.get('template') else []
             return {
