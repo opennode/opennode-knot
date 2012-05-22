@@ -9,7 +9,7 @@ from zope.interface import Interface, implements
 
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IDisplayName, ContainerInjector
+from opennode.oms.model.model.base import IMarkable, IContainer, Container, AddingContainer, IDisplayName, ContainerInjector
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.security.directives import permissions
@@ -129,7 +129,7 @@ class IUndeployed(Interface):
 class Compute(Container):
     """A compute node."""
 
-    implements(ICompute, IDisplayName)
+    implements(ICompute, IDisplayName, IMarkable)
     permissions(dict(hostname = ('read', 'modify'),
                      ipv4_address = ('read', 'modify'),
                      ipv6_address = ('read', 'modify'),
@@ -158,7 +158,7 @@ class Compute(Container):
 
     __contains__ = IInCompute
 
-    __markers__ = [IVirtualCompute]
+    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IFuncInstalled]
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
