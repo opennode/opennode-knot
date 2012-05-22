@@ -88,7 +88,6 @@ class ComputeView(ContainerView):
         ret = super(ComputeView, self).render_recursive(request, *args, **kwargs)
 
         ret.update({
-            'features': [i.__name__ for i in self.context.implemented_interfaces()],
             'uptime': self.context.uptime,
         })
         return self.filter_attributes(request, ret)
