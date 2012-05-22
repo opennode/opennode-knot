@@ -5,8 +5,9 @@ import netaddr
 from grokcore.component import context
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
-from zope.interface import Interface, implements, alsoProvides
+from zope.interface import Interface, implements
 
+from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import IContainer, Container, AddingContainer, IDisplayName, ContainerInjector
 from opennode.oms.model.model.root import OmsRoot

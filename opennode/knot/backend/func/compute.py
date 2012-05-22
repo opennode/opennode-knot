@@ -7,13 +7,14 @@ from certmaster import certmaster
 from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
 
 from grokcore.component import context, subscribe, baseclass, Adapter
+from zope.interface import implements
 
 from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, ISuspendVM, IResumeVM, IListVMS,
                                             IRebootVM, IGetComputeInfo, IFuncInstalled, IDeployVM, IUndeployVM,
                                             IGetLocalTemplates, IFuncMinion, IGetVirtualizationContainers,
                                             IGetDiskUsage, IGetRoutes, IGetHWUptime)
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
-from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent, TmpObj
+from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent, TmpObj, alsoProvides, noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed
 from opennode.knot.model.template import Template
@@ -26,8 +27,6 @@ from opennode.oms.util import blocking_yield, get_u, get_i, get_f, exception_log
 from opennode.oms.zodb import db
 
 from twisted.internet import defer
-
-from zope.interface import alsoProvides, noLongerProvides, implements
 
 
 class ComputeMinion(Adapter):

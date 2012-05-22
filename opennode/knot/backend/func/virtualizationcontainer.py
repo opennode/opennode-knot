@@ -1,12 +1,12 @@
 from grokcore.component import Adapter, context, implements
 from twisted.internet import defer
 from zope.component import handle
-from zope.interface import Interface, alsoProvides, noLongerProvides
+from zope.interface import Interface
 
 from opennode.oms.config import get_config
 from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IFuncInstalled
 from opennode.oms.model.model.actions import Action, action
-from opennode.oms.model.form import ModelDeletedEvent
+from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
