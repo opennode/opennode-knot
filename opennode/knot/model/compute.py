@@ -32,7 +32,7 @@ M = 10 ** 6
 class ICompute(Interface):
     # Network parameters
     hostname = schema.TextLine(
-        title=u"Host name", min_length=3)
+        title=u"Host name", min_length=1)
     ipv4_address = schema.TextLine(
         title=u"IPv4 address", min_length=7, required=False)
     ipv6_address = schema.TextLine(
