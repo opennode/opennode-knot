@@ -197,6 +197,13 @@ class Compute(Container):
 
     autostart = False
 
+    # zabbix specific
+    zabbix_hostgroups = []
+    zabbix_dns_name = None
+    zabbix_ipv4_address = None
+    zabbix_use_dns = True
+    zabbix_agent_port = 10050
+
     def __init__(self, hostname, state, memory=None, template=None, ipv4_address=None):
         super(Compute, self).__init__()
 
