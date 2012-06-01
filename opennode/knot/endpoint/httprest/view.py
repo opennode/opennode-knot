@@ -96,3 +96,8 @@ class ComputeView(ContainerView):
         return (super(ComputeView, self).blacklisted(item)
                 or isinstance(item, ActionsContainer)
                 or isinstance(item, Metrics))
+
+    def put_filter_attributes(self, request, data):
+        if 'template' in data and not IVirtualCompute.providedBy(self.context):
+            del data['template']
+        return data
