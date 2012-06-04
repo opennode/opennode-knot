@@ -7,6 +7,7 @@ from certmaster import certmaster
 from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
 
 from grokcore.component import context, subscribe, baseclass, Adapter
+from zope.component import handle
 from zope.interface import implements
 
 from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, ISuspendVM, IResumeVM, IListVMS,
@@ -14,7 +15,7 @@ from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, 
                                             IGetLocalTemplates, IFuncMinion, IGetVirtualizationContainers,
                                             IGetDiskUsage, IGetRoutes, IGetHWUptime)
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
-from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent, TmpObj, alsoProvides, noLongerProvides
+from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent, ModelModifiedEvent, TmpObj, alsoProvides, noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed
 from opennode.knot.model.template import Template
@@ -552,3 +553,6 @@ def handle_compute_state_change_request(compute, event):
         compute.effective_state = event.original['state']
         raise e
     compute.effective_state = event.modified['state']
+
+    handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
+                                       {'effective_state': compute.effective_state}))
