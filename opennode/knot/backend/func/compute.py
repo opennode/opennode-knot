@@ -534,6 +534,10 @@ def handle_compute_state_change_request(compute, event):
     if not event.modified.get('state', None):
         return
 
+    # handles events triggered by sync (ON-421)
+    if compute.effective_state == compute.state:
+        return
+
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
 
     if event.original['state'] == 'inactive' and event.modified['state'] == 'active':
