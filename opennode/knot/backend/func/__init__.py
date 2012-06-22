@@ -187,6 +187,7 @@ class FuncBase(Adapter):
     baseclass()
 
     func_action = None
+    __executor__ = None
 
     executor_classes = {'sync': SyncFuncExecutor,
                         'async': AsyncFuncExecutor,
@@ -194,7 +195,7 @@ class FuncBase(Adapter):
 
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
-        executor_class = self.executor_classes[get_config().get('func', 'executor_class')]
+        executor_class = self.__executor__
         hostname = yield IFuncMinion(self.context).hostname()
         interaction = db.context(self.context).get('interaction', None)
         executor = executor_class(hostname, self.func_action, interaction)
@@ -218,6 +219,10 @@ FUNC_ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
                 IHostInterfaces: 'onode.host.interfaces',
                 IGetHWUptime: 'onode.host.uptime'}
 
+OVERRIDE_EXECUTORS = {
+    IDeployVM: AsyncFuncExecutor,
+    IUndeployVM: AsyncFuncExecutor
+    }
 
 # Avoid polluting the global namespace with temporary variables:
 def _generate_classes():
@@ -226,5 +231,6 @@ def _generate_classes():
         cls_name = 'Func%s' % interface.__name__[1:]
         cls = type(cls_name, (FuncBase, ), dict(func_action=action))
         classImplements(cls, interface)
+        cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, FuncBase.executor_classes[get_config().get('func', 'executor_class')])
         globals()[cls_name] = cls
 _generate_classes()
