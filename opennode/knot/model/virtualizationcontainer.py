@@ -8,7 +8,7 @@ from zope.interface import Interface, implements
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.byname import ByNameContainerExtension
-from opennode.knot.model.compute import Compute, IInCompute
+from opennode.knot.model.compute import IVirtualCompute, IInCompute
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.security.directives import permissions
 
@@ -21,7 +21,7 @@ class VirtualizationContainer(Container):
     implements(IVirtualizationContainer, IInCompute)
     permissions(dict(backend=('read', 'modify')))
 
-    __contains__ = Compute
+    __contains__ = IVirtualCompute
 
     def __init__(self, backend):
         super(VirtualizationContainer, self).__init__()
