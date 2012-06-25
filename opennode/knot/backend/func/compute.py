@@ -385,7 +385,7 @@ class DeployAction(Action):
         def get_parameters():
             return dict(template_name=self.context.template,
                         hostname=self.context.hostname,
-                        vm_type='openvz',
+                        vm_type=self.context.__parent__.backend,
                         uuid=self.context.__name__,
                         nameservers=db.remove_persistent_proxy(self.context.nameservers),
                         autostart=self.context.autostart,
