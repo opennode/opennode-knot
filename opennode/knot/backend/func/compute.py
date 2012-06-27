@@ -145,15 +145,12 @@ class SyncAction(Action):
 
     @db.transact
     def sync_consoles(self):
-        if self.context['consoles'] and self.context.consoles['ssh']:
-            return self.fixup_console_ip(self.context.consoles['ssh'])
-
         return self._sync_consoles()
 
     @db.assert_transact
     def _sync_consoles(self):
-        if self.context.consoles['ssh']:
-            return
+        if self.context['consoles'] and self.context.consoles['ssh']:
+            return self.fixup_console_ip(self.context.consoles['ssh'])
 
         address = self.context.hostname
         try:
