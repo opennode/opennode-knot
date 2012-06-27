@@ -14,6 +14,7 @@ from opennode.oms.model.model.base import Container, ReadonlyContainer
 from opennode.oms.endpoint.ssh.terminal import RESET_COLOR
 from opennode.oms.endpoint.webterm.ssh import ssh_connect_interactive_shell
 from opennode.oms.security.directives import permissions
+from opennode.oms.zodb import db
 
 
 class IConsole(Interface):
@@ -140,16 +141,17 @@ class AttachAction(Action):
 
     action('attach')
 
+    @defer.inlineCallbacks
     def execute(self, cmd, args):
         self.closed = False
         self.protocol = cmd.protocol
         self.transport = self
         size = (cmd.protocol.width, cmd.protocol.height)
 
-        self._do_connection(size)
+        yield self._do_connection(size)
 
         self.deferred = defer.Deferred()
-        return self.deferred
+        yield self.deferred
 
     def write(self, data):
         if not self.closed:
@@ -182,6 +184,7 @@ class AttachAction(Action):
 class SshAttachAction(AttachAction):
     context(ISshConsole)
 
+    @db.ro_transact
     def _do_connection(self, size):
         self.write("Attaching to %s@%s. Use ^] to force exit.\n" % (self.context.user.encode('utf-8'), self.context.hostname.encode('utf-8')))
 
@@ -192,6 +195,7 @@ class HypervisorSshAttachAction(AttachAction):
     """For consoles that are attached by running a command on the hypervisor host."""
     baseclass()
 
+    @db.ro_transact
     def _do_connection(self, size):
         self.write("Attaching to %s. Use ^] to force exit.\n" % self.name)
 
