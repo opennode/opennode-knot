@@ -166,8 +166,6 @@ class SyncAction(Action):
             address = self.context.ipv4_address.split('/')[0]
             if console.hostname != address:
                 console.hostname = address
-            else:
-                raise db.RollbackException()
 
     @defer.inlineCallbacks
     def _sync_virtual(self):
