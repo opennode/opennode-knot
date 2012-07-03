@@ -17,7 +17,7 @@ from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent, ModelModifiedEvent, TmpObj, alsoProvides, noLongerProvides
 from opennode.oms.model.model.actions import Action, action
-from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed
+from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.template import Template
 from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
@@ -361,6 +361,7 @@ class DeployAction(Action):
     action('deploy')
 
     @defer.inlineCallbacks
+    @exception_logger
     def execute(self, cmd, args):
         parent = yield db.ro_transact(proxy=False)(lambda: self.context.__parent__)()
 
@@ -386,12 +387,19 @@ class DeployAction(Action):
                         autostart=self.context.autostart,
                         ip_address=self.context.ipv4_address.split('/')[0],)
 
+        @db.transact
+        def mark_as_deploying():
+            alsoProvides(self.context, IDeploying)
+
+        yield mark_as_deploying()
+
         vm_parameters = yield get_parameters()
         res = yield submitter.submit(IDeployVM, vm_parameters)
         cmd.write('%s\n' % (res,))
 
         @db.transact
         def finalize_vm():
+            noLongerProvides(self.context, IDeploying)
             noLongerProvides(self.context, IUndeployed)
             alsoProvides(self.context, IDeployed)
             cmd.write("changed state from undeployed to deployed\n")

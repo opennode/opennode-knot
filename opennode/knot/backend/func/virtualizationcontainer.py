@@ -7,7 +7,7 @@ from opennode.oms.config import get_config
 from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IFuncInstalled
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
-from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed
+from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
@@ -143,6 +143,10 @@ class SyncVmsAction(Action):
             alsoProvides(self.context[vm_uuid], IDeployed)
 
         for vm_uuid in local_uuids.difference(remote_uuids):
+            if IDeploying.providedBy(self.context[vm_uuid]):
+                print "[sync] don't delete undeployed VM while in IDeploying state"
+                continue
+
             noLongerProvides(self.context[vm_uuid], IDeployed)
             alsoProvides(self.context[vm_uuid], IUndeployed)
             self.context[vm_uuid].state = u'inactive'

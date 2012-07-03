@@ -127,6 +127,10 @@ class IUndeployed(Interface):
     """Marker interface implemented when the compute has not been deployed yet."""
 
 
+class IDeploying(Interface):
+    """Marker interface implemented when the compute has a deploy operation in progress."""
+
+
 class Compute(Container):
     """A compute node."""
 
@@ -159,7 +163,7 @@ class Compute(Container):
 
     __contains__ = IInCompute
 
-    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IFuncInstalled, IZabbixConfiguration]
+    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IFuncInstalled, IZabbixConfiguration]
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
