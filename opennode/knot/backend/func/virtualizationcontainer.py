@@ -91,9 +91,12 @@ class SyncVmsAction(Action):
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         # sync host interfaces (this is not the right place, but ...)
-        host_compute = self.context.__parent__
-        job = IHostInterfaces(host_compute)
-        ifaces = yield job.run()
+        @db.ro_transact
+        def get_ifaces_job():
+            host_compute = self.context.__parent__
+            return IHostInterfaces(host_compute)
+
+        ifaces = yield (yield get_ifaces_job()).run()
 
         yield self._sync_ifaces(ifaces)
 
