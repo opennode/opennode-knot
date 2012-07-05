@@ -62,7 +62,7 @@ class ICompute(Interface):
 
     # State
     state = schema.Choice(
-        title=u"State", values=(u'active', u'inactive', u'suspended'))
+        title=u"State", values=(u'active', u'inactive', u'suspended'), required=False, default=u'inactive')
     effective_state = schema.TextLine(
         title=u"Effective state", readonly=True, required=False)
 
@@ -208,7 +208,7 @@ class Compute(Container):
     zabbix_use_dns = True
     zabbix_agent_port = 10050
 
-    def __init__(self, hostname, state, memory=None, template=None, ipv4_address=None):
+    def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None):
         super(Compute, self).__init__()
 
         self.hostname = hostname
@@ -326,7 +326,7 @@ class ComputeTags(ModelTags):
     context(Compute)
 
     def auto_tags(self):
-        res = [u'state:' + self.context.state]
+        res = [u'state:' + self.context.state] if self.context.state else []
         if self.context.architecture:
             for i in self.context.architecture:
                 res.append(u'arch:' + i)
