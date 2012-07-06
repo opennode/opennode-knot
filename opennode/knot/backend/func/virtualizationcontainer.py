@@ -178,10 +178,15 @@ class SyncVmsAction(Action):
     def _sync_ifaces(self, ifaces):
         host_compute = self.context.__parent__
 
-        # XXX TODO: handle when the interface changes type or gets removed
-        for interface in ifaces:
-            if host_compute.interfaces[interface['name']]:
-                continue
+        local_interfaces = host_compute.interfaces
+        local_names = set(i.__name__ for i in local_interfaces)
+        remote_names = set(i['name'] for i in ifaces)
+
+        ifaces_by_name = dict((i['name'], i) for i in ifaces)
+
+        # add interfaces
+        for iface_name in remote_names.difference(local_names):
+            interface = ifaces_by_name[iface_name]
 
             cls = NetworkInterface
             if interface['type'] == 'bridge':
@@ -198,3 +203,31 @@ class SyncVmsAction(Action):
                 iface_node.primary = True
 
             host_compute.interfaces.add(iface_node)
+
+        # modify interfaces
+        for iface_name in remote_names.intersection(local_names):
+            interface = ifaces_by_name[iface_name]
+            iface_node = local_interfaces[iface_name]
+
+            if 'ip' in interface:
+                iface_node.ipv4_address = interface['ip']
+            else:
+                iface_node.ipv4_address = ''
+
+            if 'mac' in interface:
+                iface_node.hw_address = interface['mac']
+            else:
+                iface_node.hw_address = ''
+
+            if interface.get('primary'):
+                iface_node.primary = True
+
+            # Currently doesn't handle when an interface changes type
+            # it would be easier to have a code path that treats it as a removal + addition
+            if interface['type'] == 'bridge' and isinstance(iface_node, BridgeInterface):
+                iface_node.members = interface['members']
+
+
+        # remove interfaces
+        for iface_name in local_names.difference(remote_names):
+            del local_interfaces[iface_name]
