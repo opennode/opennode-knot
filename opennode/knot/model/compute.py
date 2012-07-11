@@ -202,7 +202,7 @@ class Compute(Container):
     autostart = False
 
     # zabbix specific
-    zabbix_hostgroups = []
+    zabbix_hostgroups = {}
     zabbix_dns_name = None
     zabbix_ipv4_address = None
     zabbix_use_dns = True
