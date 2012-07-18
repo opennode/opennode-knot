@@ -4,7 +4,7 @@ from zope.component import provideSubscriptionAdapter
 
 from grokcore.component import context
 
-from opennode.oms.model.model.base import Model, ReadonlyContainer, IDisplayName, ContainerInjector
+from opennode.oms.model.model.base import Model, Container, ReadonlyContainer, IDisplayName, ContainerInjector
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.root import OmsRoot
 
@@ -51,21 +51,11 @@ class ZabbixServer(ReadonlyContainer):
         return [self.url]
 
 
-class ZabbixServers(ReadonlyContainer):
+class ZabbixServers(Container):
     __name__ = 'zabbix'
 
     def __str__(self):
         return 'Zabbix servers'
-
-    @property
-    def _items(self):
-        pending = {}
-        if get_config().getboolean('zabbix', 'enabled', False):
-            url = get_config().get('zabbix', 'url')
-            pending['primary'] = ZabbixServer(url,
-                                              get_config().get('zabbix', 'username'),
-                                              get_config().get('zabbix', 'password'))
-        return pending
 
 
 class ZabbixServerRootInjector(ContainerInjector):

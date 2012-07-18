@@ -19,7 +19,7 @@ from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.zodb import db
 from opennode.oms.config import get_config
 
-from opennode.knot.model.zabbix import IZabbixServer
+from opennode.knot.model.zabbix import ZabbixServer, IZabbixServer
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.hangar import IHangar
 from opennode.knot.backend.zabbix_api import ZabbixAPI
@@ -29,7 +29,7 @@ class ZabbixSyncAction(Action):
     """Synchronize zabbix server model with the targeted server."""
     context(IZabbixServer)
 
-    action('sync')
+    action('zabbix-sync')
 
     @db.transact
     def execute(self, cmd, args):
@@ -38,10 +38,11 @@ class ZabbixSyncAction(Action):
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         try:
-            cmd.write('Executed a call to zabbix server')
-            zapi = ZabbixAPI(server=self.context.url, path="", log_level=6)
+            cmd.write('Executing a call to zabbix server')
+            zapi = ZabbixAPI(server=self.context.url, path="")
             yield zapi.login(self.context.username, self.context.password)
             existing_groups = yield zapi.hostgroup.get({"output": 'extend'})
+            print "[_EXECUTE] Modifying ZS: ", self.context
             if len(existing_groups) > 0:
                 self.context.hostgroups = {}
             for group in existing_groups:
@@ -83,15 +84,28 @@ class ZabbixSyncDaemonProcess(DaemonProcess):
     def sync(self):
         self.log("syncing zabbix")
 
-        @db.ro_transact
+        @db.transact
         def get_zabbix_server():
-            # refresh server from 
-            get_config
             res = []
             oms_root = db.get_root()['oms_root']
+            # first check if we already have existing Zabbix Servers
             for i in [follow_symlinks(i) for i in oms_root['zabbix'].listcontent()]:
+                print "[get_zabbix_server] Found server", i
                 if IZabbixServer.providedBy(i):
                     res.append((i, i.url))
+            # if we don't, but it's enabled in the configuration file -> create a new instance
+            if get_config().getboolean('zabbix', 'enabled', False):
+                url = get_config().get('zabbix', 'url')
+                username = get_config().get('zabbix', 'username')
+                password = get_config().get('zabbix', 'password')
+                if len(res) == 0:
+                    oms_root['zabbix'].add(ZabbixServer(url, username, password))
+                else:
+                    # update configuration of the already defined server
+                    # XXX currently only a single zabbix server is supported
+                    res[0][0].url = url
+                    res[0][0].username = username
+                    res[0][0].password = password
             return res
 
         sync_actions = []
@@ -112,7 +126,7 @@ class ZabbixSyncDaemonProcess(DaemonProcess):
             else:
                 self.log("Syncing was ok for Zabbix server: '%s'" % c)
 
-        self.log("synced")
+        self.log("zabbix synced")
 
 
 provideSubscriptionAdapter(subscription_factory(ZabbixSyncDaemonProcess), adapts=(Proc,))
