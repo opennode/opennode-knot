@@ -22,7 +22,7 @@ from opennode.oms.config import get_config
 from opennode.knot.model.zabbix import ZabbixServer, IZabbixServer
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.hangar import IHangar
-from opennode.knot.backend.zabbix_api import ZabbixAPI
+from opennode.knot.backend.zabbix_api import ZabbixAPI, ZabbixAPIException
 
 
 class ZabbixSyncAction(Action):
@@ -38,15 +38,17 @@ class ZabbixSyncAction(Action):
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         try:
-            cmd.write('Executing a call to zabbix server')
+            cmd.write('Executing a call to Zabbix server: %s' % self.context.url)
             zapi = ZabbixAPI(server=self.context.url, path="")
             yield zapi.login(self.context.username, self.context.password)
             existing_groups = yield zapi.hostgroup.get({"output": 'extend'})
-            print "[_EXECUTE] Modifying ZS: ", self.context
             if len(existing_groups) > 0:
-                self.context.hostgroups = {}
+                self.context.zabbix_hostgroups = {}
             for group in existing_groups:
-                self.context.hostgroups[int(group['groupid'])] = group['name']
+                self.context.zabbix_hostgroups[int(group['groupid'])] = group['name']
+        except ZabbixAPIException as ze:
+            cmd.write("%s\n" % ze.args[0])
+            self.context.zabbix_hostgroups = {}
         except Exception as e:
             cmd.write("%s\n" % (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/'))))
 
@@ -90,7 +92,6 @@ class ZabbixSyncDaemonProcess(DaemonProcess):
             oms_root = db.get_root()['oms_root']
             # first check if we already have existing Zabbix Servers
             for i in [follow_symlinks(i) for i in oms_root['zabbix'].listcontent()]:
-                print "[get_zabbix_server] Found server", i
                 if IZabbixServer.providedBy(i):
                     res.append((i, i.url))
             # if we don't, but it's enabled in the configuration file -> create a new instance
