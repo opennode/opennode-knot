@@ -45,9 +45,15 @@ class PingCheckAction(Action):
         self.context.last_ping = (res == 1)
         self.context.pingcheck.append({'timestamp': datetime.utcnow(),
                                        'result': res})
-        if len(self.context.pingcheck) > self.mem_limit:
-            del self.context.pingcheck[self.mem_limit:]
+        history_len = len(self.context.pingcheck)
+        if history_len > self.mem_limit:
+            del self.context.pingcheck[:-self.mem_limit]
 
+        ping_results = map(lambda i: i['result'] == 1,
+                           self.context.pingcheck[:3])
+
+        self.context.suspicious = not all(ping_results)
+        self.context.failure = not any(ping_results)
 
 class PingCheckDaemonProcess(DaemonProcess):
     implements(IProcess)

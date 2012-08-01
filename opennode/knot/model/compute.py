@@ -116,6 +116,12 @@ class ICompute(Interface):
                                                    required=False,
                                                    readonly=True))
 
+    suspicious = schema.Bool(title=u'Suspicion of unavailability',
+                             required=False, readonly=True, default=False)
+
+    failure = schema.Bool(title=u'Availability failure', required=False,
+                          readonly=True, default=False)
+
 class IVirtualCompute(Interface):
     """A virtual compute."""
 
@@ -188,6 +194,8 @@ class Compute(Container):
     kernel = u"unknown"
     last_ping = False
     pingcheck = []
+    suspicious = False
+    failure = False
 
     num_cores = 1
     memory = 2048,
