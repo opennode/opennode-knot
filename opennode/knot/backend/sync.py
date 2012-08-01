@@ -1,5 +1,6 @@
 import traceback
 
+from datetime import datetime
 from twisted.internet import defer
 from uuid import uuid5, NAMESPACE_DNS
 
@@ -16,7 +17,7 @@ from opennode.knot.utils.icmp import ping
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.config import get_config
-from opennode.oms.util import subscription_factory, async_sleep, blocking_yield
+from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -28,6 +29,11 @@ class PingCheckAction(Action):
 
     action('ping-check')
 
+    def __init__(self, *args, **kwargs):
+        super(PingCheckAction, self).__init__(*args, **kwargs)
+        config = get_config()
+        self.mem_limit = config.getint('pingcheck', 'mem_limit')
+
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         yield self._execute(cmd, args)
@@ -37,6 +43,10 @@ class PingCheckAction(Action):
         address = self.context.hostname.encode('utf-8')
         res = ping(address)
         self.context.last_ping = (res == 1)
+        self.context.pingcheck.append({'timestamp': datetime.utcnow(),
+                                       'result': res})
+        if len(self.context.pingcheck) > self.mem_limit:
+            del self.context.pingcheck[self.mem_limit:]
 
 
 class PingCheckDaemonProcess(DaemonProcess):
@@ -74,18 +84,21 @@ class PingCheckDaemonProcess(DaemonProcess):
             res = []
 
             oms_root = db.get_root()['oms_root']
-            for i in [follow_symlinks(i) for i in oms_root['computes'].listcontent()]:
-                if ICompute.providedBy(i):
-                    res.append((i, i.hostname))
+            res = map(lambda i: (i, i.hostname),
+                      filter(ICompute.providedBy,
+                             map(follow_symlinks,
+                                 oms_root['computes'].listcontent())))
 
             return res
 
         ping_actions = []
         for i, hostname in (yield get_computes()):
             action = PingCheckAction(i)
-            ping_actions.append((hostname, action.execute(DetachedProtocol(), object())))
+            ping_actions.append((hostname,
+                                 action.execute(DetachedProtocol(), object())))
 
         self.log("Starting ping checks")
+
         # wait for all async synchronization tasks to finish
         for c, deferred in ping_actions:
             try:

@@ -9,7 +9,9 @@ from zope.interface import Interface, implements
 
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import IMarkable, IContainer, Container, AddingContainer, IDisplayName, ContainerInjector
+from opennode.oms.model.model.base import (IMarkable, Container,
+                                           AddingContainer, IDisplayName,
+                                           ContainerInjector)
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.security.directives import permissions
@@ -105,8 +107,14 @@ class ICompute(Interface):
         required=False, readonly=True)
 
     # availability
-    last_ping = schema.Bool(title=u'Success of the last ping', required=False, readonly=True, default=False)
+    last_ping = schema.Bool(title=u'Success of the last ping', required=False,
+                            readonly=True, default=False)
 
+    pingcheck = schema.List(title=u'Ping history', required=False,
+                            readonly=True, default=[],
+                            value_type=schema.Dict(title=u'Ping result',
+                                                   required=False,
+                                                   readonly=True))
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
@@ -179,6 +187,7 @@ class Compute(Container):
     os_release = u"build 35"
     kernel = u"unknown"
     last_ping = False
+    pingcheck = []
 
     num_cores = 1
     memory = 2048,
@@ -314,7 +323,8 @@ class Compute(Container):
         if 'interfaces' not in self._items:
             return self._ipv4_address
 
-        primaries = [i.ipv4_address for i in self._items['interfaces'] if i.ipv4_address and getattr(i, 'primary', False)]
+        primaries = [i.ipv4_address for i in self._items['interfaces']
+                     if i.ipv4_address and getattr(i, 'primary', False)]
         if primaries:
             return unicode(primaries[0])
 
