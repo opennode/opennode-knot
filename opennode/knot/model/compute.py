@@ -104,6 +104,9 @@ class ICompute(Interface):
         value_type=schema.Float(),
         required=False, readonly=True)
 
+    # availability
+    last_ping = schema.Bool(title=u'Success of the last ping', required=False, readonly=True, default=False)
+
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
@@ -175,6 +178,7 @@ class Compute(Container):
 
     os_release = u"build 35"
     kernel = u"unknown"
+    last_ping = False
 
     num_cores = 1
     memory = 2048,
