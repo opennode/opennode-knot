@@ -90,10 +90,10 @@ class PingCheckDaemonProcess(DaemonProcess):
             res = []
 
             oms_root = db.get_root()['oms_root']
-            res = map(lambda i: (i, i.hostname),
-                      filter(ICompute.providedBy,
-                             map(follow_symlinks,
-                                 oms_root['computes'].listcontent())))
+            res = [(i, i.hostname)
+                   for i in map(follow_symlinks,
+                                oms_root['computes'].listcontent())
+                   if ICompute.providedBy(i)]
 
             return res
 
