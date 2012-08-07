@@ -116,3 +116,7 @@ class IGetHWUptime(IJob):
 
 class IMigrateVM(IJob):
     """ Migrate compute to another host """
+
+
+class IUpdateVM(IJob):
+    """Update VM configuration"""

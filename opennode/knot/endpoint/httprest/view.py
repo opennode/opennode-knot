@@ -64,8 +64,7 @@ class VirtualizationContainerView(ContainerView):
             template_error = [dict(id='template', msg="missing value")] if not data.get('template') else []
             return {
                 'success': False,
-                'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + template_error
-                }
+                'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + template_error}
 
         compute = form.create()
 

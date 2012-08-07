@@ -8,7 +8,7 @@ class Storage(Model):
         self.id = 1  # UID
         self.name = "Local storage"  # description
         self.path = '/storagemount/local'
-        self.type = local  # local | shared
+        self.type = 'local'  # local | shared
         self.size = size  # 1.1 GiB
         self.used_size = 0
         self.state = state  # online | offline | backup | snapshot | resize | degraded
