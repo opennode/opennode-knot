@@ -10,8 +10,7 @@ from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 from grokcore.component.directive import context
 
-from opennode.knot.model.compute import ICompute
-from opennode.knot.model.compute import Compute
+from opennode.knot.model.compute import ICompute, Compute
 from opennode.knot.utils.icmp import ping
 
 from opennode.oms.model.model.actions import Action, action
@@ -24,7 +23,7 @@ from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 
 
 class PingCheckAction(Action):
-    """Remove request of the host for joining OMS/certmaster"""
+    """Check if a Compute responds to ICMP request from OMS."""
     context(ICompute)
 
     action('ping-check')
@@ -87,8 +86,6 @@ class PingCheckDaemonProcess(DaemonProcess):
 
         @db.ro_transact
         def get_computes():
-            res = []
-
             oms_root = db.get_root()['oms_root']
             res = [(i, i.hostname)
                    for i in map(follow_symlinks,
@@ -103,8 +100,6 @@ class PingCheckDaemonProcess(DaemonProcess):
             ping_actions.append((hostname,
                                  action.execute(DetachedProtocol(), object())))
 
-        self.log("Starting ping checks")
-
         # wait for all async synchronization tasks to finish
         for c, deferred in ping_actions:
             try:
@@ -113,10 +108,6 @@ class PingCheckDaemonProcess(DaemonProcess):
                 self.log("Got exception when pinging compute '%s': %s" % (c, e))
                 if get_config().getboolean('debug', 'print_exceptions'):
                     traceback.print_exc()
-            else:
-                self.log("Pinging was ok for compute: '%s'" % c)
-
-        self.log("Ping check complete")
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
