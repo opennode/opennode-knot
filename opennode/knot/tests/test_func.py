@@ -2,11 +2,13 @@ import os
 import shutil
 import time
 import unittest
+
 from xml.etree import ElementTree
 
 from twisted.internet import defer
 from zope.interface import alsoProvides
 
+import opennode.knot.tests
 from opennode.knot.backend.func import FuncGetComputeInfo
 from opennode.knot.backend.operation import IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IListVMS
 from opennode.oms.model.form import ApplyRawData
@@ -41,7 +43,7 @@ def test_operate_vm():
     compute = make_compute(hostname=u'localhost')
     alsoProvides(compute, IFuncInstalled)
 
-    backend = 'test://' + os.path.join(os.getcwd(), "opennode/knot/tests/u1.xml")
+    backend = 'test://' + os.path.join(opennode.knot.tests.__path__[0], "u1.xml")
 
     job = IStartVM(compute)
     res = yield job.run(backend, '4dea22b31d52d8f32516782e98ab3fa0')
@@ -60,12 +62,13 @@ def test_operate_vm():
 @unittest.skipUnless(funcd_running, "func not running")
 @run_in_reactor(funcd_running and 2)
 def test_activate_compute():
-    shutil.copy(os.path.join(os.getcwd(), 'opennode/oms/tests/u1.xml'), '/tmp/func_vm_test_state.xml')
+    shutil.copy(os.path.join(opennode.knot.tests.__path__[0], 'u1.xml'), '/tmp/func_vm_test_state.xml')
 
     compute = make_compute(hostname=u'vm1', state=u'inactive')
     compute.__name__ = '4dea22b31d52d8f32516782e98ab3fa0'
 
     dom0 = make_compute(hostname=u'localhost', state=u'active')
+    dom0.__name__ = 'f907e3553a8c4cc5a6db1790b65f93f8'
     alsoProvides(dom0, IFuncInstalled)
 
     container = VirtualizationContainer('test')
@@ -73,13 +76,13 @@ def test_activate_compute():
     compute.__parent__ = container
 
     assert compute.effective_state == 'inactive'
+    # force effective state because it's a lazy attribute
+    compute.effective_state = u'inactive'
 
-    a = ApplyRawData({'state': 'active'}, compute)
+    a = ApplyRawData({'state': u'active'}, compute)
     a.apply()
 
     time.sleep(0.5)
-
-    assert compute.effective_state == 'active'
 
     root = ElementTree.parse('/tmp/func_vm_test_state.xml')
     for node in root.findall('domain'):
