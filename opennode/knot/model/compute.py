@@ -122,6 +122,7 @@ class ICompute(Interface):
     failure = schema.Bool(title=u'Availability failure', required=False,
                           readonly=True, default=False)
 
+
 class IVirtualCompute(Interface):
     """A virtual compute."""
 
@@ -364,7 +365,8 @@ class ComputeTags(ModelTags):
         if config.has_section('netenv-tags'):
             for tag, nets in config.items('netenv-tags'):
                 try:
-                    if len(netaddr.all_matching_cidrs(self.context.ipv4_address.split('/')[0], nets.split(','))) > 0:
+                    if self.context.ipv4_address is not None and \
+                     len(netaddr.all_matching_cidrs(self.context.ipv4_address.split('/')[0], nets.split(','))) > 0:
                         res.append(u'env:' + tag)
                 except ValueError:
                     # graceful ignoring of incorrect ips
