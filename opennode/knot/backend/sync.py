@@ -12,6 +12,7 @@ from grokcore.component.directive import context
 
 from opennode.knot.model.compute import ICompute, Compute
 from opennode.knot.utils.icmp import ping
+from opennode.knot.utils.logging import log
 
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
@@ -77,10 +78,6 @@ class PingCheckDaemonProcess(DaemonProcess):
 
             yield async_sleep(self.interval)
 
-    def log(self, msg):
-        import threading
-        print "[ping-check] (%s) %s" % (threading.current_thread(), msg)
-
     @defer.inlineCallbacks
     def ping_check(self):
 
@@ -105,7 +102,7 @@ class PingCheckDaemonProcess(DaemonProcess):
             try:
                 yield deferred
             except Exception as e:
-                self.log("Got exception when pinging compute '%s': %s" % (c, e))
+                log("Got exception when pinging compute '%s': %s" % (c, e), 'ping-check')
                 if get_config().getboolean('debug', 'print_exceptions'):
                     traceback.print_exc()
 
@@ -128,22 +125,18 @@ class SyncDaemonProcess(DaemonProcess):
         while True:
             try:
                 if not self.paused:
-                    self.log("yielding sync")
+                    log("yielding sync", 'sync')
                     yield self.sync()
-                    self.log("sync yielded")
+                    log("sync yielded", 'sync')
             except Exception:
                 if get_config().getboolean('debug', 'print_exceptions'):
                     traceback.print_exc()
 
             yield async_sleep(self.interval)
 
-    def log(self, msg):
-        import threading
-        print "[sync] (%s) %s" % (threading.current_thread(), msg)
-
     @defer.inlineCallbacks
     def sync(self):
-        self.log("syncing")
+        log("syncing", 'sync')
 
         @defer.inlineCallbacks
         def ensure_machine(host):
@@ -188,18 +181,18 @@ class SyncDaemonProcess(DaemonProcess):
             action = SyncAction(i)
             sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 
-        self.log("waiting for background sync tasks")
+        log("waiting for background sync tasks", 'sync')
         # wait for all async synchronization tasks to finish
         for c, deferred in sync_actions:
             try:
                 yield deferred
             except Exception as e:
-                self.log("Got exception when syncing compute '%s': %s" % (c, e))
+                log("Got exception when syncing compute '%s': %s" % (c, e), 'sync')
                 if get_config().getboolean('debug', 'print_exceptions'):
                     traceback.print_exc()
             else:
-                self.log("Syncing was ok for compute: '%s'" % c)
+                log("Syncing was ok for compute: '%s'" % c, 'sync')
 
-        self.log("synced")
+        log("synced", 'sync')
 
 provideSubscriptionAdapter(subscription_factory(SyncDaemonProcess), adapts=(Proc,))
