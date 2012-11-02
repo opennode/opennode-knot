@@ -10,6 +10,9 @@ from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 from grokcore.component.directive import context
 
+from opennode.knot.backend.func.compute import SyncAction as FuncSyncAction
+from opennode.knot.backend.salt.compute import SyncAction as SaltSyncAction
+from opennode.knot.backend.operation import IFuncInstalled, ISaltInstalled
 from opennode.knot.model.compute import ICompute, Compute
 from opennode.knot.utils.icmp import ping
 from opennode.knot.utils.logging import log
@@ -49,11 +52,11 @@ class PingCheckAction(Action):
         if history_len > self.mem_limit:
             del self.context.pingcheck[:-self.mem_limit]
 
-        ping_results = map(lambda i: i['result'] == 1,
-                           self.context.pingcheck[:3])
+        ping_results = map(lambda i: i['result'] == 1, self.context.pingcheck[:3])
 
         self.context.suspicious = not all(ping_results)
         self.context.failure = not any(ping_results)
+
 
 class PingCheckDaemonProcess(DaemonProcess):
     implements(IProcess)
@@ -106,6 +109,7 @@ class PingCheckDaemonProcess(DaemonProcess):
                 if get_config().getboolean('debug', 'print_exceptions'):
                     traceback.print_exc()
 
+
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
 
@@ -113,6 +117,9 @@ class SyncDaemonProcess(DaemonProcess):
     implements(IProcess)
 
     __name__ = "sync"
+
+    markers = [IFuncInstalled, ISaltInstalled]
+    sync_action_map = {IFuncInstalled: FuncSyncAction, ISaltInstalled: SaltSyncAction}
 
     def __init__(self):
         super(SyncDaemonProcess, self).__init__()
@@ -157,29 +164,14 @@ class SyncDaemonProcess(DaemonProcess):
                 yield update()
 
         @defer.inlineCallbacks
-        def import_machines():
+        def import_machines_func():
             cm = certmaster.CertMaster()
             for host in cm.get_signed_certs():
                 yield ensure_machine(host)
 
-        yield import_machines()
+        yield import_machines_func()
 
-        @db.ro_transact
-        def get_machines():
-            res = []
-
-            oms_root = db.get_root()['oms_root']
-            for i in [follow_symlinks(i) for i in oms_root['machines'].listcontent()]:
-                if ICompute.providedBy(i):
-                    res.append((i, i.hostname))
-
-            return res
-
-        sync_actions = []
-        from opennode.knot.backend.func.compute import SyncAction
-        for i, hostname in (yield get_machines()):
-            action = SyncAction(i)
-            sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
+        sync_actions = yield self._getSyncActionsFunc()
 
         log("waiting for background sync tasks", 'sync')
         # wait for all async synchronization tasks to finish
@@ -194,5 +186,25 @@ class SyncDaemonProcess(DaemonProcess):
                 log("Syncing was ok for compute: '%s'" % c, 'sync')
 
         log("synced", 'sync')
+
+    @defer.inlineCallbacks
+    def _getSyncActions(self):
+        @db.ro_transact
+        def get_machines():
+            oms_root = db.get_root()['oms_root']
+            res = [(i, i.hostname) for i in
+                   [follow_symlinks(j) for j in oms_root['machines'].listcontent()]
+                   if ICompute.providedBy(i)]
+            return res
+
+        sync_actions = []
+
+        for i, hostname in (yield get_machines()):
+            for marker in self.markers:
+                if marker.providedBy(i):
+                    action = self.sync_action_map[marker](i)
+                    sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
+
+        yield sync_actions
 
 provideSubscriptionAdapter(subscription_factory(SyncDaemonProcess), adapts=(Proc,))

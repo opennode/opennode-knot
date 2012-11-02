@@ -8,12 +8,13 @@ from grokcore.component import Adapter, context, baseclass
 from twisted.internet import defer, reactor, threads
 from zope.interface import classImplements
 
-from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM,
-                                            ISuspendVM, IResumeVM, IRebootVM, IListVMS, IHostInterfaces, IDeployVM,
-                                            IUndeployVM, IGetGuestMetrics, IGetHostMetrics, IGetLocalTemplates,
-                                            IFuncMinion, IGetSignedCertificateNames, IGetVirtualizationContainers,
-                                            IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleanupHost,
-                                            IAcceptIncomingHost, IGetHWUptime)
+from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM,
+                                             IDestroyVM, ISuspendVM, IResumeVM, IRebootVM, IListVMS,
+                                             IHostInterfaces, IDeployVM, IUndeployVM, IGetGuestMetrics,
+                                             IGetHostMetrics, IGetLocalTemplates, IMinion,
+                                             IGetSignedCertificateNames, IGetVirtualizationContainers,
+                                             IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleanupHost,
+                                             IAcceptIncomingHost, IGetHWUptime)
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import Proc
 from opennode.oms.security.principals import effective_principals
@@ -196,7 +197,7 @@ class FuncBase(Adapter):
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
         executor_class = self.__executor__
-        hostname = yield IFuncMinion(self.context).hostname()
+        hostname = yield IMinion(self.context).hostname()
         interaction = db.context(self.context).get('interaction', None)
         executor = executor_class(hostname, self.func_action, interaction)
         res = yield executor.run(*args, **kwargs)

@@ -64,7 +64,8 @@ class ICompute(Interface):
 
     # State
     state = schema.Choice(
-        title=u"State", values=(u'active', u'inactive', u'suspended'), required=False, default=u'inactive')
+        title=u"State", values=(u'active', u'inactive', u'suspended'),
+        required=False, default=u'inactive')
     effective_state = schema.TextLine(
         title=u"Effective state", readonly=True, required=False)
 
@@ -355,7 +356,8 @@ class ComputeTags(ModelTags):
                 res.append(u'arch:' + i)
 
         from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
-        if IVirtualCompute.providedBy(self.context) and IVirtualizationContainer.providedBy(self.context.__parent__):
+        if (IVirtualCompute.providedBy(self.context) and
+            IVirtualizationContainer.providedBy(self.context.__parent__)):
             res.append(u'virt_type:' + self.context.__parent__.backend)
             res.append(u'virt:yes')
         else:
@@ -366,7 +368,8 @@ class ComputeTags(ModelTags):
             for tag, nets in config.items('netenv-tags'):
                 try:
                     if self.context.ipv4_address is not None and \
-                     len(netaddr.all_matching_cidrs(self.context.ipv4_address.split('/')[0], nets.split(','))) > 0:
+                     len(netaddr.all_matching_cidrs(self.context.ipv4_address.split('/')[0],
+                                                    nets.split(','))) > 0:
                         res.append(u'env:' + tag)
                 except ValueError:
                     # graceful ignoring of incorrect ips
@@ -397,7 +400,8 @@ class Computes(AddingContainer):
             for item in container.listcontent():
                 if ICompute.providedBy(item):
                     computes[item.__name__] = Symlink(item.__name__, item)
-                if isinstance(item, Machines) or isinstance(item, Computes) or ICompute.providedBy(item) or IVirtualizationContainer.providedBy(item):
+                if (isinstance(item, Machines) or isinstance(item, Computes) or
+                    ICompute.providedBy(item) or IVirtualizationContainer.providedBy(item)):
                     if item.__name__ not in seen:
                         seen.add(item.__name__)
                         collect(item)
@@ -422,7 +426,8 @@ class ComputesRootInjector(ContainerInjector):
     __class__ = Computes
 
 
-provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']), adapts=(Compute,), provides=(IMetrics))
+provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']),
+               adapts=(Compute,), provides=(IMetrics))
 
 
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(Compute, ))

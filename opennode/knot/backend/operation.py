@@ -14,9 +14,13 @@ class IFuncInstalled(Interface):
     """Marker for FUNC-controlled Computes."""
 
 
-class IFuncMinion(Interface):
+class IMinion(Interface):
     def hostname():
         """Return a (possibly deferred) hostname of the minion"""
+
+
+class ISaltInstalled(Interface):
+    """Marker for SaltStack-controlled computes."""
 
 
 class IBotoManageable(Interface):

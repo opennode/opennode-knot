@@ -64,8 +64,6 @@ class MetricsDaemonProcess(DaemonProcess):
                 import traceback
                 traceback.print_exc()
                 self.log("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
-            else:
-                self.log("metrics ok for: '%s'" % i.context)
 
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))

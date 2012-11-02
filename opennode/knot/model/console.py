@@ -122,7 +122,8 @@ class VncProxyProcess(object):
     def __init__(self, hostname, port):
         self.port = port
         self.proxy_port = port + 1000
-        self.process = subprocess.Popen(['bin/wsproxy', str(self.proxy_port), '%s:%s' % (hostname, self.port)])
+        self.process = subprocess.Popen(['bin/wsproxy', str(self.proxy_port),
+                                         '%s:%s' % (hostname, self.port)])
 
     def kill(self):
         self.process.terminate()
@@ -186,9 +187,11 @@ class SshAttachAction(AttachAction):
 
     @db.ro_transact
     def _do_connection(self, size):
-        self.write("Attaching to %s@%s. Use ^] to force exit.\n" % (self.context.user.encode('utf-8'), self.context.hostname.encode('utf-8')))
+        self.write("Attaching to %s@%s. Use ^] to force exit.\n" % (self.context.user.encode('utf-8'),
+                                                                    self.context.hostname.encode('utf-8')))
 
-        ssh_connect_interactive_shell(self.context.user, self.context.hostname, self.context.port, self.transport, self._set_channel, size)
+        ssh_connect_interactive_shell(self.context.user, self.context.hostname, self.context.port,
+                                      self.transport, self._set_channel, size)
 
 
 class HypervisorSshAttachAction(AttachAction):

@@ -1,26 +1,24 @@
 from __future__ import absolute_import
 
-import netaddr
-
 from certmaster import certmaster
+from grokcore.component import context, subscribe, baseclass
+import netaddr
+from twisted.internet import defer
+from zope.component import handle
 
 from opennode.knot.backend.func.virtualizationcontainer import (IVirtualizationContainerSubmitter, backends,
                                                                 SyncVmsAction)
-
-from grokcore.component import context, subscribe, baseclass
-from zope.component import handle
-
-from opennode.knot.backend.operation import (IStartVM, IShutdownVM, IDestroyVM, ISuspendVM, IResumeVM,
-                                             IListVMS, IRebootVM, IGetComputeInfo, IFuncInstalled, IDeployVM,
-                                             IUndeployVM, IGetLocalTemplates, IGetVirtualizationContainers,
+from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
+                                             ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
+                                             IFuncInstalled, IDeployVM, IUndeployVM, IGetLocalTemplates,
                                              IGetDiskUsage, IGetRoutes, IGetHWUptime)
-from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
-from opennode.knot.model.template import Template
-from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
-from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
-from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
-from opennode.knot.model.network import NetworkInterface, NetworkRoute
 
+from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
+from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
+from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
+from opennode.knot.model.network import NetworkInterface, NetworkRoute
+from opennode.knot.model.template import Template
+from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent,
                                      ModelModifiedEvent, TmpObj, alsoProvides, noLongerProvides)
@@ -28,8 +26,6 @@ from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.util import blocking_yield, get_u, get_i, get_f, exception_logger
 from opennode.oms.zodb import db
-
-from twisted.internet import defer
 
 
 class AcceptHostRequestAction(Action):
@@ -194,7 +190,6 @@ class SyncAction(Action):
         # XXX TODO: handle removal of consoles when they are no longer reported from upstream
 
         # networks
-
         for interface in vm['interfaces']:
             if not self.context.interfaces[interface['name']]:
                 iface = NetworkInterface(interface['name'], None, interface['mac'], 'active')
