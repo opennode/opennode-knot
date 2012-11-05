@@ -6,3 +6,4 @@ bin
 develop-eggs
 eggs
 parts
+.*.swp
