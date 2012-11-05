@@ -1,19 +1,18 @@
 from __future__ import absolute_import
 
-from certmaster import certmaster
 
-from zope.component import provideSubscriptionAdapter
-from zope import schema
-from zope.interface import Interface, implements
 from grokcore.component import context
+from zope import schema
+from zope.component import provideSubscriptionAdapter
+from zope.interface import Interface, implements
 
-from opennode.oms.security.directives import permissions
-from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import  Container, ContainerInjector, ReadonlyContainer
-from opennode.oms.model.model.root import OmsRoot
-from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.knot.model.compute import Compute
 from opennode.knot.model.hangar import Hangar
+from opennode.oms.model.model.actions import ActionsContainerExtension
+from opennode.oms.model.model.base import  Container, ContainerInjector, ReadonlyContainer
+from opennode.oms.model.model.byname import ByNameContainerExtension
+from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.security.directives import permissions
 
 
 class Machines(Container):
@@ -50,18 +49,25 @@ class IncomingMachineRequest(ReadonlyContainer):
 class IncomingMachines(ReadonlyContainer):
     __name__ = 'incoming'
 
-    @property
-    def _items(self):
-        cm = certmaster.CertMaster()
-        pending = {}
-        for h in cm.get_csrs_waiting():
-            pending[h] = IncomingMachineRequest(h)
-        return pending
-
 
 class IncomingMachinesInjector(ContainerInjector):
     context(Machines)
     __class__ = IncomingMachines
+
+
+class BaseIncomingMachines(ReadonlyContainer):
+    """Template method abstract class for stack-specific incoming machines list implementations"""
+
+    def _get(self):
+        """ Provide list of incoming host names """
+        raise NotImplemented
+
+    @property
+    def _items(self):
+        items = self._get()
+        pending = dict((h, IncomingMachineRequest(h)) for h in items)
+        return pending
+
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Machines, ))
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(IncomingMachineRequest, ))

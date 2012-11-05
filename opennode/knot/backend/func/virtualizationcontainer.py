@@ -3,14 +3,14 @@ from twisted.internet import defer
 from zope.component import handle
 from zope.interface import Interface
 
-from opennode.oms.config import get_config
 from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IFuncInstalled
-from opennode.oms.model.model.actions import Action, action
-from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
-from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+from opennode.oms.config import get_config
+from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
+from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.zodb import db
 
 
