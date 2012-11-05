@@ -26,7 +26,6 @@ from opennode.knot.model.console import Consoles
 from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
 from opennode.knot.model.template import Templates
 from opennode.knot.model.zabbix import IZabbixConfiguration
-from opennode.knot.backend.operation import IFuncInstalled
 
 
 M = 10 ** 6
@@ -182,7 +181,7 @@ class Compute(Container):
 
     __contains__ = IInCompute
 
-    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IFuncInstalled, IZabbixConfiguration]
+    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IZabbixConfiguration]
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'

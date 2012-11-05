@@ -4,7 +4,7 @@ from certmaster import certmaster
 
 from grokcore.component import context
 
-from opennode.knot.model import BaseIncomingMachines, IncomingMachines
+from opennode.knot.model.machines import BaseIncomingMachines, IncomingMachines
 from opennode.oms.model.model.base import  ContainerInjector
 
 
