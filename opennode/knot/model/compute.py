@@ -243,8 +243,7 @@ class Compute(Container):
         if self.template:
             alsoProvides(self, IVirtualCompute)
             alsoProvides(self, IUndeployed)
-        else:
-            alsoProvides(self, IFuncInstalled)
+        # TODO: specify management stack (Func or Salt)
 
         assert self.hostname
 

@@ -3,18 +3,18 @@ from twisted.internet import defer
 from zope.component import handle
 from zope.interface import Interface
 
-from opennode.oms.config import get_config
-from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IFuncInstalled
-from opennode.oms.model.model.actions import Action, action
-from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces, ISaltInstalled
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
-from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+from opennode.oms.config import get_config
+from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
+from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.zodb import db
 
 
-backends = {'test': 'test:///tmp/func_vm_test_state.xml',
+backends = {'test': 'test:///tmp/salt_vm_test_state.xml',
             'openvz': 'openvz:///system',
             'kvm': 'qemu:///system',
             'xen': 'xen:///'}
@@ -25,7 +25,7 @@ class IVirtualizationContainerSubmitter(Interface):
         """Submits a job to the virtualization container"""
 
 
-class FuncVirtualizationContainerSubmitter(Adapter):
+class SaltVirtualizationContainerSubmitter(Adapter):
     implements(IVirtualizationContainerSubmitter)
     context(IVirtualizationContainer)
 
@@ -61,14 +61,17 @@ class ListVirtualizationContainerAction(Action):
         try:
             vms = yield submitter.submit(IListVMS)
         except Exception as e:
-            cmd.write("%s\n" % (": ".join(str(msg) for msg in e.args if (not msg.startswith('  File "/') if isinstance(msg, str)  else True))))
+            cmd.write("%s\n" %
+                      (": ".join(str(msg) for msg in e.args
+                                 if (not isinstance(msg, str) or not msg.startswith('  File "/')))))
             return
 
         max_key_len = max([0] + [len(vm['name']) for vm in vms])
 
         for vm in vms:
             vm['name'] = vm['name'].ljust(max_key_len)
-            cmd.write("%(name)s:  state=%(state)s, run_state=%(run_state)s, uuid=%(uuid)s, memory=%(memory)s, template=%(template)s\n" % vm)
+            cmd.write("%(name)s:  state=%(state)s, run_state=%(run_state)s, uuid=%(uuid)s, "
+                      "memory=%(memory)s, template=%(template)s\n" % vm)
 
             if vm['diskspace']:
                 cmd.write(" %s    storage:\n" % (' ' * max_key_len))
@@ -137,8 +140,8 @@ class SyncVmsAction(Action):
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
 
-                # for now let's foce synced computes to not have func installed
-                noLongerProvides(new_compute, IFuncInstalled)
+                # for now let's force synced computes to not have salt installed
+                noLongerProvides(new_compute, ISaltInstalled)
                 self.context.add(new_compute)
 
         for vm_uuid in remote_uuids.intersection(local_uuids):

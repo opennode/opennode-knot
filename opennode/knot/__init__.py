@@ -30,6 +30,7 @@ class KnotPlugin(PluginInfo):
         print "[KnotPlugin] initializing plugin"
 
         compute_creatable_models = dict((cls.__name__.lower(), cls)
-                                        for cls in [Compute, Template, Network, NetworkInterface, Storage, VirtualizationContainer, Hangar, VncConsole])
+                                        for cls in [Compute, Template, Network, NetworkInterface, Storage,
+                                                    VirtualizationContainer, Hangar, VncConsole])
 
         creatable_models.update(compute_creatable_models)

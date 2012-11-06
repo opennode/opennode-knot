@@ -3,7 +3,7 @@ from twisted.internet import defer
 
 from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter
 from opennode.knot.backend.metrics import IMetricsGatherer
-from opennode.knot.backend.operation import IFuncInstalled, IGetGuestMetrics, IGetHostMetrics
+from opennode.knot.backend.operation import ISaltInstalled, IGetGuestMetrics, IGetHostMetrics
 from opennode.oms.config import get_config
 from opennode.oms.model.model.stream import IStream
 from opennode.oms.zodb import db
@@ -14,7 +14,7 @@ class VirtualComputeMetricGatherer(Adapter):
     """Gathers VM metrics through functionality exposed by the host compute via func."""
 
     implements(IMetricsGatherer)
-    context(IFuncInstalled)
+    context(ISaltInstalled)
 
     @defer.inlineCallbacks
     def gather(self):
