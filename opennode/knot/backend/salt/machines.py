@@ -5,7 +5,9 @@ from grokcore.component import context
 import salt.config
 from salt.cli.key import Key
 from salt.utils import parsers
+from twisted.internet import defer
 
+from opennode.knot.backend.compute import register_machine
 from opennode.knot.model.machines import IncomingMachines, BaseIncomingMachines
 from opennode.oms.model.model.base import  ContainerInjector
 
@@ -64,3 +66,10 @@ class IncomingMachinesSaltInjector(ContainerInjector):
 class RegisteredMachinesSalt(object):
     def _get(self):
         return SaltKeyAdapter().getAcceptedKeyNames()
+
+
+@defer.inlineCallbacks
+def import_machines():
+    accepted = RegisteredMachinesSalt()._get()
+    for host in accepted:
+        yield register_machine(host)

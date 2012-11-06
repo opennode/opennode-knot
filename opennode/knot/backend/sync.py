@@ -139,13 +139,14 @@ class SyncDaemonProcess(DaemonProcess):
         log("syncing", 'sync')
 
         # TODO: decouple via interfaces?
-        yield salt_backend.import_machines()
-        yield func_backend.import_machines()
+        yield salt_backend.machines.import_machines()
+        yield func_backend.machines.import_machines()
 
         sync_actions = yield self._getSyncActions()
 
         log("waiting for background sync tasks", 'sync')
         # wait for all async synchronization tasks to finish
+        log(sync_actions)
         for c, deferred in sync_actions:
             try:
                 yield deferred

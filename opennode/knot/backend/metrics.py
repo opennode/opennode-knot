@@ -1,9 +1,11 @@
-from twisted.internet import defer
+
 from grokcore.component import Adapter, context
+import time
+from twisted.internet import defer
 from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
 
-from opennode.knot.backend.func.virtualizationcontainer import IVirtualizationContainerSubmitter
+from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.backend.operation import IStackInstalled, IGetGuestMetrics
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess

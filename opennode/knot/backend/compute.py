@@ -4,16 +4,14 @@ from twisted.internet import defer
 from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
 
-from opennode.knot.backend.salt.virtualizationcontainer import (IVirtualizationContainerSubmitter, backends,
-                                                                SyncVmsAction)
+from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
 
 from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
                                              ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
                                              IStackInstalled, IDeployVM, IUndeployVM, IGetLocalTemplates,
                                              IGetDiskUsage, IGetRoutes, IGetHWUptime)
 
-from opennode.knot.model.compute import (ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed,
-                                         IDeploying)
+from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template

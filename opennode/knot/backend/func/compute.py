@@ -6,8 +6,8 @@ from grokcore.component import context, subscribe
 from twisted.internet import defer
 
 from opennode.knot.backend.operation import IFuncInstalled
-from opennode.knot.backend.func.machines import RegisteredMachinesFunc
-from opennode.knot.model.compute import ICompute, format_error, register_machine
+from opennode.knot.backend.compute import format_error, register_machine
+from opennode.knot.model.compute import ICompute
 from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import IModelDeletedEvent
@@ -53,12 +53,6 @@ class RejectHostRequestAction(Action):
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
 
-
-@defer.inlineCallbacks
-def import_machines():
-    signed = RegisteredMachinesFunc()._get()
-    for host in signed:
-        yield register_machine(host)
 
 
 @subscribe(ICompute, IModelDeletedEvent)

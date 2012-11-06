@@ -3,9 +3,8 @@ from twisted.internet import defer
 from zope.component import handle
 from zope.interface import Interface
 
-from opennode.knot.backend.operation import IListVMS, IHostInterfaces
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IStackInstalled
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
-from opennode.knot.model.compute import IStackInstalled
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
