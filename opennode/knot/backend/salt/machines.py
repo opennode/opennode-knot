@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 import logging
 
+from grokcore.component import context
 import salt.config
 from salt.cli.key import Key
 from salt.utils import parsers
-from grokcore.component import context
 
 from opennode.knot.model.machines import IncomingMachines, BaseIncomingMachines
 from opennode.oms.model.model.base import  ContainerInjector
@@ -37,7 +37,7 @@ class SaltKeyAdapter(Key, parsers.ConfigDirMixIn):
         try:
             return self._keys(ktype)
         except SystemExit:
-            logging.error('Salt reported an error and terminated trying to retrieve unaccepted keys.')
+            logging.error('Salt terminated trying to retrieve unaccepted keys.')
 
     def getUnacceptedKeyNames(self):
         return self._getKeyNames(self.UNACCEPTED)
@@ -59,3 +59,8 @@ class IncomingMachinesSalt(BaseIncomingMachines):
 class IncomingMachinesSaltInjector(ContainerInjector):
     context(IncomingMachines)
     __class__ = IncomingMachinesSalt
+
+
+class RegisteredMachinesSalt(object):
+    def _get(self):
+        return SaltKeyAdapter().getAcceptedKeyNames()

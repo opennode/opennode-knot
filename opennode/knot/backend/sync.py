@@ -1,28 +1,25 @@
 import traceback
 
 from datetime import datetime
+from grokcore.component.directive import context
 from twisted.internet import defer
-from uuid import uuid5, NAMESPACE_DNS
-
-from certmaster import certmaster
-
 from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
-from grokcore.component.directive import context
 
 from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend.operation import IStackInstalled
-from opennode.knot.model.compute import ICompute, Compute
+from opennode.knot.backend import func as func_backend
+from opennode.knot.backend import salt as salt_backend
+from opennode.knot.model.compute import ICompute
 from opennode.knot.utils.icmp import ping
 from opennode.knot.utils.logging import log
-
+from opennode.oms.config import get_config
+from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
-from opennode.oms.config import get_config
+from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
-from opennode.oms.model.model.symlink import follow_symlinks
-from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 
 
 class PingCheckAction(Action):
@@ -141,34 +138,11 @@ class SyncDaemonProcess(DaemonProcess):
     def sync(self):
         log("syncing", 'sync')
 
-        @defer.inlineCallbacks
-        def ensure_machine(host):
-            @db.ro_transact
-            def check():
-                machines = db.get_root()['oms_root']['machines']
-                return follow_symlinks(machines['by-name'][host])
+        # TODO: decouple via interfaces?
+        yield salt_backend.import_machines()
+        yield func_backend.import_machines()
 
-            @db.transact
-            def update():
-                machines = db.get_root()['oms_root']['machines']
-
-                machine = Compute(unicode(host), u'active')
-                machine.__name__ = str(uuid5(NAMESPACE_DNS, host))
-                machines.add(machine)
-
-            if not (yield check()):
-                yield update()
-
-        # TODO: REFACTORIT: move to func
-        @defer.inlineCallbacks
-        def import_machines_func():
-            cm = certmaster.CertMaster()
-            for host in cm.get_signed_certs():
-                yield ensure_machine(host)
-
-        yield import_machines_func()
-
-        sync_actions = yield self._getSyncActionsFunc()
+        sync_actions = yield self._getSyncActions()
 
         log("waiting for background sync tasks", 'sync')
         # wait for all async synchronization tasks to finish

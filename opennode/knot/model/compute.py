@@ -1,8 +1,7 @@
 from __future__ import absolute_import
 
-import netaddr
-
 from grokcore.component import context
+import netaddr
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements
@@ -21,7 +20,6 @@ from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.model.symlink import Symlink
 from opennode.oms.model.schema import Path
-
 from opennode.knot.model.console import Consoles
 from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
 from opennode.knot.model.template import Templates

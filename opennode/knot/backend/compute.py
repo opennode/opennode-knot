@@ -1,6 +1,7 @@
 from grokcore.component import context, subscribe, baseclass
 import netaddr
 from twisted.internet import defer
+from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
 
 from opennode.knot.backend.salt.virtualizationcontainer import (IVirtualizationContainerSubmitter, backends,
@@ -11,7 +12,8 @@ from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStar
                                              IStackInstalled, IDeployVM, IUndeployVM, IGetLocalTemplates,
                                              IGetDiskUsage, IGetRoutes, IGetHWUptime)
 
-from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
+from opennode.knot.model.compute import (ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed,
+                                         IDeploying)
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
@@ -29,6 +31,29 @@ def any_stack_installed(context):
     return IStackInstalled.providedBy(context)
 
 
+def format_error(e):
+    return (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/')))
+
+
+@defer.inlineCallbacks
+def register_machine(host):
+    @db.ro_transact
+    def check():
+        machines = db.get_root()['oms_root']['machines']
+        return follow_symlinks(machines['by-name'][host])
+
+    @db.transact
+    def update():
+        machines = db.get_root()['oms_root']['machines']
+
+        machine = Compute(unicode(host), u'active')
+        machine.__name__ = str(uuid5(NAMESPACE_DNS, host))
+        machines.add(machine)
+
+    if not (yield check()):
+        yield update()
+
+
 class DeployAction(Action):
     context(IUndeployed)
 
@@ -40,7 +65,6 @@ class DeployAction(Action):
         parent = yield db.ro_transact(proxy=False)(lambda: self.context.__parent__)()
 
         submitter = IVirtualizationContainerSubmitter(parent)
-
         template = yield db.ro_transact(lambda: self.context.template)()
 
         if not template:
@@ -124,7 +148,7 @@ class InfoAction(Action):
                     for key, value in vm.items():
                         cmd.write("%s %s\n" % ((key + ':').ljust(max_key_len), value))
         except Exception as e:
-            cmd.write("%s\n" % (": ".join(msg for msg in e.args if not msg.startswith('  File "/'))))
+            cmd.write("%s\n" % format_error(e))
 
 
 class ComputeAction(Action):
@@ -144,7 +168,7 @@ class ComputeAction(Action):
         try:
             yield submitter.submit(self.job, name)
         except Exception as e:
-            cmd.write("%s\n" % (": ".join(msg for msg in e.args if not msg.startswith('  File "/'))))
+            cmd.write("%s\n" % format_error(e))
 
 
 class StartComputeAction(ComputeAction):
@@ -499,12 +523,12 @@ def handle_compute_state_change_request(compute, event):
 @subscribe(IVirtualCompute, IModelDeletedEvent)
 def delete_virtual_compute(model, event):
     if IDeployed.providedBy(model):
-        print ('[compute_backend] deleting compute %s which is ion IDeployed state, shutting down and '
+        print ('[compute_backend] deleting compute %s which is in IDeployed state, shutting down and '
                'undeploying first' % model.hostname)
         blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()))
         blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()))
     else:
-        print ('[compute_backend] deleting compute %s which is already in the IUndeployed state' %
+        print ('[compute_backend] deleting compute %s which is already in IUndeployed state' %
                model.hostname)
 
 

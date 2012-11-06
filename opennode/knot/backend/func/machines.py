@@ -15,6 +15,12 @@ class IncomingMachinesCertmaster(BaseIncomingMachines):
         cm = certmaster.CertMaster()
         return cm.get_csrs_waiting()
 
-class IncomingMachinesFuncInjector(ContainerInjector):
+class IncomingMachinesInjector(ContainerInjector):
     context(IncomingMachines)
     __class__ = IncomingMachinesCertmaster
+
+
+class RegisteredMachinesFunc(object):
+    def _get(self):
+        cm = certmaster.CertMaster()
+        return cm.get_csrs_signed()

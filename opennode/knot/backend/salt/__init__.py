@@ -4,7 +4,7 @@ import time
 
 from salt.client import LocalClient
 from grokcore.component import Adapter, context, baseclass
-from twisted.internet import defer, reactor, threads
+from twisted.internet import defer, threads
 from zope.interface import classImplements
 
 from opennode.knot.backend.operation import (ISaltInstalled, IGetComputeInfo, IStartVM, IShutdownVM,
