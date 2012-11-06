@@ -10,9 +10,8 @@ from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 from grokcore.component.directive import context
 
-from opennode.knot.backend.func.compute import SyncAction as FuncSyncAction
-from opennode.knot.backend.salt.compute import SyncAction as SaltSyncAction
-from opennode.knot.backend.operation import IFuncInstalled, ISaltInstalled
+from opennode.knot.backend.compute import SyncAction
+from opennode.knot.backend.operation import IStackInstalled
 from opennode.knot.model.compute import ICompute, Compute
 from opennode.knot.utils.icmp import ping
 from opennode.knot.utils.logging import log
@@ -118,9 +117,6 @@ class SyncDaemonProcess(DaemonProcess):
 
     __name__ = "sync"
 
-    markers = [IFuncInstalled, ISaltInstalled]
-    sync_action_map = {IFuncInstalled: FuncSyncAction, ISaltInstalled: SaltSyncAction}
-
     def __init__(self):
         super(SyncDaemonProcess, self).__init__()
 
@@ -163,6 +159,7 @@ class SyncDaemonProcess(DaemonProcess):
             if not (yield check()):
                 yield update()
 
+        # TODO: REFACTORIT: move to func
         @defer.inlineCallbacks
         def import_machines_func():
             cm = certmaster.CertMaster()
@@ -193,17 +190,16 @@ class SyncDaemonProcess(DaemonProcess):
         def get_machines():
             oms_root = db.get_root()['oms_root']
             res = [(i, i.hostname) for i in
-                   [follow_symlinks(j) for j in oms_root['machines'].listcontent()]
-                   if ICompute.providedBy(i)]
+                   (follow_symlinks(j) for j in oms_root['machines'].listcontent())
+                    if ICompute.providedBy(i)]
             return res
 
         sync_actions = []
 
         for i, hostname in (yield get_machines()):
-            for marker in self.markers:
-                if marker.providedBy(i):
-                    action = self.sync_action_map[marker](i)
-                    sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
+            if IStackInstalled.providedBy(i):
+                action = SyncAction(i)
+                sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 
         yield sync_actions
 
