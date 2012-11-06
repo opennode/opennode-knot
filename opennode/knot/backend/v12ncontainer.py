@@ -3,8 +3,9 @@ from twisted.internet import defer
 from zope.component import handle
 from zope.interface import Interface
 
-from opennode.knot.backend.operation import IListVMS, IHostInterfaces, ISaltInstalled
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
+from opennode.knot.model.compute import IStackInstalled
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
@@ -12,7 +13,6 @@ from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerPro
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.zodb import db
-
 
 backends = {'test': 'test:///tmp/salt_vm_test_state.xml',
             'openvz': 'openvz:///system',
@@ -25,7 +25,7 @@ class IVirtualizationContainerSubmitter(Interface):
         """Submits a job to the virtualization container"""
 
 
-class SaltVirtualizationContainerSubmitter(Adapter):
+class VirtualizationContainerSubmitter(Adapter):
     implements(IVirtualizationContainerSubmitter)
     context(IVirtualizationContainer)
 
@@ -140,8 +140,9 @@ class SyncVmsAction(Action):
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
 
-                # for now let's force synced computes to not have salt installed
-                noLongerProvides(new_compute, ISaltInstalled)
+                # for now let's force synced computes to not have salt/func installed
+                # XXX: not sure if removing a parent interface will remove the child also
+                noLongerProvides(new_compute, IStackInstalled)
                 self.context.add(new_compute)
 
         for vm_uuid in remote_uuids.intersection(local_uuids):

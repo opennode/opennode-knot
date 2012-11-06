@@ -8,8 +8,8 @@ from opennode.knot.backend.salt.virtualizationcontainer import (IVirtualizationC
 
 from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
                                              ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
-                                             ISaltInstalled, IFuncInstalled, IDeployVM, IUndeployVM,
-                                             IGetLocalTemplates, IGetDiskUsage, IGetRoutes, IGetHWUptime)
+                                             IStackInstalled, IDeployVM, IUndeployVM, IGetLocalTemplates,
+                                             IGetDiskUsage, IGetRoutes, IGetHWUptime)
 
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
@@ -25,9 +25,8 @@ from opennode.oms.util import blocking_yield, get_u, get_i, get_f, exception_log
 from opennode.oms.zodb import db
 
 
-# TODO: invent a better way (so that all known stack markers wouldn't have to be imported
-def any_stack_installed():
-    return any(interface.providedBy(self.context) for interface in (ISaltInstalled, IFuncInstalled))
+def any_stack_installed(context):
+    return IStackInstalled.providedBy(context)
 
 
 class DeployAction(Action):
@@ -200,7 +199,7 @@ class SyncAction(Action):
         yield self.sync_consoles()
         yield self.sync_hw()
 
-        if any_stack_installed():
+        if any_stack_installed(self.context):
             yield self.ensure_vms()
             yield self.sync_templates()
 
@@ -334,7 +333,7 @@ class SyncAction(Action):
 
     @defer.inlineCallbacks
     def sync_hw(self):
-        if not any_stack_installed():
+        if not any_stack_installed(self.context):
             return
 
         info = yield IGetComputeInfo(self.context).run()
@@ -400,7 +399,7 @@ class SyncAction(Action):
 
     @defer.inlineCallbacks
     def ensure_vms(self):
-        if not self.context['vms'] and any_stack_installed():
+        if not self.context['vms'] and any_stack_installed(self.context):
             vms_types = yield IGetVirtualizationContainers(self.context).run()
             if vms_types:
                 url_to_backend_type = dict((v, k) for k, v in backends.items())
@@ -517,5 +516,3 @@ def create_virtual_compute(model, event):
         return
 
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
-
-

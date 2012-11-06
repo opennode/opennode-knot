@@ -16,8 +16,7 @@ from opennode.oms.zodb import db
 
 
 def format_error(e):
-    return (": ".join(msg for msg in e.args if isinstance(msg, str)
-                                          and not msg.startswith('  File "/')))
+    return (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/')))
 
 class AcceptHostRequestAction(Action):
     """Accept request of the host for joining OMS/certmaster"""
