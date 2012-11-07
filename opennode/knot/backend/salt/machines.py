@@ -9,6 +9,7 @@ from twisted.internet import defer
 
 from opennode.knot.backend.compute import register_machine
 from opennode.knot.model.machines import IncomingMachines, BaseIncomingMachines
+from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.model.model.base import  ContainerInjector
 
 
@@ -72,4 +73,4 @@ class RegisteredMachinesSalt(object):
 def import_machines():
     accepted = RegisteredMachinesSalt()._get()
     for host in accepted:
-        yield register_machine(host)
+        yield register_machine(host, mgt_stack=ISaltInstalled)

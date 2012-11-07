@@ -8,13 +8,14 @@ from grokcore.component import Adapter, context, baseclass
 from twisted.internet import defer, reactor, threads
 from zope.interface import classImplements
 
-from opennode.knot.backend.operation import (IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM,
+from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdownVM,
                                              IDestroyVM, ISuspendVM, IResumeVM, IRebootVM, IListVMS,
                                              IHostInterfaces, IDeployVM, IUndeployVM, IGetGuestMetrics,
                                              IGetHostMetrics, IGetLocalTemplates, IMinion,
                                              IGetSignedCertificateNames, IGetVirtualizationContainers,
                                              IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleanupHost,
                                              IAcceptIncomingHost, IGetHWUptime)
+from opennode.knot.model.compute import IFuncInstalled
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import Proc
 from opennode.oms.security.principals import effective_principals

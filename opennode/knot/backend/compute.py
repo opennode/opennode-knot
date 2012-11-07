@@ -5,12 +5,11 @@ from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
 
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
-
 from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
                                              ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
-                                             IStackInstalled, IDeployVM, IUndeployVM, IGetLocalTemplates,
-                                             IGetDiskUsage, IGetRoutes, IGetHWUptime)
-
+                                             IDeployVM, IUndeployVM, IGetLocalTemplates, IGetDiskUsage,
+                                             IGetRoutes, IGetHWUptime)
+from opennode.knot.model.compute import IManageable
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
@@ -26,7 +25,7 @@ from opennode.oms.zodb import db
 
 
 def any_stack_installed(context):
-    return IStackInstalled.providedBy(context)
+    return IManageable.providedBy(context)
 
 
 def format_error(e):
@@ -34,17 +33,20 @@ def format_error(e):
 
 
 @defer.inlineCallbacks
-def register_machine(host):
+def register_machine(host, mgt_stack=None):
+
     @db.ro_transact
     def check():
         machines = db.get_root()['oms_root']['machines']
-        return follow_symlinks(machines['by-name'][host])
+        machine = follow_symlinks(machines['by-name'][host])
+        if not IManageable.providedBy(machine):
+            return None
+        return machine
 
     @db.transact
     def update():
         machines = db.get_root()['oms_root']['machines']
-
-        machine = Compute(unicode(host), u'active')
+        machine = Compute(unicode(host), u'active', mgt_stack=mgt_stack)
         machine.__name__ = str(uuid5(NAMESPACE_DNS, host))
         machines.add(machine)
 

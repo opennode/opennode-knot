@@ -7,10 +7,10 @@ from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 
 from opennode.knot.backend.compute import SyncAction
-from opennode.knot.backend.operation import IStackInstalled
 from opennode.knot.backend import func as func_backend
 from opennode.knot.backend import salt as salt_backend
 from opennode.knot.model.compute import ICompute
+from opennode.knot.model.compute import IManageable, IFuncInstalled, ISaltInstalled
 from opennode.knot.utils.icmp import ping
 from opennode.knot.utils.logging import log
 from opennode.oms.config import get_config
@@ -142,11 +142,11 @@ class SyncDaemonProcess(DaemonProcess):
         yield salt_backend.machines.import_machines()
         yield func_backend.machines.import_machines()
 
-        sync_actions = yield self._getSyncActions()
+        sync_actions = (yield self._getSyncActions())
 
         log("waiting for background sync tasks", 'sync')
+
         # wait for all async synchronization tasks to finish
-        log(sync_actions)
         for c, deferred in sync_actions:
             try:
                 yield deferred
@@ -172,10 +172,10 @@ class SyncDaemonProcess(DaemonProcess):
         sync_actions = []
 
         for i, hostname in (yield get_machines()):
-            if IStackInstalled.providedBy(i):
+            if IManageable.providedBy(i):
                 action = SyncAction(i)
                 sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 
-        yield sync_actions
+        defer.returnValue(sync_actions)
 
 provideSubscriptionAdapter(subscription_factory(SyncDaemonProcess), adapts=(Proc,))

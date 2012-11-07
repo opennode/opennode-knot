@@ -3,11 +3,10 @@ from __future__ import absolute_import
 from grokcore.component import context, subscribe
 from twisted.internet import defer
 
-from opennode.knot.backend.compute import format_error, register_machine
-from opennode.knot.backend.operation import ISaltInstalled
-from opennode.knot.backend.salt.machines import RegisteredMachinesSalt
+from opennode.knot.backend.compute import format_error
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
+from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import IModelDeletedEvent
 from opennode.oms.model.model.actions import Action, action
@@ -51,7 +50,6 @@ class RejectHostRequestAction(Action):
             raise NotImplemented("TODO: implement")
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
-
 
 
 @subscribe(ICompute, IModelDeletedEvent)

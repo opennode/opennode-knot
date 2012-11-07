@@ -6,10 +6,13 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements
 
+from opennode.knot.model.console import Consoles
+from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
+from opennode.knot.model.template import Templates
+from opennode.knot.model.zabbix import IZabbixConfiguration
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import (IMarkable, Container,
-                                           AddingContainer, IDisplayName,
+from opennode.oms.model.model.base import (IMarkable, Container, AddingContainer, IDisplayName,
                                            ContainerInjector)
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.byname import ByNameContainerExtension
@@ -20,13 +23,21 @@ from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.model.symlink import Symlink
 from opennode.oms.model.schema import Path
-from opennode.knot.model.console import Consoles
-from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
-from opennode.knot.model.template import Templates
-from opennode.knot.model.zabbix import IZabbixConfiguration
-
 
 M = 10 ** 6
+
+
+class IManageable(Interface):
+    """ Marker for any management stack installed on a compute """
+
+
+class IFuncInstalled(IManageable):
+    """Marker for FUNC-controlled Computes."""
+
+
+class ISaltInstalled(IManageable):
+    """Marker for SaltStack-controlled computes."""
+
 
 
 class ICompute(Interface):
@@ -179,7 +190,8 @@ class Compute(Container):
 
     __contains__ = IInCompute
 
-    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IZabbixConfiguration]
+    __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IZabbixConfiguration, IManageable,
+                  ISaltInstalled, IFuncInstalled]
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
@@ -228,7 +240,7 @@ class Compute(Container):
     zabbix_use_dns = True
     zabbix_agent_port = 10050
 
-    def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None):
+    def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()
 
         self.hostname = hostname
@@ -237,11 +249,13 @@ class Compute(Container):
         self.template = template
         if ipv4_address:
             self._ipv4_address = ipv4_address
+        self._mgt_stack = mgt_stack
 
         if self.template:
             alsoProvides(self, IVirtualCompute)
             alsoProvides(self, IUndeployed)
-        # TODO: specify management stack (Func or Salt)
+        elif self._mgt_stack:
+            alsoProvides(self, self._mgt_stack)
 
         assert self.hostname
 

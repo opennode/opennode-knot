@@ -10,18 +10,6 @@ class IJob(Interface):
         pass
 
 
-class IStackInstalled(Interface):
-    """ Marker for any management stack installed on a compute """
-
-
-class IFuncInstalled(IStackInstalled):
-    """Marker for FUNC-controlled Computes."""
-
-
-class ISaltInstalled(IStackInstalled):
-    """Marker for SaltStack-controlled computes."""
-
-
 class IMinion(Interface):
     def hostname():
         """Return a (possibly deferred) hostname of the minion"""

@@ -3,8 +3,9 @@ from twisted.internet import defer
 from zope.component import handle
 from zope.interface import Interface
 
-from opennode.knot.backend.operation import IListVMS, IHostInterfaces, IStackInstalled
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
+from opennode.knot.model.compute import IManageable
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
@@ -12,6 +13,7 @@ from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerPro
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.zodb import db
+
 
 backends = {'test': 'test:///tmp/salt_vm_test_state.xml',
             'openvz': 'openvz:///system',
@@ -141,7 +143,7 @@ class SyncVmsAction(Action):
 
                 # for now let's force synced computes to not have salt/func installed
                 # XXX: not sure if removing a parent interface will remove the child also
-                noLongerProvides(new_compute, IStackInstalled)
+                noLongerProvides(new_compute, IManageable)
                 self.context.add(new_compute)
 
         for vm_uuid in remote_uuids.intersection(local_uuids):
@@ -164,7 +166,7 @@ class SyncVmsAction(Action):
                 handle(compute, ModelDeletedEvent(self.context))
 
         # sync each vm
-        from opennode.knot.backend.func.compute import SyncAction
+        from opennode.knot.backend.compute import SyncAction
         for action in [SyncAction(i) for i in self.context.listcontent() if IVirtualCompute.providedBy(i)]:
             matching = [i for i in remote_vms if i['uuid'] == action.context.__name__]
             if not matching:

@@ -5,13 +5,15 @@ from twisted.internet import defer
 from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
 
+from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
-from opennode.knot.backend.operation import IStackInstalled, IGetGuestMetrics
+from opennode.knot.model.compute import IManageable
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
+from opennode.oms.model.model.symlink import follow_symlinks
+from opennode.oms.model.model.stream import IStream
 from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
-from opennode.oms.model.model.symlink import follow_symlinks
 
 
 class IMetricsGatherer(Interface):
@@ -78,7 +80,7 @@ class VirtualComputeMetricGatherer(Adapter):
     """Gathers VM metrics through functionality exposed by the host compute via func."""
 
     implements(IMetricsGatherer)
-    context(IStackInstalled)
+    context(IManageable)
 
     @defer.inlineCallbacks
     def gather(self):

@@ -7,13 +7,15 @@ from grokcore.component import Adapter, context, baseclass
 from twisted.internet import defer, threads
 from zope.interface import classImplements
 
-from opennode.knot.backend.operation import (ISaltInstalled, IGetComputeInfo, IStartVM, IShutdownVM,
-                                             IDestroyVM, ISuspendVM, IResumeVM, IRebootVM, IListVMS,
-                                             IHostInterfaces, IDeployVM, IUndeployVM, IGetGuestMetrics,
-                                             IGetHostMetrics, IGetLocalTemplates, IMinion,
-                                             IGetSignedCertificateNames, IGetVirtualizationContainers,
-                                             IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleanupHost,
+from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM, ISuspendVM,
+                                             IResumeVM, IRebootVM, IListVMS, IHostInterfaces, IDeployVM,
+                                             IUndeployVM, IGetGuestMetrics, IGetHostMetrics,
+                                             IGetLocalTemplates, IMinion, IGetSignedCertificateNames,
+                                             IGetVirtualizationContainers, IGetDiskUsage, IGetRoutes,
+                                             IGetIncomingHosts, ICleanupHost,
                                              IAcceptIncomingHost, IGetHWUptime)
+from opennode.knot.model.compute import ISaltInstalled
+from opennode.knot.utils.logging import log
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import Proc
 from opennode.oms.security.principals import effective_principals
@@ -22,19 +24,20 @@ from opennode.oms.zodb import db
 
 
 class SaltExecutor(object):
-    overlords = {}
+    client = None
 
     @db.assert_transact
     def _get_client(self):
         """Returns an instance of Salt Stack LocalClient."""
         if not self.client:
             self.client = LocalClient(
-                c_path=get_config().get('salt', 'master_config_path'))
+                c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
         return self.client
 
     def register_salt_proc(self, args, **kwargs):
-        Proc.register(self.deferred, "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'), self.action,
-                                            ' '.join(str(i) for i in args)), **kwargs)
+        Proc.register(self.deferred,
+                      "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'), self.action,
+                                                ' '.join(str(i) for i in args)), **kwargs)
 
 class AsyncSaltExecutor(SaltExecutor):
     interval = 0.1
@@ -52,8 +55,11 @@ class AsyncSaltExecutor(SaltExecutor):
             client = self._get_client()
 
             # TODO: convert to async
-            client.cmd(self.hostname, self.action)
-            self.register_salt_proc(args)
+            try:
+                client.cmd(self.hostname, self.action)
+                self.register_salt_proc(args)
+            except SystemExit:
+                log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
             #self.start_polling()
 
         spawn()
@@ -126,18 +132,19 @@ class SyncSaltExecutor(SaltExecutor):
 
         def spawn_real():
             client = self._get_client()
-            data = client.cmd(self.hostname, self.action)
-            # noglobs=True and async=True cannot live together
-            # see http://goo.gl/UgrZu
-            # thus we need a robust way to get the result for this host,
-            # even when the host names don't match (e.g. localhost vs real host name).
-            hostkey = self.hostname
-            if len(data.keys()) == 1:
-                hostkey = data.keys()[0]
-            res = data[hostkey]
-            if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
-                raise Exception(*res[1:])
-            return res
+            try:
+                data = client.cmd(self.hostname, self.action)
+            except SystemExit:
+                log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
+            else:
+                hostkey = self.hostname
+                if len(data.keys()) == 1:
+                    hostkey = data.keys()[0]
+                res = data[hostkey]
+                if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
+                    raise Exception(*res[1:])
+
+                return res
 
         @defer.inlineCallbacks
         def spawn_handle_timeout():
