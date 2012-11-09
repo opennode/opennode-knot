@@ -233,6 +233,7 @@ def _generate_classes():
         cls_name = 'Func%s' % interface.__name__[1:]
         cls = type(cls_name, (FuncBase, ), dict(func_action=action))
         classImplements(cls, interface)
-        cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, FuncBase.executor_classes[get_config().get('func', 'executor_class')])
+        executor = get_config().get('func', 'executor_class')
+        cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, FuncBase.executor_classes[executor])
         globals()[cls_name] = cls
 _generate_classes()

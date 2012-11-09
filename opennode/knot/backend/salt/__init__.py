@@ -192,22 +192,22 @@ class SaltBase(Adapter):
         defer.returnValue(res)
 
 
-ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
-            IShutdownVM: 'onode.vm.shutdown_vm', IDestroyVM: 'onode.vm.destroy_vm',
-            ISuspendVM: 'onode.vm.suspend_vm', IResumeVM: 'onode.vm.resume_vm',
-            IRebootVM: 'onode.vm.reboot_vm', IListVMS: 'onode.vm.list_vms',
-            IDeployVM: 'onode.vm.deploy_vm', IUndeployVM: 'onode.vm.undeploy_vm',
-            IGetVirtualizationContainers: 'onode.vm.autodetected_backends',
-            IGetGuestMetrics: 'onode.vm.metrics', IGetHostMetrics: 'onode.metrics',
-            IGetLocalTemplates: 'onode.vm.get_local_templates',
+ACTIONS = {IGetComputeInfo: 'onode.hardware_info', IStartVM: 'onode.vm_start_vm',
+            IShutdownVM: 'onode.vm_shutdown_vm', IDestroyVM: 'onode.vm_destroy_vm',
+            ISuspendVM: 'onode.vm_suspend_vm', IResumeVM: 'onode.vm_resume_vm',
+            IRebootVM: 'onode.vm_reboot_vm', IListVMS: 'onode.vm_list_vms',
+            IDeployVM: 'onode.vm_deploy_vm', IUndeployVM: 'onode.vm_undeploy_vm',
+            IGetVirtualizationContainers: 'onode.vm_autodetected_backends',
+            IGetGuestMetrics: 'onode.vm_metrics', IGetHostMetrics: 'onode.metrics',
+            IGetLocalTemplates: 'onode.vm_get_local_templates',
             IGetSignedCertificateNames: 'certmastermod.get_signed_certs',
             IGetIncomingHosts: 'certmastermod.get_hosts_to_sign',
             ICleanupHost: 'certmastermod.cleanup_hosts',
             IAcceptIncomingHost: 'certmastermod.sign_hosts',
-            IGetDiskUsage: 'onode.host.disk_usage',
-            IGetRoutes: 'onode.network.show_routing_table',
-            IHostInterfaces: 'onode.host.interfaces',
-            IGetHWUptime: 'onode.host.uptime'}
+            IGetDiskUsage: 'onode.host_disk_usage',
+            IGetRoutes: 'onode.network_show_routing_table',
+            IHostInterfaces: 'onode.host_interfaces',
+            IGetHWUptime: 'onode.host_uptime'}
 
 OVERRIDE_EXECUTORS = {
     IDeployVM: AsyncSaltExecutor,
@@ -221,7 +221,7 @@ def _generate_classes():
         cls_name = 'Salt%s' % interface.__name__[1:]
         cls = type(cls_name, (SaltBase, ), dict(action=action))
         classImplements(cls, interface)
-        cls.__executor__ = OVERRIDE_EXECUTORS.get(interface,
-                                      SaltBase.executor_classes[get_config().get('salt', 'executor_class')])
+        executor = get_config().get('salt', 'executor_class')
+        cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, SaltBase.executor_classes[executor])
         globals()[cls_name] = cls
 _generate_classes()

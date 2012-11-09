@@ -345,6 +345,7 @@ class Compute(Container):
 
         primaries = [i.ipv4_address for i in self._items['interfaces']
                      if i.ipv4_address and getattr(i, 'primary', False)]
+
         if primaries:
             return unicode(primaries[0])
 

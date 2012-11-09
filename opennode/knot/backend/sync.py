@@ -10,7 +10,7 @@ from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend import func as func_backend
 from opennode.knot.backend import salt as salt_backend
 from opennode.knot.model.compute import ICompute
-from opennode.knot.model.compute import IManageable, IFuncInstalled, ISaltInstalled
+from opennode.knot.model.compute import IManageable
 from opennode.knot.utils.icmp import ping
 from opennode.knot.utils.logging import log
 from opennode.oms.config import get_config

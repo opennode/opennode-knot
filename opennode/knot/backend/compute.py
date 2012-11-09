@@ -39,7 +39,7 @@ def register_machine(host, mgt_stack=None):
     def check():
         machines = db.get_root()['oms_root']['machines']
         machine = follow_symlinks(machines['by-name'][host])
-        if not IManageable.providedBy(machine):
+        if not mgt_stack.providedBy(machine):
             return None
         return machine
 
@@ -364,9 +364,14 @@ class SyncAction(Action):
         uptime = yield IGetHWUptime(self.context).run()
         disk_usage = yield IGetDiskUsage(self.context).run()
 
+        # TODO: Salt may return a string error, if something goes wrong, need to handle it somehow
+        # TODO: Improve error handling
         def disk_info(aspect):
-            res = dict((unicode(k), round(float(v[aspect]) / 1024, 2)) for k, v in disk_usage.items()
-                       if v['device'].startswith('/dev/'))
+            if type(disk_usage) is str:
+                raise Exception(disk_usage)
+            res = dict((unicode(k), round(float(v[aspect]) / 1024, 2))
+                   for k, v in disk_usage.items()
+                   if v['device'].startswith('/dev/'))
             res[u'total'] = sum([0.0] + res.values())
             return res
 
@@ -395,7 +400,6 @@ class SyncAction(Action):
         # routes
 
         # XXX TODO: handle removal of routes
-
         for i in routes:
             destination = netaddr.IPNetwork('%s/%s' % (i['destination'], i['netmask']))
             route_name = str(destination.cidr).replace('/', '_')
