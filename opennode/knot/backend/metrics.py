@@ -108,13 +108,11 @@ class VirtualComputeMetricGatherer(Adapter):
         def get_streams():
             streams = []
             for uuid, data in metrics.items():
-                vm = vms[uuid]
-                if vm:
-                    vm_metrics = vm['metrics']
-                    if vm_metrics:
-                        for k in data:
-                            if vm_metrics[k]:
-                                streams.append((IStream(vm_metrics[k]), (timestamp, data[k])))
+                if vms[uuid] and vms[uuid]['metrics']:
+                    vm_metrics = vms[uuid]['metrics']
+                    for k in data:
+                        if vm_metrics[k]:
+                            streams.append((IStream(vm_metrics[k]), (timestamp, data[k])))
             return streams
 
         # streams could defer the data appending but we don't care

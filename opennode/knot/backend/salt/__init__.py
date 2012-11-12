@@ -56,7 +56,7 @@ class AsyncSaltExecutor(SaltExecutor):
 
             # TODO: convert to async
             try:
-                client.cmd(self.hostname, self.action)
+                client.cmd(self.hostname, self.action, arg=args)
                 self.register_salt_proc(args)
             except SystemExit:
                 log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
@@ -133,7 +133,8 @@ class SyncSaltExecutor(SaltExecutor):
         def spawn_real():
             client = self._get_client()
             try:
-                data = client.cmd(self.hostname, self.action)
+                log('running action: %s args: %s' %( self.action, args), 'salt')
+                data = client.cmd(self.hostname, self.action, arg=args)
             except SystemExit:
                 log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
             else:
@@ -192,22 +193,30 @@ class SaltBase(Adapter):
         defer.returnValue(res)
 
 
-ACTIONS = {IGetComputeInfo: 'onode.hardware_info', IStartVM: 'onode.vm_start_vm',
-            IShutdownVM: 'onode.vm_shutdown_vm', IDestroyVM: 'onode.vm_destroy_vm',
-            ISuspendVM: 'onode.vm_suspend_vm', IResumeVM: 'onode.vm_resume_vm',
-            IRebootVM: 'onode.vm_reboot_vm', IListVMS: 'onode.vm_list_vms',
-            IDeployVM: 'onode.vm_deploy_vm', IUndeployVM: 'onode.vm_undeploy_vm',
-            IGetVirtualizationContainers: 'onode.vm_autodetected_backends',
-            IGetGuestMetrics: 'onode.vm_metrics', IGetHostMetrics: 'onode.metrics',
-            IGetLocalTemplates: 'onode.vm_get_local_templates',
-            IGetSignedCertificateNames: 'certmastermod.get_signed_certs',
-            IGetIncomingHosts: 'certmastermod.get_hosts_to_sign',
-            ICleanupHost: 'certmastermod.cleanup_hosts',
-            IAcceptIncomingHost: 'certmastermod.sign_hosts',
-            IGetDiskUsage: 'onode.host_disk_usage',
-            IGetRoutes: 'onode.network_show_routing_table',
-            IHostInterfaces: 'onode.host_interfaces',
-            IGetHWUptime: 'onode.host_uptime'}
+ACTIONS = {
+    IAcceptIncomingHost: 'saltmod.sign_hosts',
+    ICleanupHost: 'saltmod.cleanup_hosts',
+    IDeployVM: 'onode.vm_deploy_vm',
+    IDestroyVM: 'onode.vm_destroy_vm',
+    IGetComputeInfo: 'onode.hardware_info',
+    IGetDiskUsage: 'onode.host_disk_usage',
+    IGetGuestMetrics: 'onode.vm_metrics',
+    IGetHWUptime: 'onode.host_uptime',
+    IGetHostMetrics: 'onode.host_metrics',
+    IGetIncomingHosts: 'saltmod.get_hosts_to_sign',
+    IGetLocalTemplates: 'onode.vm_get_local_templates',
+    IGetRoutes: 'onode.network_show_routing_table',
+    IGetSignedCertificateNames: 'saltmod.get_signed_certs',
+    IGetVirtualizationContainers: 'onode.vm_autodetected_backends',
+    IHostInterfaces: 'onode.host_interfaces',
+    IListVMS: 'onode.vm_list_vms',
+    IRebootVM: 'onode.vm_reboot_vm',
+    IResumeVM: 'onode.vm_resume_vm',
+    IShutdownVM: 'onode.vm_shutdown_vm',
+    IStartVM: 'onode.vm_start_vm',
+    ISuspendVM: 'onode.vm_suspend_vm',
+    IUndeployVM: 'onode.vm_undeploy_vm',
+    }
 
 OVERRIDE_EXECUTORS = {
     IDeployVM: AsyncSaltExecutor,
