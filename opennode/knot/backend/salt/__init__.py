@@ -1,11 +1,12 @@
 from __future__ import absolute_import
 
-import time
-
 from salt.client import LocalClient
 from grokcore.component import Adapter, context, baseclass
-from twisted.internet import defer, threads
+from twisted.internet import defer, threads, reactor
 from zope.interface import classImplements
+import multiprocessing
+import cPickle
+import time
 
 from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM, ISuspendVM,
                                              IResumeVM, IRebootVM, IListVMS, IHostInterfaces, IDeployVM,
@@ -23,6 +24,27 @@ from opennode.oms.util import timeout, TimeoutException
 from opennode.oms.zodb import db
 
 
+class SaltMultiprocessingClient(multiprocessing.Process):
+
+    def __init__(self):
+        self.q = multiprocessing.Queue()
+        super(SaltMultiprocessingClient, self).__init__()
+
+    def provide_args(self, hostname, action, args):
+        self.hostname = hostname
+        self.action = action
+        self.args = args
+
+    def run(self):
+        client = LocalClient(
+                c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
+
+        log('running action: %s args: %s' %(self.action, self.args), 'salt')
+        data = client.cmd(self.hostname, self.action, arg=self.args)
+        pdata = cPickle.dumps(data)
+        self.q.put(pdata)
+
+
 class SaltExecutor(object):
     client = None
 
@@ -30,14 +52,14 @@ class SaltExecutor(object):
     def _get_client(self):
         """Returns an instance of Salt Stack LocalClient."""
         if not self.client:
-            self.client = LocalClient(
-                c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
+            self.client = SaltMultiprocessingClient()
         return self.client
 
     def register_salt_proc(self, args, **kwargs):
         Proc.register(self.deferred,
                       "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'), self.action,
                                                 ' '.join(str(i) for i in args)), **kwargs)
+
 
 class AsyncSaltExecutor(SaltExecutor):
     interval = 0.1
@@ -54,33 +76,27 @@ class AsyncSaltExecutor(SaltExecutor):
         def spawn():
             client = self._get_client()
 
-            # TODO: convert to async
             try:
-                client.cmd(self.hostname, self.action, arg=args)
+                client.provide_args(self.hostname, self.action, args)
+                client.start()
                 self.register_salt_proc(args)
             except SystemExit:
                 log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
-            #self.start_polling()
+            self.start_polling()
 
         spawn()
         return self.deferred
 
     @db.ro_transact
     def start_polling(self):
-        """
-        return_code, results = self._get_client().job_status(self.job_id)
+        status = self._get_client().is_alive()
 
-        if return_code in (jobthing.JOB_ID_FINISHED, jobthing.JOB_ID_REMOTE_ERROR):
+        if status:
+            pdata = self._get_client().q.get()
+            results = cPickle.loads(pdata)
             self._fire_events(results)
             return
-
-        if return_code == jobthing.JOB_ID_LOST_IN_SPACE:
-            self.deferred.errback(Exception('Command lost in space'))
-            return
-
         reactor.callLater(self.interval, self.start_polling)
-        """
-        raise NotImplemented
 
     def _fire_events(self, data):
         # noglobs=True and async=True cannot live together
@@ -133,8 +149,11 @@ class SyncSaltExecutor(SaltExecutor):
         def spawn_real():
             client = self._get_client()
             try:
-                log('running action: %s args: %s' %( self.action, args), 'salt')
-                data = client.cmd(self.hostname, self.action, arg=args)
+                client.provide_args(self.hostname, self.action, args)
+                client.start()
+                client.join()
+                pdata = client.q.get()
+                data = cPickle.loads(pdata)
             except SystemExit:
                 log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
             else:
