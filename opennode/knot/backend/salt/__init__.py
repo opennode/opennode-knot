@@ -36,13 +36,17 @@ class SaltMultiprocessingClient(multiprocessing.Process):
         self.args = args
 
     def run(self):
-        client = LocalClient(
-                c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
+        client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
 
-        log('running action: %s args: %s' %(self.action, self.args), 'salt')
-        data = client.cmd(self.hostname, self.action, arg=self.args)
-        pdata = cPickle.dumps(data)
-        self.q.put(pdata)
+        try:
+            log('running action: %s args: %s' %(self.action, self.args), 'salt')
+            data = client.cmd(self.hostname, self.action, arg=self.args)
+        except SystemExit:
+            log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
+            self.q.put(cPickle.dumps({}))
+        else:
+            pdata = cPickle.dumps(data)
+            self.q.put(pdata)
 
 
 class SaltExecutor(object):
@@ -54,6 +58,9 @@ class SaltExecutor(object):
         if not self.client:
             self.client = SaltMultiprocessingClient()
         return self.client
+
+    def _destroy_client(self):
+        self.client = None
 
     def register_salt_proc(self, args, **kwargs):
         Proc.register(self.deferred,
@@ -75,13 +82,9 @@ class AsyncSaltExecutor(SaltExecutor):
         @db.ro_transact
         def spawn():
             client = self._get_client()
-
-            try:
-                client.provide_args(self.hostname, self.action, args)
-                client.start()
-                self.register_salt_proc(args)
-            except SystemExit:
-                log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
+            client.provide_args(self.hostname, self.action, args)
+            client.start()
+            self.register_salt_proc(args)
             self.start_polling()
 
         spawn()
@@ -96,6 +99,7 @@ class AsyncSaltExecutor(SaltExecutor):
             results = cPickle.loads(pdata)
             self._fire_events(results)
             return
+
         reactor.callLater(self.interval, self.start_polling)
 
     def _fire_events(self, data):
@@ -106,9 +110,7 @@ class AsyncSaltExecutor(SaltExecutor):
         hostkey = self.hostname
         if len(data.keys()) == 1:
             hostkey = data.keys()[0]
-
         res = data[hostkey]
-
         if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
             self.deferred.errback(Exception(*res[1:]))
         else:
@@ -148,23 +150,21 @@ class SyncSaltExecutor(SaltExecutor):
 
         def spawn_real():
             client = self._get_client()
-            try:
-                client.provide_args(self.hostname, self.action, args)
-                client.start()
-                client.join()
-                pdata = client.q.get()
-                data = cPickle.loads(pdata)
-            except SystemExit:
-                log('failed action: %s on host: %s' % (self.action, self.hostname), 'salt')
-            else:
-                hostkey = self.hostname
-                if len(data.keys()) == 1:
-                    hostkey = data.keys()[0]
+            client.provide_args(self.hostname, self.action, args)
+            client.start()
+            client.join()
+            pdata = client.q.get()
+            data = cPickle.loads(pdata)
+            hostkey = self.hostname
+            if len(data.keys()) == 1:
+                hostkey = data.keys()[0]
+            if hostkey in data:
                 res = data[hostkey]
-                if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
-                    raise Exception(*res[1:])
-
-                return res
+            else:
+                raise KeyError('%s not in data: %s; action: %s' % (hostkey, data, self.action))
+            if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
+                raise Exception(*res[1:])
+            return res
 
         @defer.inlineCallbacks
         def spawn_handle_timeout():
@@ -172,6 +172,9 @@ class SyncSaltExecutor(SaltExecutor):
                 res = yield spawn()
                 defer.returnValue(res)
             except TimeoutException as e:
+                client = self._get_client()
+                client.terminate()
+                self._destroy_client()
                 print "[salt] Got timeout while executing %s on %s (%s)" % (self.action, self.hostname, e)
                 if blacklist_enabled:
                     if self.hostname not in whitelist:
