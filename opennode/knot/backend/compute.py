@@ -529,8 +529,8 @@ def delete_virtual_compute(model, event):
     if IDeployed.providedBy(model):
         print ('[compute_backend] deleting compute %s which is in IDeployed state, shutting down and '
                'undeploying first' % model.hostname)
-        blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()))
-        blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()))
+        blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()), timeout=20000)
+        blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()), timeout=20000)
     else:
         print ('[compute_backend] deleting compute %s which is already in IUndeployed state' %
                model.hostname)
