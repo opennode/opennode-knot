@@ -500,19 +500,23 @@ def handle_compute_state_change_request(compute, event):
     if compute.effective_state == compute.state:
         return
 
-    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
+    def get_action(original, modified):
+        action_mapping = {'inactive': {'active': IStartVM},
+                          'suspended': {'active': IResumeVM},
+                          'active': {'inactive': IShutdownVM,
+                                     'suspended': ISuspendVM},}
 
-    if event.original['state'] == 'inactive' and event.modified['state'] == 'active':
-        action = IStartVM
-    elif event.original['state'] == 'suspended' and event.modified['state'] == 'active':
-        action = IResumeVM
-    elif event.original['state'] == 'active' and event.modified['state'] == 'inactive':
-        action = IShutdownVM
-    elif event.original['state'] == 'active' and event.modified['state'] == 'suspended':
-        action = ISuspendVM
-    else:
+        action = action_mapping.get(original, {}).get(modified, None)
+        return action
+
+    original = event.original['state']
+    modified = event.modified['state']
+    action = get_action(original, modified)
+
+    if not action:
         return
 
+    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
     try:
         yield submitter.submit(action, compute.__name__)
     except Exception as e:
