@@ -10,9 +10,10 @@ from zope.interface import alsoProvides
 
 import opennode.knot.tests
 from opennode.knot.backend.func import FuncGetComputeInfo
-from opennode.knot.backend.operation import IFuncInstalled, IGetComputeInfo, IStartVM, IShutdownVM, IListVMS
+from opennode.knot.backend.operation import IGetComputeInfo, IStartVM, IShutdownVM, IListVMS
 from opennode.oms.model.form import ApplyRawData
 from opennode.knot.model.compute import Compute
+from opennode.knot.model.compute import IFuncInstalled
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.oms.tests.util import run_in_reactor, funcd_running
 
