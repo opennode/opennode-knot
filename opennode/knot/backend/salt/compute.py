@@ -3,8 +3,6 @@ from __future__ import absolute_import
 from grokcore.component import context, subscribe
 from twisted.internet import defer
 
-from pprint import pprint
-
 import salt.config
 from salt.cli.key import Key
 

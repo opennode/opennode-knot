@@ -151,7 +151,8 @@ class SyncFuncExecutor(FuncExecutor):
                 res = yield spawn_func()
                 defer.returnValue(res)
             except TimeoutException as e:
-                print "[func] Got timeout while executing %s on %s (%s)" % (self.func_action, self.hostname, e)
+                print "[func] Got timeout while executing %s on %s (%s)" % (self.func_action,
+                                                                            self.hostname, e)
                 if blacklist_enabled:
                     if self.hostname not in whitelist:
                         print "[func] blacklisting %s for %s s" % (self.hostname, blacklist_ttl)
@@ -166,9 +167,10 @@ class SyncFuncExecutor(FuncExecutor):
             principals = effective_principals(self.interaction)
             if principals:
                 principal = principals[0]
-                Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
-                                                                    self.func_action,
-                                                                    ' '.join(str(i) for i in args)),
+                Proc.register(self.deferred,
+                              "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
+                                                             self.func_action,
+                                                             ' '.join(str(i) for i in args)),
                               principal=principal)
 
         return self.deferred
@@ -221,10 +223,12 @@ FUNC_ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
                 IHostInterfaces: 'onode.host.interfaces',
                 IGetHWUptime: 'onode.host.uptime'}
 
+
 OVERRIDE_EXECUTORS = {
     IDeployVM: AsyncFuncExecutor,
     IUndeployVM: AsyncFuncExecutor
     }
+
 
 # Avoid polluting the global namespace with temporary variables:
 def _generate_classes():
