@@ -209,7 +209,6 @@ class RebootAction(ComputeAction):
     job = IRebootVM
 
 
-
 class SyncAction(Action):
     """Force compute sync"""
     context(ICompute)

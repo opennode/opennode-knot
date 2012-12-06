@@ -24,37 +24,41 @@ from opennode.oms.zodb import db
 
 
 class FuncExecutor(object):
-    pass
+
+    def register_proc_task(self, deferred, cmd, *args, **kwargs):
+        Proc.register(self.deferred,
+                      "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'), self.action,
+                                                     ' '.join(map(str, args))),
+                     **kwargs)
+
 
 
 class AsyncFuncExecutor(FuncExecutor):
     interval = 0.1
 
-    def __init__(self, hostname, func_action, interaction):
+    def __init__(self, hostname, action, interaction):
         self.hostname = hostname
-        self.func_action = func_action
+        self.action = action
         self.interaction = interaction
 
     def run(self, *args, **kwargs):
         self.deferred = defer.Deferred()
 
         @db.ro_transact
-        def spawn_func():
+        def spawn():
             client = self._get_client()
             # we assume that all of the func actions are in the form of 'module.action'
-            module_action, action_name = self.func_action.rsplit('.', 1)
+            module_action, action_name = self.action.rsplit('.', 1)
             module = getattr(client, module_action)
             action = getattr(module, action_name)
 
             self.job_id = action(*args, **kwargs)
 
-            Proc.register(self.deferred, "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
-                                                                        self.func_action,
-                                                                        ' '.join(str(i) for i in args)))
+            self.register_proc_task(self.deferred, self, *args, **kwargs)
 
             self.start_polling()
 
-        spawn_func()
+        spawn()
         return self.deferred
 
     @db.ro_transact
@@ -101,9 +105,9 @@ class SyncFuncExecutor(FuncExecutor):
     func_host_blacklist = {}
 
 
-    def __init__(self, hostname, func_action, interaction):
+    def __init__(self, hostname, action, interaction):
         self.hostname = hostname
-        self.func_action = func_action
+        self.action = action
         self.interaction = interaction
 
     def run(self, *args, **kwargs):
@@ -121,13 +125,13 @@ class SyncFuncExecutor(FuncExecutor):
             del self.func_host_blacklist[self.hostname]
 
         @timeout(hard_timeout)
-        def spawn_func():
-            return threads.deferToThread(spawn_func_real)
+        def spawn():
+            return threads.deferToThread(spawn_real)
 
-        def spawn_func_real():
+        def spawn_real():
             client = self._get_client()
             # we assume that all of the func actions are in the form of 'module.action'
-            module_action, action_name = self.func_action.rsplit('.', 1)
+            module_action, action_name = self.action.rsplit('.', 1)
             module = getattr(client, module_action)
             action = getattr(module, action_name)
 
@@ -146,12 +150,12 @@ class SyncFuncExecutor(FuncExecutor):
                 return res
 
         @defer.inlineCallbacks
-        def spawn_func_handle_timeout():
+        def spawn_handle_timeout():
             try:
-                res = yield spawn_func()
+                res = yield spawn()
                 defer.returnValue(res)
             except TimeoutException as e:
-                print "[func] Got timeout while executing %s on %s (%s)" % (self.func_action,
+                print "[func] Got timeout while executing %s on %s (%s)" % (self.action,
                                                                             self.hostname, e)
                 if blacklist_enabled:
                     if self.hostname not in whitelist:
@@ -161,17 +165,13 @@ class SyncFuncExecutor(FuncExecutor):
                         print "[func] host %s not blacklisted because in 'timeout_whitelist'" % self.hostname
                 raise
 
-        self.deferred = spawn_func_handle_timeout()
+        self.deferred = spawn_handle_timeout()
 
         if self.interaction:
             principals = effective_principals(self.interaction)
             if principals:
                 principal = principals[0]
-                Proc.register(self.deferred,
-                              "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'),
-                                                             self.func_action,
-                                                             ' '.join(str(i) for i in args)),
-                              principal=principal)
+                self.register_proc_task(self.deferred, self, *args, principal=principal)
 
         return self.deferred
 
@@ -190,7 +190,7 @@ class FuncBase(Adapter):
     context(IFuncInstalled)
     baseclass()
 
-    func_action = None
+    action = None
     __executor__ = None
 
     executor_classes = {'sync': SyncFuncExecutor,
@@ -202,12 +202,12 @@ class FuncBase(Adapter):
         executor_class = self.__executor__
         hostname = yield IMinion(self.context).hostname()
         interaction = db.context(self.context).get('interaction', None)
-        executor = executor_class(hostname, self.func_action, interaction)
+        executor = executor_class(hostname, self.action, interaction)
         res = yield executor.run(*args, **kwargs)
         defer.returnValue(res)
 
 
-FUNC_ACTIONS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
+actionS = {IGetComputeInfo: 'hardware.info', IStartVM: 'onode.vm.start_vm',
                 IShutdownVM: 'onode.vm.shutdown_vm', IDestroyVM: 'onode.vm.destroy_vm',
                 ISuspendVM: 'onode.vm.suspend_vm', IResumeVM: 'onode.vm.resume_vm',
                 IRebootVM: 'onode.vm.reboot_vm', IListVMS: 'onode.vm.list_vms',
@@ -233,9 +233,9 @@ OVERRIDE_EXECUTORS = {
 # Avoid polluting the global namespace with temporary variables:
 def _generate_classes():
     # Dynamically generate an adapter class for each supported Func function:
-    for interface, action in FUNC_ACTIONS.items():
+    for interface, action in actionS.items():
         cls_name = 'Func%s' % interface.__name__[1:]
-        cls = type(cls_name, (FuncBase, ), dict(func_action=action))
+        cls = type(cls_name, (FuncBase, ), dict(action=action))
         classImplements(cls, interface)
         executor = get_config().get('func', 'executor_class')
         cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, FuncBase.executor_classes[executor])

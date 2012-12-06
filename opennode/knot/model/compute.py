@@ -10,19 +10,20 @@ from opennode.knot.model.console import Consoles
 from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
 from opennode.knot.model.template import Templates
 from opennode.knot.model.zabbix import IZabbixConfiguration
+from opennode.oms.config import get_config
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import (IMarkable, Container, AddingContainer, IDisplayName,
-                                           ContainerInjector)
-from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.model.model.base import Container, AddingContainer, ReadonlyContainer
+from opennode.oms.model.model.base import IMarkable, IDisplayName, ContainerInjector
 from opennode.oms.model.model.byname import ByNameContainerExtension
-from opennode.oms.security.directives import permissions
-from opennode.oms.util import adapter_value
-from opennode.oms.config import get_config
+from opennode.oms.model.model.proc import ITask, Task
+from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.model.symlink import Symlink
 from opennode.oms.model.schema import Path
+from opennode.oms.security.directives import permissions
+from opennode.oms.util import adapter_value
 
 M = 10 ** 6
 
@@ -435,6 +436,34 @@ class Computes(AddingContainer):
 class ComputesRootInjector(ContainerInjector):
     context(OmsRoot)
     __class__ = Computes
+
+
+class ComputeTasks(ReadonlyContainer):
+    context(Compute)
+    __contains__ = ITask
+    __name__ = 'tasks'
+
+    @property
+    def _items(self):
+        from opennode.oms.zodb import db
+        processes = db.get_root()['oms_root']['proc']
+        tasks = {}
+        def collect(container):
+            seen = set()
+            for item in container.listcontent():
+                if ITask.providedBy(item):
+                    tasks[item.__name__] = Symlink(item.__name__, item)
+                if (isinstance(item, Task) or ITask.providedBy(item)):
+                    if item.__name__ not in seen:
+                        seen.add(item.__name__)
+                        collect(item)
+
+        collect(processes)
+        return tasks
+
+class ComputeTasksInjector(ContainerInjector):
+    context(Compute)
+    __class__ = ComputeTasks
 
 
 provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']),

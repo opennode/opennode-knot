@@ -25,6 +25,7 @@ class DummyOptions(object):
             return '/etc/salt'
         return None
 
+
 class SaltKeyAdapter(Key, parsers.ConfigDirMixIn):
     """ Adaptor for Salt key management logic """
 

@@ -37,7 +37,6 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 
     def run(self):
         client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
-
         try:
             log('running action: %s args: %s' % (self.action, self.args), 'salt')
             data = client.cmd(self.hostname, self.action, arg=self.args)
@@ -63,9 +62,10 @@ class SaltExecutor(object):
         self.client = None
 
     def register_salt_proc(self, args, **kwargs):
-        Proc.register(self.deferred,
+        Proc.register(self.deferred, self,
                       "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'), self.action,
-                                                ' '.join(str(i) for i in args)), **kwargs)
+                                                ' '.join(map(str, args))),
+                      **kwargs)
 
 
 class AsyncSaltExecutor(SaltExecutor):
