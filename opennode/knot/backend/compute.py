@@ -384,14 +384,14 @@ class SyncAction(Action):
         if IVirtualCompute.providedBy(self.context):
             self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
         else:
-            self.context.cpu_info = unicode(info['cpuModel'])
+            self.context.cpu_info = unicode(info.get('cpuModel', 'Unknown'))
 
-        self.context.architecture = (unicode(info['platform']), u'linux', self.distro(info))
-        self.context.kernel = unicode(info['kernelVersion'])
-        self.context.memory = int(info['systemMemory'])
-        self.context.num_cores = int(info['numCpus'])
-        self.context.os_release = unicode(info['os'])
-        self.context.swap_size = int(info['systemSwap'])
+        self.context.architecture = (unicode(info.get('platform', 'Unknown')), u'linux', self.distro(info))
+        self.context.kernel = unicode(info.get('kernelVersion', 'Unknown'))
+        self.context.memory = int(info.get('systemMemory', 0))
+        self.context.num_cores = int(info.get('numCpus', 1))
+        self.context.os_release = unicode(info.get('os', 'Unknown'))
+        self.context.swap_size = int(info.get('systemSwap', 0))
         self.context.diskspace = disk_space
         self.context.diskspace_usage = disk_usage
         self.context.template = u'Hardware node'
@@ -423,7 +423,10 @@ class SyncAction(Action):
             self.context.routes.add(route)
 
     def distro(self, info):
-        return unicode(info['os'].split()[0])
+	if 'os' in info:
+	    return unicode(info['os'].split()[0])
+	else:
+            return 'Unknown'
 
     @defer.inlineCallbacks
     def ensure_vms(self):
