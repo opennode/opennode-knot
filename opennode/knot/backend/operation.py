@@ -1,6 +1,13 @@
 from zope.interface import Interface
 
 
+class OperationRemoteError(Exception):
+    """ Raised on any error coming from Salt"""
+    def __init__(self, msg="Unspecified error", remote_tb=""):
+        super(OperationRemoteError, self).__init__(msg)
+        self.remote_tb = remote_tb
+
+
 class IJob(Interface):
 
     def run():

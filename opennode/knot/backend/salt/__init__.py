@@ -13,8 +13,8 @@ from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdow
                                              IUndeployVM, IGetGuestMetrics, IGetHostMetrics,
                                              IGetLocalTemplates, IMinion, IGetSignedCertificateNames,
                                              IGetVirtualizationContainers, IGetDiskUsage, IGetRoutes,
-                                             IGetIncomingHosts, ICleanupHost,
-                                             IAcceptIncomingHost, IGetHWUptime)
+                                             IGetIncomingHosts, ICleanupHost, IAcceptIncomingHost,
+                                             IGetHWUptime, OperationRemoteError)
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.knot.utils.logging import log
 from opennode.oms.config import get_config
@@ -63,7 +63,8 @@ class SaltExecutor(object):
 
     def register_salt_proc(self, args, **kwargs):
         Proc.register(self.deferred, self,
-                      "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'), self.action,
+                      "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'),
+                                                self.action,
                                                 ' '.join(map(str, args))),
                       **kwargs)
 
@@ -108,10 +109,12 @@ class AsyncSaltExecutor(SaltExecutor):
             hostkey = data.keys()[0]
 
         if hostkey not in data:
-            res = {}
+            self.deferred.errback(None)
+
+        if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
+            self.deferred.errback(OperationRemoteError(msg="Remote error on %s" % hostkey, remote_tb=data[hostkey]))
         else:
-            res = data[hostkey]
-        self.deferred.callback(res)
+            self.deferred.callback(data[hostkey])
 
 
 class SyncSaltExecutor(SaltExecutor):
@@ -158,10 +161,12 @@ class SyncSaltExecutor(SaltExecutor):
                 hostkey = data.keys()[0]
 
             if hostkey not in data:
-                return {}
+                raise OperationRemoteError(msg='Response for %s was empty' % hostkey)
 
-            res = data[hostkey]
-            return res
+            if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
+                raise OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])
+
+            return data[hostkey]
 
         @defer.inlineCallbacks
         def spawn_handle_timeout():

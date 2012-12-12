@@ -1,6 +1,7 @@
 from grokcore.component import context, subscribe, baseclass
 import netaddr
 from twisted.internet import defer
+from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
 
@@ -8,7 +9,7 @@ from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitte
 from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
                                              ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
                                              IDeployVM, IUndeployVM, IGetLocalTemplates, IGetDiskUsage,
-                                             IGetRoutes, IGetHWUptime)
+                                             IGetRoutes, IGetHWUptime, OperationRemoteError)
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
@@ -284,7 +285,8 @@ class SyncAction(Action):
         try:
             if self.context.ipv4_address:
                 address = self.context.ipv4_address.split('/')[0]
-        except:
+        except Exception as e:
+            log.error(e)
             pass
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
@@ -359,15 +361,17 @@ class SyncAction(Action):
         if not any_stack_installed(self.context):
             return
 
-        info = yield IGetComputeInfo(self.context).run()
-        uptime = yield IGetHWUptime(self.context).run()
-        disk_usage = yield IGetDiskUsage(self.context).run()
+        try:
+            info = yield IGetComputeInfo(self.context).run()
+            uptime = yield IGetHWUptime(self.context).run()
+            disk_usage = yield IGetDiskUsage(self.context).run()
+        except OperationRemoteError as e:
+            log.error(e.message)
+            log.error(e.remote_tb)
 
         # TODO: Salt may return a string error, if something goes wrong, need to handle it somehow
         # TODO: Improve error handling
         def disk_info(aspect):
-            if type(disk_usage) is str:
-                raise Exception(disk_usage)
             res = dict((unicode(k), round(float(v[aspect]) / 1024, 2))
                    for k, v in disk_usage.items()
                    if v['device'].startswith('/dev/'))
@@ -380,23 +384,30 @@ class SyncAction(Action):
 
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
+        if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
+            log.error('Nothing to update: info does not include required data')
+            return
+
         if IVirtualCompute.providedBy(self.context):
             self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
         else:
-            self.context.cpu_info = unicode(info.get('cpuModel', 'Unknown'))
+            self.context.cpu_info = unicode(info['cpuModel'])
 
-        self.context.architecture = (unicode(info.get('platform', 'Unknown')), u'linux', self.distro(info))
-        self.context.kernel = unicode(info.get('kernelVersion', 'Unknown'))
-        self.context.memory = int(info.get('systemMemory', 0))
-        self.context.num_cores = int(info.get('numCpus', 1))
-        self.context.os_release = unicode(info.get('os', 'Unknown'))
-        self.context.swap_size = int(info.get('systemSwap', 0))
+        def convertIfKnown(type_, value):
+            if value is not None:
+                return type_(value)
+            return None
+
+        self.context.architecture = (unicode(info['platform']), u'linux', self.distro(info))
+        self.context.kernel = unicode(info['kernelVersion'])
+        self.context.memory = info['systemMemory']
+        self.context.num_cores = info['numCpus']
+        self.context.os_release = unicode(info['os'])
+        self.context.swap_size = info['systemSwap']
         self.context.diskspace = disk_space
         self.context.diskspace_usage = disk_usage
         self.context.template = u'Hardware node'
-        self.context.uptime = float(uptime)
-
-        # routes
+        self.context.uptime = uptime
 
         # XXX TODO: handle removal of routes
         for i in routes:
