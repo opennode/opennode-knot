@@ -367,7 +367,9 @@ class SyncAction(Action):
             disk_usage = yield IGetDiskUsage(self.context).run()
         except OperationRemoteError as e:
             log.err(e.message)
-            log.err(e.remote_tb)
+            if e.remote_tb:
+                log.err(e.remote_tb)
+            raise
 
         # TODO: Salt may return a string error, if something goes wrong, need to handle it somehow
         # TODO: Improve error handling
