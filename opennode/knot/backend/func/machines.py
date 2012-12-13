@@ -28,8 +28,11 @@ class RegisteredMachinesFunc(object):
         return cm.get_signed_certs()
 
 
+def get_accepted_machines():
+    return RegisteredMachinesFunc()._get()
+
+
 @defer.inlineCallbacks
-def import_machines():
-    signed = RegisteredMachinesFunc()._get()
-    for host in signed:
+def import_machines(accepted):
+    for host in accepted:
         yield register_machine(host, mgt_stack=IFuncInstalled)
