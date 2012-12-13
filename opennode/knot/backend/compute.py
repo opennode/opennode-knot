@@ -286,7 +286,7 @@ class SyncAction(Action):
             if self.context.ipv4_address:
                 address = self.context.ipv4_address.split('/')[0]
         except Exception as e:
-            log.error(e)
+            log.err(e)
             pass
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
@@ -366,8 +366,8 @@ class SyncAction(Action):
             uptime = yield IGetHWUptime(self.context).run()
             disk_usage = yield IGetDiskUsage(self.context).run()
         except OperationRemoteError as e:
-            log.error(e.message)
-            log.error(e.remote_tb)
+            log.err(e.message)
+            log.err(e.remote_tb)
 
         # TODO: Salt may return a string error, if something goes wrong, need to handle it somehow
         # TODO: Improve error handling
@@ -385,18 +385,13 @@ class SyncAction(Action):
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
         if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
-            log.error('Nothing to update: info does not include required data')
+            log.err('Nothing to update: info does not include required data')
             return
 
         if IVirtualCompute.providedBy(self.context):
             self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
         else:
             self.context.cpu_info = unicode(info['cpuModel'])
-
-        def convertIfKnown(type_, value):
-            if value is not None:
-                return type_(value)
-            return None
 
         self.context.architecture = (unicode(info['platform']), u'linux', self.distro(info))
         self.context.kernel = unicode(info['kernelVersion'])
@@ -433,9 +428,9 @@ class SyncAction(Action):
             self.context.routes.add(route)
 
     def distro(self, info):
-	if 'os' in info:
-	    return unicode(info['os'].split()[0])
-	else:
+        if 'os' in info:
+            return unicode(info['os'].split()[0])
+        else:
             return 'Unknown'
 
     @defer.inlineCallbacks
