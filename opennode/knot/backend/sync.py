@@ -108,6 +108,14 @@ class PingCheckDaemonProcess(DaemonProcess):
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
+@db.ro_transact
+def get_machines():
+    oms_root = db.get_root()['oms_root']
+    res = [(i, i.hostname) for i in
+           (follow_symlinks(j) for j in oms_root['machines'].listcontent())
+            if ICompute.providedBy(i)]
+    return res
+
 
 class SyncDaemonProcess(DaemonProcess):
     implements(IProcess)
@@ -137,6 +145,8 @@ class SyncDaemonProcess(DaemonProcess):
     @defer.inlineCallbacks
     def sync(self):
         log("syncing", 'sync')
+        # This will help resolve issues like ON-751
+        log('Machines before import:', (yield get_machines()), 'sync')
 
         # TODO: decouple via interfaces?
         yield salt_backend.machines.import_machines()
@@ -161,16 +171,7 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def _getSyncActions(self):
-        @db.ro_transact
-        def get_machines():
-            oms_root = db.get_root()['oms_root']
-            res = [(i, i.hostname) for i in
-                   (follow_symlinks(j) for j in oms_root['machines'].listcontent())
-                    if ICompute.providedBy(i)]
-            return res
-
         sync_actions = []
-
         for i, hostname in (yield get_machines()):
             if IManageable.providedBy(i):
                 action = SyncAction(i)
