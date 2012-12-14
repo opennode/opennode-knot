@@ -2,6 +2,8 @@ from __future__ import absolute_import
 
 from grokcore.component import context
 import netaddr
+from twisted.python import log
+from types import GeneratorType
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements
@@ -16,7 +18,7 @@ from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container, AddingContainer, ReadonlyContainer
 from opennode.oms.model.model.base import IMarkable, IDisplayName, ContainerInjector
 from opennode.oms.model.model.byname import ByNameContainerExtension
-from opennode.oms.model.model.proc import ITask, Task
+from opennode.oms.model.model.proc import ITask
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
@@ -451,12 +453,21 @@ class ComputeTasks(ReadonlyContainer):
         def collect(container):
             seen = set()
             for item in container.listcontent():
-                if ITask.providedBy(item):
-                    tasks[item.__name__] = Symlink(item.__name__, item)
-                if (isinstance(item, Task) or ITask.providedBy(item)):
-                    if item.__name__ not in seen:
-                        seen.add(item.__name__)
-                        collect(item)
+                name = item.__name__
+                if not ITask.providedBy(item):
+                    continue
+
+                # Cmd.subject() implemented incorrectly (must not return a generator)
+                assert not isinstance(item.subject, GeneratorType)
+
+                iterable = isinstance(item.subject, tuple)
+
+                if iterable and self.__parent__ in item.subject:
+                    tasks[name] = Symlink(name, item)
+
+                if name not in seen:
+                    seen.add(name)
+                    collect(item)
 
         collect(processes)
         return tasks

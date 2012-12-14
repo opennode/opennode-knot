@@ -287,7 +287,6 @@ class SyncAction(Action):
                 address = self.context.ipv4_address.split('/')[0]
         except Exception as e:
             log.err(e)
-            pass
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
 
@@ -371,7 +370,6 @@ class SyncAction(Action):
                 log.err(e.remote_tb)
             raise
 
-        # TODO: Salt may return a string error, if something goes wrong, need to handle it somehow
         # TODO: Improve error handling
         def disk_info(aspect):
             res = dict((unicode(k), round(float(v[aspect]) / 1024, 2))
