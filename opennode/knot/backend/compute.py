@@ -395,7 +395,7 @@ class SyncAction(Action):
         self.context.diskspace = disk_space
         self.context.diskspace_usage = disk_usage
         self.context.template = u'Hardware node'
-        self.context.uptime = float(uptime)
+        self.context.uptime = uptime
 
         # routes
 
