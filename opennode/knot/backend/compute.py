@@ -286,7 +286,7 @@ class SyncAction(Action):
             if self.context.ipv4_address:
                 address = self.context.ipv4_address.split('/')[0]
         except Exception as e:
-            log.err(e)
+            log.err(e, system='sync')
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
 
@@ -365,9 +365,9 @@ class SyncAction(Action):
             uptime = yield IGetHWUptime(self.context).run()
             disk_usage = yield IGetDiskUsage(self.context).run()
         except OperationRemoteError as e:
-            log.err(e.message)
+            log.err(e.message, system='sync')
             if e.remote_tb:
-                log.err(e.remote_tb)
+                log.err(e.remote_tb, system='sync')
             raise
 
         # TODO: Improve error handling
@@ -385,7 +385,7 @@ class SyncAction(Action):
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
         if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
-            log.err('Nothing to update: info does not include required data')
+            log.err('Nothing to update: info does not include required data', system='sync')
             return
 
         if IVirtualCompute.providedBy(self.context):
@@ -539,13 +539,13 @@ def handle_compute_state_change_request(compute, event):
 @subscribe(IVirtualCompute, IModelDeletedEvent)
 def delete_virtual_compute(model, event):
     if IDeployed.providedBy(model):
-        print ('[compute_backend] deleting compute %s which is in IDeployed state, shutting down and '
-               'undeploying first' % model.hostname)
+        log.msg('deleting compute %s which is in IDeployed state, shutting down and '
+               'undeploying first' % model.hostname, system='compute_backend')
         blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()), timeout=20000)
         blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()), timeout=20000)
     else:
-        print ('[compute_backend] deleting compute %s which is already in IUndeployed state' %
-               model.hostname)
+        log.msg('deleting compute %s which is already in IUndeployed state' %
+               model.hostname, system='compute_backend')
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)

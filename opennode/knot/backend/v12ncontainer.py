@@ -1,9 +1,10 @@
 from grokcore.component import Adapter, context, implements
 from twisted.internet import defer
+from twisted.python import log
 from zope.component import handle
 from zope.interface import Interface
 
-from opennode.knot.backend.operation import IListVMS, IHostInterfaces
+from opennode.knot.backend.operation import IListVMS, IHostInterfaces, OperationRemoteError
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
@@ -41,7 +42,20 @@ class VirtualizationContainerSubmitter(Adapter):
             return (job, backend_uri)
 
         job, backend_uri = yield get_job()
-        res = yield job.run(backend_uri, *args)
+        d = job.run(backend_uri, *args)
+
+        @d
+        def on_error(e):
+            e.trap(Exception)
+            try:
+                e.raiseException()
+            except OperationRemoteError as ore:
+                log.err(e, _why='Remote error', system='v12n-submitter')
+                log.msg(ore.remote_tb, system='v12n-submitter')
+            except Exception:
+                log.err(e, system='v12n-submitter')
+
+        res = yield d
         defer.returnValue(res)
 
 
@@ -152,7 +166,7 @@ class SyncVmsAction(Action):
 
         for vm_uuid in local_uuids.difference(remote_uuids):
             if IDeploying.providedBy(self.context[vm_uuid]):
-                print "[sync] don't delete undeployed VM while in IDeploying state"
+                log.msg("don't delete undeployed VM while in IDeploying state", system='v12n')
                 continue
 
             noLongerProvides(self.context[vm_uuid], IDeployed)
@@ -160,7 +174,7 @@ class SyncVmsAction(Action):
             self.context[vm_uuid].state = u'inactive'
 
             if get_config().getboolean('sync', 'delete_on_sync'):
-                print "[sync] Deleting compute", vm_uuid
+                log.msg("Deleting compute", vm_uuid, system='v12n')
                 compute = self.context[vm_uuid]
                 del self.context[vm_uuid]
                 handle(compute, ModelDeletedEvent(self.context))
@@ -231,7 +245,6 @@ class SyncVmsAction(Action):
             # it would be easier to have a code path that treats it as a removal + addition
             if interface['type'] == 'bridge' and isinstance(iface_node, BridgeInterface):
                 iface_node.members = interface['members']
-
 
         # remove interfaces
         for iface_name in local_names.difference(remote_names):

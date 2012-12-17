@@ -1,9 +1,11 @@
 
 from grokcore.component import Adapter, context
-import time
 from twisted.internet import defer
+from twisted.python import log
 from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
+import time
+import traceback
 
 from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
@@ -42,13 +44,15 @@ class MetricsDaemonProcess(DaemonProcess):
                 # and maintain the gatherers via add/remove events.
                 if not self.paused:
                     yield self.gather_machines()
-            except Exception:
-                import traceback
-                traceback.print_exc()
-                pass
+            except Exception as e:
+                traceback.print_exc(e)
+                self.log_err(e)
 
-    def log(self, msg):
-        print "[metrics] %s" % (msg, )
+    def log_msg(self, msg, **kwargs):
+        log.msg(msg, system='metrics', **kwargs)
+
+    def log_err(self, msg, **kwargs):
+        log.err(msg, system='metrics', **kwargs)
 
     @defer.inlineCallbacks
     def gather_machines(self):
@@ -68,9 +72,8 @@ class MetricsDaemonProcess(DaemonProcess):
             try:
                 yield i.gather()
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                self.log("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
+                self.log_err("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
+                traceback.print_exc(e)
 
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
@@ -143,4 +146,5 @@ class VirtualComputeMetricGatherer(Adapter):
 
         except Exception as e:
             if get_config().getboolean('debug', 'print_exceptions'):
-                print "[metrics] cannot gather phy metrics", e
+                log.err("cannot gather phy metrics", system='metrics')
+                traceback.print_exc(e)

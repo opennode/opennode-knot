@@ -1,4 +1,5 @@
 from grokcore.component import implements, Subscription, context
+from twisted.python import log
 
 import opennode.knot
 
@@ -27,7 +28,7 @@ class KnotPlugin(PluginInfo):
     implements(IPlugin)
 
     def initialize(self):
-        print "[KnotPlugin] initializing plugin"
+        log.msg("initializing", system='KnotPlugin')
 
         compute_creatable_models = dict((cls.__name__.lower(), cls)
                                         for cls in [Compute, Template, Network, NetworkInterface, Storage,
