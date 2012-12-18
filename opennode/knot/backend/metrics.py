@@ -5,7 +5,6 @@ from twisted.python import log
 from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
 import time
-import traceback
 
 from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
@@ -45,7 +44,6 @@ class MetricsDaemonProcess(DaemonProcess):
                 if not self.paused:
                     yield self.gather_machines()
             except Exception as e:
-                traceback.print_exc(e)
                 self.log_err(e)
 
     def log_msg(self, msg, **kwargs):
@@ -73,7 +71,6 @@ class MetricsDaemonProcess(DaemonProcess):
                 yield i.gather()
             except Exception as e:
                 self.log_err("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
-                traceback.print_exc(e)
 
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
@@ -145,6 +142,6 @@ class VirtualComputeMetricGatherer(Adapter):
                 stream.add(data_point)
 
         except Exception as e:
+            log.msg("cannot gather phy metrics", system='metrics')
             if get_config().getboolean('debug', 'print_exceptions'):
-                log.err("cannot gather phy metrics", system='metrics')
-                traceback.print_exc(e)
+                log.err(e, system='metrics')

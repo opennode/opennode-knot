@@ -21,6 +21,7 @@ from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IM
                                      ModelModifiedEvent, TmpObj, alsoProvides, noLongerProvides)
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
+from opennode.oms.model.model.proc import registered_process
 from opennode.oms.util import blocking_yield, get_u, get_i, get_f, exception_logger
 from opennode.oms.zodb import db
 
@@ -31,6 +32,7 @@ def any_stack_installed(context):
 
 def format_error(e):
     return (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/')))
+
 
 
 @defer.inlineCallbacks
@@ -60,22 +62,30 @@ class DeployAction(Action):
 
     action('deploy')
 
+    def get_name(self, *args):
+        return self._name
+
+    @db.ro_transact(proxy=False)
+    def get_subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__.__parent__,))
+
+    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     @exception_logger
     def execute(self, cmd, args):
-        parent = yield db.ro_transact(proxy=False)(lambda: self.context.__parent__)()
-
-        submitter = IVirtualizationContainerSubmitter(parent)
         template = yield db.ro_transact(lambda: self.context.template)()
 
         if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
             return
 
+        @db.transact
+        def mark_as_deploying():
+            alsoProvides(self.context, IDeploying)
+
         # XXX: TODO resolve template object from the template name
         # and take the template name from the object
         #template = cmd.traverse(self.context.template)
-
         @db.ro_transact(proxy=False)
         def get_parameters():
             return dict(template_name=self.context.template,
@@ -86,14 +96,11 @@ class DeployAction(Action):
                         autostart=self.context.autostart,
                         ip_address=self.context.ipv4_address.split('/')[0],)
 
-        @db.transact
-        def mark_as_deploying():
-            alsoProvides(self.context, IDeploying)
-
+        parent = yield db.ro_transact(lambda: self.context.__parent__)()
         yield mark_as_deploying()
-
         vm_parameters = yield get_parameters()
-        res = yield submitter.submit(IDeployVM, vm_parameters)
+
+        res = yield IVirtualizationContainerSubmitter(parent).submit(IDeployVM, vm_parameters)
         cmd.write('%s\n' % (res,))
 
         @db.transact
@@ -111,6 +118,14 @@ class UndeployAction(Action):
 
     action('undeploy')
 
+    def get_name(self, *args):
+        return self._name
+
+    @db.ro_transact(proxy=False)
+    def get_subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__.__parent__,))
+
+    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         name = yield db.ro_transact(lambda: self.context.__name__)()
@@ -135,6 +150,14 @@ class InfoAction(Action):
 
     action('info')
 
+    def get_name(self, *args):
+        return self._name
+
+    @db.ro_transact(proxy=False)
+    def get_subject(self, *args, **kwargs):
+        return self.context.__parent__
+
+    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         name = yield db.ro_transact(lambda: self.context.__name__)()
@@ -157,6 +180,14 @@ class ComputeAction(Action):
     context(IVirtualCompute)
     baseclass()
 
+    def get_name(self, *args):
+        return getattr(self, 'action_name', self._name)
+
+    @db.ro_transact(proxy=False)
+    def get_subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__.__parent__,))
+
+    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         action_name = getattr(self, 'action_name', self._name + "ing")
@@ -166,6 +197,7 @@ class ComputeAction(Action):
 
         cmd.write("%s %s\n" % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
+
         try:
             yield submitter.submit(self.job, name)
         except Exception as e:
@@ -215,6 +247,14 @@ class SyncAction(Action):
     context(ICompute)
 
     action('sync')
+
+    def get_name(self, *args):
+        return self._name
+
+    def get_subject(self, *args, **kwargs):
+        return tuple((self.context,))
+
+    @registered_process(get_name, get_subject)
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
@@ -492,7 +532,8 @@ class SyncAction(Action):
                 template.ip = get_u(i, 'ip_address')
 
             # delete templates no more offered upstream
-            for i in set(template_container['by-name'].listnames()).difference(i['template_name'] for i in templates):
+            template_names = template_container['by-name'].listnames()
+            for i in set(template_names).difference(i['template_name'] for i in templates):
                 template_container.remove(follow_symlinks(template_container['by-name'][i]))
 
         yield update_templates()
@@ -527,9 +568,9 @@ def handle_compute_state_change_request(compute, event):
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
     try:
         yield submitter.submit(action, compute.__name__)
-    except Exception as e:
+    except Exception:
         compute.effective_state = event.original['state']
-        raise e
+        raise
     compute.effective_state = event.modified['state']
 
     handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
@@ -550,6 +591,7 @@ def delete_virtual_compute(model, event):
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
 def create_virtual_compute(model, event):
+    # TODO: maybe raise an exception here instead?
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
     if IDeployed.providedBy(model):

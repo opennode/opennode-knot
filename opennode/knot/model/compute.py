@@ -1,9 +1,10 @@
 from __future__ import absolute_import
 
 from grokcore.component import context
+import logging
 import netaddr
-from twisted.python import log
 from types import GeneratorType
+from twisted.python import log
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements
@@ -462,7 +463,17 @@ class ComputeTasks(ReadonlyContainer):
 
                 iterable = isinstance(item.subject, tuple)
 
-                if iterable and self.__parent__ in item.subject:
+                if iterable:
+                    log.msg('\t CMD: %s %s' % (item.__name__, item.cmdline),
+                            system='proc',
+                            logLevel=logging.DEBUG)
+                    for s in item.subject:
+                        log.msg('\t\tSUBJ: %s, %s' % (s.__name__ == self.__parent__.__name__,
+                                                      self.__parent__),
+                                system='proc',
+                                logLevel=logging.DEBUG)
+
+                if iterable and self.__parent__.__name__ in map(lambda s: s.__name__, item.subject):
                     tasks[name] = Symlink(name, item)
 
                 if name not in seen:
@@ -471,6 +482,7 @@ class ComputeTasks(ReadonlyContainer):
 
         collect(processes)
         return tasks
+
 
 class ComputeTasksInjector(ContainerInjector):
     context(Compute)

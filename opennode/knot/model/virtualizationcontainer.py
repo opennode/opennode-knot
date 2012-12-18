@@ -25,9 +25,7 @@ class VirtualizationContainer(Container):
 
     def __init__(self, backend):
         super(VirtualizationContainer, self).__init__()
-
         self.backend = backend
-
         self.__name__ = 'vms'
 
     def __str__(self):

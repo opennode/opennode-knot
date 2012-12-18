@@ -12,6 +12,7 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
 from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
 from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.proc import registered_process
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.zodb import db
 
@@ -66,6 +67,10 @@ class ListVirtualizationContainerAction(Action):
     context(IVirtualizationContainer)
     action('list')
 
+    def get_context(self, *args, **kwargs):
+        return tuple((self.context,))
+
+    @registered_process('list', get_context)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         cmd.write("listing virtual machines\n")
@@ -76,8 +81,7 @@ class ListVirtualizationContainerAction(Action):
         try:
             vms = yield submitter.submit(IListVMS)
         except Exception as e:
-            cmd.write("%s\n" %
-                      (": ".join(str(msg) for msg in e.args
+            cmd.write("%s\n" % (": ".join(str(msg) for msg in e.args
                                  if (not isinstance(msg, str) or not msg.startswith('  File "/')))))
             return
 
@@ -106,6 +110,11 @@ class SyncVmsAction(Action):
 
     action('sync')
 
+    @db.ro_transact
+    def get_subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__,))
+
+    @registered_process('sync', get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         # sync host interfaces (this is not the right place, but ...)

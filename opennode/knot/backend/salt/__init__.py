@@ -19,8 +19,6 @@ from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdow
                                              IGetHWUptime, OperationRemoteError)
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
-from opennode.oms.model.model.proc import Proc
-from opennode.oms.security.principals import effective_principals
 from opennode.oms.util import timeout, TimeoutException
 from opennode.oms.zodb import db
 
@@ -63,13 +61,6 @@ class SaltExecutor(object):
     def _destroy_client(self):
         self.client = None
 
-    def register_salt_proc(self, args, **kwargs):
-        Proc.register(self.deferred, self,
-                      "/bin/salt '%s' %s %s" % (self.hostname.encode('utf-8'),
-                                                self.action,
-                                                ' '.join(map(str, args))),
-                      **kwargs)
-
 
 class AsyncSaltExecutor(SaltExecutor):
     interval = 0.1
@@ -87,14 +78,13 @@ class AsyncSaltExecutor(SaltExecutor):
             client = self._get_client()
             client.provide_args(self.hostname, self.action, args)
             client.start()
-            self.register_salt_proc(args)
-            self.start_polling()
+            self.poll()
 
         spawn()
         return self.deferred
 
     @db.ro_transact
-    def start_polling(self):
+    def poll(self):
         done = not self._get_client().is_alive()
 
         if done:
@@ -103,17 +93,14 @@ class AsyncSaltExecutor(SaltExecutor):
             self._fire_events(results)
             return
 
-        reactor.callLater(self.interval, self.start_polling)
+        reactor.callLater(self.interval, self.poll)
 
     def _fire_events(self, data):
-        hostkey = self.hostname
-        if len(data.keys()) == 1:
-            hostkey = data.keys()[0]
+        hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
         if hostkey not in data:
-            self.deferred.errback(None)
-
-        if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
+            self.deferred.errback(OperationRemoteError(msg='Remote returned empty response'))
+        elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
             self.deferred.errback(OperationRemoteError(msg="Remote error on %s" % hostkey,
                                                        remote_tb=data[hostkey]))
         else:
@@ -194,12 +181,6 @@ class SyncSaltExecutor(SaltExecutor):
                 raise
 
         self.deferred = spawn_handle_timeout()
-
-        if self.interaction:
-            principals = effective_principals(self.interaction)
-            if principals:
-                principal = principals[0]
-                self.register_salt_proc(args, principal=principal)
 
         return self.deferred
 

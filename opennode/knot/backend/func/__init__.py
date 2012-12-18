@@ -17,20 +17,13 @@ from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdow
                                              IAcceptIncomingHost, IGetHWUptime)
 from opennode.knot.model.compute import IFuncInstalled
 from opennode.oms.config import get_config
-from opennode.oms.model.model.proc import Proc
 from opennode.oms.security.principals import effective_principals
 from opennode.oms.util import timeout, TimeoutException
 from opennode.oms.zodb import db
 
 
 class FuncExecutor(object):
-
-    def register_proc_task(self, deferred, cmd, *args, **kwargs):
-        Proc.register(self.deferred,
-                      "/bin/func '%s' call %s %s" % (self.hostname.encode('utf-8'), self.action,
-                                                     ' '.join(map(str, args))),
-                     **kwargs)
-
+    pass
 
 
 class AsyncFuncExecutor(FuncExecutor):
@@ -51,11 +44,7 @@ class AsyncFuncExecutor(FuncExecutor):
             module_action, action_name = self.action.rsplit('.', 1)
             module = getattr(client, module_action)
             action = getattr(module, action_name)
-
             self.job_id = action(*args, **kwargs)
-
-            self.register_proc_task(self.deferred, self, *args, **kwargs)
-
             self.start_polling()
 
         spawn()
@@ -166,13 +155,6 @@ class SyncFuncExecutor(FuncExecutor):
                 raise
 
         self.deferred = spawn_handle_timeout()
-
-        if self.interaction:
-            principals = effective_principals(self.interaction)
-            if principals:
-                principal = principals[0]
-                self.register_proc_task(self.deferred, self, *args, principal=principal)
-
         return self.deferred
 
     overlords = {}
