@@ -459,6 +459,9 @@ class ComputeTasks(ReadonlyContainer):
                     continue
 
                 # Cmd.subject() implemented incorrectly (must not return a generator)
+                # XXX: for some reason, when I let subject stick to a generator instance,
+                # I get an empty generator here, while it magically works when I save
+                # it as a tuple under item.subject
                 assert not isinstance(item.subject, GeneratorType)
 
                 iterable = isinstance(item.subject, tuple)
