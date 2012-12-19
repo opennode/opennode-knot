@@ -9,7 +9,7 @@ from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitte
 from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
                                              ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
                                              IDeployVM, IUndeployVM, IGetLocalTemplates, IGetDiskUsage,
-                                             IGetRoutes, IGetHWUptime, OperationRemoteError)
+                                             IGetRoutes, IGetHWUptime, IMigrateVM, OperationRemoteError)
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
@@ -18,7 +18,8 @@ from opennode.knot.model.template import Template
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent,
-                                     ModelModifiedEvent, TmpObj, alsoProvides, noLongerProvides)
+                                     ModelModifiedEvent, IModelMovedEvent, TmpObj, alsoProvides,
+                                     noLongerProvides)
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.model.model.proc import registered_process
@@ -540,6 +541,17 @@ class SyncAction(Action):
                 template_container.remove(follow_symlinks(template_container['by-name'][i]))
 
         yield update_templates()
+
+
+@subscribe(ICompute, IModelMovedEvent)
+@defer.inlineCallbacks
+def handle_compute_migrate(compute, event):
+    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
+    try:
+        yield submitter.submit(IMigrateVM, compute.__name__)
+    except Exception:
+        # TODO: rollback local changes
+        raise
 
 
 @subscribe(ICompute, IModelModifiedEvent)

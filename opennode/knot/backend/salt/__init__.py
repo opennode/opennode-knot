@@ -15,8 +15,8 @@ from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdow
                                              IUndeployVM, IGetGuestMetrics, IGetHostMetrics,
                                              IGetLocalTemplates, IMinion, IGetSignedCertificateNames,
                                              IGetVirtualizationContainers, IGetDiskUsage, IGetRoutes,
-                                             IGetIncomingHosts, ICleanupHost, IAcceptIncomingHost,
-                                             IGetHWUptime, OperationRemoteError)
+                                             IGetIncomingHosts, ICleanupHost, IMigrateVM,
+                                             IAcceptIncomingHost, IGetHWUptime, OperationRemoteError)
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
 from opennode.oms.util import timeout, TimeoutException
@@ -229,6 +229,7 @@ ACTIONS = {
     IStartVM: 'onode.vm_start_vm',
     ISuspendVM: 'onode.vm_suspend_vm',
     IUndeployVM: 'onode.vm_undeploy_vm',
+    IMigrateVM: 'onode.vm_migrate'
 }
 
 OVERRIDE_EXECUTORS = {

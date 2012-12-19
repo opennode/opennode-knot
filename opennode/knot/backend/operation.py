@@ -112,3 +112,6 @@ class ICleanupHost(IJob):
 
 class IGetHWUptime(IJob):
     """Return uptime of a physical host"""
+
+class IMigrateVM(IJob):
+    """ Migrate compute to another host """
