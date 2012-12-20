@@ -109,6 +109,22 @@ class PingCheckDaemonProcess(DaemonProcess):
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
+@db.ro_transact
+def get_machines():
+    oms_root = db.get_root()['oms_root']
+    machines = (follow_symlinks(j) for j in oms_root['machines'].listcontent())
+    res = [(i, i.hostname) for i in machines
+           if ICompute.providedBy(i) and IManageable.providedBy(i)]
+    return res
+
+
+@db.ro_transact
+def delete_machines(delete_list):
+    oms_machines = db.get_root()['oms_root']['machines']
+
+    for host, hostname in delete_list:
+        del oms_machines[host.__name__]
+
 
 class SyncDaemonProcess(DaemonProcess):
     implements(IProcess)
@@ -139,9 +155,19 @@ class SyncDaemonProcess(DaemonProcess):
     def sync(self):
         log.msg("syncing", system='sync')
 
-        # TODO: decouple via interfaces?
-        yield salt_backend.machines.import_machines()
-        yield func_backend.machines.import_machines()
+        # This will help resolve issues like ON-751
+        log('Machines before cleanup: %s' % (yield get_machines()), 'sync')
+        accepted_salt = salt_backend.machines.get_accepted_machines()
+        accepted_func = func_backend.machines.get_accepted_machines()
+
+        accepted = accepted_salt.union(set(accepted_func))
+        hosts_to_delete = [(host, hostname) for host, hostname in (yield get_machines())
+                           if hostname not in accepted]
+        log('Hosts to delete: %s' % (hosts_to_delete), 'sync')
+        # cleanup machines not known from func or salt
+        yield delete_machines(hosts_to_delete)
+        yield salt_backend.machines.import_machines(accepted_salt)
+        yield func_backend.machines.import_machines(accepted_func)
 
         sync_actions = (yield self._getSyncActions())
 
@@ -162,20 +188,10 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def _getSyncActions(self):
-        @db.ro_transact
-        def get_machines():
-            oms_root = db.get_root()['oms_root']
-            res = [(i, i.hostname) for i in
-                   (follow_symlinks(j) for j in oms_root['machines'].listcontent())
-                    if ICompute.providedBy(i)]
-            return res
-
         sync_actions = []
-
         for i, hostname in (yield get_machines()):
-            if IManageable.providedBy(i):
-                action = SyncAction(i)
-                sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
+            action = SyncAction(i)
+            sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 
         defer.returnValue(sync_actions)
 

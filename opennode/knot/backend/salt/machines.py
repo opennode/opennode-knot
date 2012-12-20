@@ -70,8 +70,11 @@ class RegisteredMachinesSalt(object):
         return SaltKeyAdapter().getAcceptedKeyNames()
 
 
+def get_accepted_machines():
+    return RegisteredMachinesSalt()._get()
+
+
 @defer.inlineCallbacks
-def import_machines():
-    accepted = RegisteredMachinesSalt()._get()
+def import_machines(accepted):
     for host in accepted:
         yield register_machine(host, mgt_stack=ISaltInstalled)
