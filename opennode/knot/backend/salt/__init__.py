@@ -151,8 +151,8 @@ class SyncSaltExecutor(SaltExecutor):
                 hostkey = data.keys()[0]
 
             if hostkey not in data:
-                raise OperationRemoteError(msg='Response for %s on \'%s %s\' was empty' %
-                                           (hostkey, self.action, args))
+                raise OperationRemoteError(
+                    msg='Response for %s on \'%s%s\' was empty' % (hostkey, self.action, args))
 
             if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
                 raise OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])

@@ -51,10 +51,11 @@ class VirtualizationContainerSubmitter(Adapter):
             try:
                 e.raiseException()
             except OperationRemoteError as ore:
-                log.err(e, _why='Remote error', system='v12n-submitter')
-                log.msg(ore.remote_tb, system='v12n-submitter')
+                log.msg(e, _why='Remote error', system='v12n-submitter')
+                if ore.remote_tb:
+                    log.msg(ore.remote_tb, system='v12n-submitter')
             except Exception:
-                log.err(e, system='v12n-submitter')
+                log.err(system='v12n-submitter')
 
         res = yield d
         defer.returnValue(res)
@@ -110,7 +111,7 @@ class SyncVmsAction(Action):
 
     action('sync')
 
-    @db.ro_transact
+    @db.ro_transact(proxy=False)
     def get_subject(self, *args, **kwargs):
         return tuple((self.context.__parent__,))
 

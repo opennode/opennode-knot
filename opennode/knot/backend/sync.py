@@ -1,11 +1,10 @@
 from datetime import datetime
 from grokcore.component.directive import context
 from twisted.internet import defer
-from twisted.python import log, failure
+from twisted.python import log
 from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 import logging
-import traceback
 
 from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend import func as func_backend
@@ -71,10 +70,9 @@ class PingCheckDaemonProcess(DaemonProcess):
             try:
                 if not self.paused:
                     yield self.ping_check()
-            except Exception as e:
-                log.err(e, system='sync')
+            except Exception:
                 if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(traceback.format_exc(e), system='sync')
+                    log.err(system='ping-check')
 
             yield async_sleep(self.interval)
 
@@ -85,8 +83,7 @@ class PingCheckDaemonProcess(DaemonProcess):
         def get_computes():
             oms_root = db.get_root()['oms_root']
             res = [(i, i.hostname)
-                   for i in map(follow_symlinks,
-                                oms_root['computes'].listcontent())
+                   for i in map(follow_symlinks, oms_root['computes'].listcontent())
                    if ICompute.providedBy(i)]
 
             return res
@@ -104,17 +101,17 @@ class PingCheckDaemonProcess(DaemonProcess):
             except Exception as e:
                 log.msg("Got exception when pinging compute '%s': %s" % (c, e), system='ping-check')
                 if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(e, system='ping-check')
+                    log.err(system='ping-check')
 
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
 @db.ro_transact
-def get_machines():
+def get_manageable_machines():
     oms_root = db.get_root()['oms_root']
-    machines = (follow_symlinks(j) for j in oms_root['machines'].listcontent())
-    res = [(i, i.hostname) for i in machines
-           if ICompute.providedBy(i) and IManageable.providedBy(i)]
+    machines = map(follow_symlinks, oms_root['machines'].listcontent())
+    res = [(m, m.hostname) for m in machines
+           if ICompute.providedBy(m) and IManageable.providedBy(m)]
     return res
 
 
@@ -145,9 +142,9 @@ class SyncDaemonProcess(DaemonProcess):
                     log.msg("yielding sync", system='sync', logLevel=logging.DEBUG)
                     yield self.sync()
                     log.msg("sync yielded", system='sync', logLevel=logging.DEBUG)
-            except Exception, e:
+            except Exception:
                 if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(e, system='sync')
+                    log.err(system='sync')
 
             yield async_sleep(self.interval)
 
@@ -155,15 +152,14 @@ class SyncDaemonProcess(DaemonProcess):
     def sync(self):
         log.msg("syncing", system='sync')
 
-        # This will help resolve issues like ON-751
-        log('Machines before cleanup: %s' % (yield get_machines()), 'sync')
+        log.msg('Machines before cleanup: %s' % (yield get_manageable_machines()), system='sync')
         accepted_salt = salt_backend.machines.get_accepted_machines()
         accepted_func = func_backend.machines.get_accepted_machines()
 
         accepted = accepted_salt.union(set(accepted_func))
-        hosts_to_delete = [(host, hostname) for host, hostname in (yield get_machines())
+        hosts_to_delete = [(host, hostname) for host, hostname in (yield get_manageable_machines())
                            if hostname not in accepted]
-        log('Hosts to delete: %s' % (hosts_to_delete), 'sync')
+        log.msg('Hosts to delete: %s' % (hosts_to_delete), system='sync')
         # cleanup machines not known from func or salt
         yield delete_machines(hosts_to_delete)
         yield salt_backend.machines.import_machines(accepted_salt)
@@ -180,7 +176,7 @@ class SyncDaemonProcess(DaemonProcess):
             except Exception as e:
                 log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
                 if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(failure.Failure(e), system='sync')
+                    log.err(system='sync')
             else:
                 log.msg("Syncing was ok for compute: '%s'" % c, system='sync')
 
@@ -189,7 +185,7 @@ class SyncDaemonProcess(DaemonProcess):
     @defer.inlineCallbacks
     def _getSyncActions(self):
         sync_actions = []
-        for i, hostname in (yield get_machines()):
+        for i, hostname in (yield get_manageable_machines()):
             action = SyncAction(i)
             sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 

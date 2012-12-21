@@ -14,10 +14,9 @@ from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdow
                                              IGetHostMetrics, IGetLocalTemplates, IMinion,
                                              IGetSignedCertificateNames, IGetVirtualizationContainers,
                                              IGetDiskUsage, IGetRoutes, IGetIncomingHosts, ICleanupHost,
-                                             IAcceptIncomingHost, IGetHWUptime)
+                                             IAcceptIncomingHost, IGetHWUptime, OperationRemoteError)
 from opennode.knot.model.compute import IFuncInstalled
 from opennode.oms.config import get_config
-from opennode.oms.security.principals import effective_principals
 from opennode.oms.util import timeout, TimeoutException
 from opennode.oms.zodb import db
 
@@ -73,7 +72,7 @@ class AsyncFuncExecutor(FuncExecutor):
         res = data[hostkey]
 
         if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
-            self.deferred.errback(Exception(*res[1:]))
+            self.deferred.errback(OperationRemoteError(res[1], remote_tb=res[2]))
         else:
             self.deferred.callback(res)
 
@@ -134,7 +133,7 @@ class SyncFuncExecutor(FuncExecutor):
                 hostkey = data.keys()[0]
             res = data[hostkey]
             if res and isinstance(res, list) and res[0] == 'REMOTE_ERROR':
-                raise Exception(*res[1:])
+                raise OperationRemoteError(res[1], remote_tb=res[2])
             else:
                 return res
 

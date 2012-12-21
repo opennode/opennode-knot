@@ -6,7 +6,7 @@ from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
 import time
 
-from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics
+from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics, OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import IManageable
 from opennode.oms.config import get_config
@@ -43,13 +43,13 @@ class MetricsDaemonProcess(DaemonProcess):
                 # and maintain the gatherers via add/remove events.
                 if not self.paused:
                     yield self.gather_machines()
-            except Exception as e:
-                self.log_err(e)
+            except Exception :
+                self.log_err()
 
     def log_msg(self, msg, **kwargs):
         log.msg(msg, system='metrics', **kwargs)
 
-    def log_err(self, msg, **kwargs):
+    def log_err(self, msg=None, **kwargs):
         log.err(msg, system='metrics', **kwargs)
 
     @defer.inlineCallbacks
@@ -59,18 +59,16 @@ class MetricsDaemonProcess(DaemonProcess):
             res = []
 
             oms_root = db.get_root()['oms_root']
-            for i in [follow_symlinks(i) for i in oms_root['computes'].listcontent()]:
-                adapter = queryAdapter(i, IMetricsGatherer)
-                if adapter:
-                    res.append(adapter)
-
+            res = filter(None, (queryAdapter(follow_symlinks(i), IMetricsGatherer)
+                                        for i in oms_root['computes'].listcontent()))
             return res
 
         for i in (yield get_gatherers()):
             try:
                 yield i.gather()
             except Exception as e:
-                self.log_err("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
+                self.log_msg("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
+                self.log_err()
 
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
@@ -100,6 +98,10 @@ class VirtualComputeMetricGatherer(Adapter):
             return
 
         metrics = yield IVirtualizationContainerSubmitter(vms).submit(IGetGuestMetrics)
+
+        if not metrics:
+            log.msg('No vm metrics received', system='metrics')
+            return
 
         timestamp = int(time.time() * 1000)
 
@@ -140,8 +142,9 @@ class VirtualComputeMetricGatherer(Adapter):
 
             for stream, data_point in (yield get_streams()):
                 stream.add(data_point)
-
-        except Exception as e:
-            log.msg("cannot gather phy metrics", system='metrics')
+        except OperationRemoteError as e:
+            log.msg(e, system='metrics')
+        except Exception:
+            log.msg("Error gathering phy metrics", system='metrics')
             if get_config().getboolean('debug', 'print_exceptions'):
-                log.err(e, system='metrics')
+                log.err(system='metrics')

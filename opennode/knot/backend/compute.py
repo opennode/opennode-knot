@@ -251,11 +251,11 @@ class SyncAction(Action):
     def get_name(self, *args):
         return self._name
 
+    @db.ro_transact(proxy=False)
     def get_subject(self, *args, **kwargs):
         return tuple((self.context,))
 
     @registered_process(get_name, get_subject)
-
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         default = yield self.default_console()
@@ -325,8 +325,8 @@ class SyncAction(Action):
         try:
             if self.context.ipv4_address:
                 address = self.context.ipv4_address.split('/')[0]
-        except Exception as e:
-            log.err(e, system='sync')
+        except Exception:
+            log.err(system='sync')
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
 
@@ -405,10 +405,10 @@ class SyncAction(Action):
             uptime = yield IGetHWUptime(self.context).run()
             disk_usage = yield IGetDiskUsage(self.context).run()
         except OperationRemoteError as e:
-            log.err(e.message, system='sync')
+            log.msg(e.message, system='sync')
             if e.remote_tb:
-                log.err(e.remote_tb, system='sync')
-            raise
+                log.msg(e.remote_tb, system='sync')
+            return
 
         # TODO: Improve error handling
         def disk_info(aspect):
@@ -503,6 +503,9 @@ class SyncAction(Action):
 
         submitter = IVirtualizationContainerSubmitter(self.context['vms'])
         templates = yield submitter.submit(IGetLocalTemplates)
+
+        if not templates:
+            return
 
         @db.transact
         def update_templates():
