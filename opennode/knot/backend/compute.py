@@ -548,7 +548,7 @@ class SyncAction(Action):
 def handle_compute_migrate(compute, event):
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
     try:
-        yield submitter.submit(IMigrateVM, compute.__name__)
+        yield submitter.submit(IMigrateVM, compute.__name__, event.toContainer)
     except Exception:
         # TODO: rollback local changes
         raise

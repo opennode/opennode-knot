@@ -1,14 +1,15 @@
 from datetime import datetime
 from grokcore.component.directive import context
+from logging import DEBUG, ERROR, WARN
 from twisted.internet import defer
 from twisted.python import log
 from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
-import logging
 
-from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend import func as func_backend
 from opennode.knot.backend import salt as salt_backend
+from opennode.knot.backend.compute import SyncAction
+from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.compute import IManageable
 from opennode.knot.utils.icmp import ping
@@ -106,6 +107,7 @@ class PingCheckDaemonProcess(DaemonProcess):
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
+
 @db.ro_transact
 def get_manageable_machines():
     oms_root = db.get_root()['oms_root']
@@ -136,12 +138,16 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def run(self):
+        if get_config().getboolean('debug', 'sync_disabled'):
+            log('sync is disabled for debugging purposes', 'sync', logLevel=WARN)
+            return
+
         while True:
             try:
                 if not self.paused:
-                    log.msg("yielding sync", system='sync', logLevel=logging.DEBUG)
+                    log.msg("yielding sync", system='sync', logLevel=DEBUG)
                     yield self.sync()
-                    log.msg("sync yielded", system='sync', logLevel=logging.DEBUG)
+                    log.msg("sync yielded", system='sync', logLevel=DEBUG)
             except Exception:
                 if get_config().getboolean('debug', 'print_exceptions'):
                     log.err(system='sync')
@@ -167,12 +173,17 @@ class SyncDaemonProcess(DaemonProcess):
 
         sync_actions = (yield self._getSyncActions())
 
-        log.msg("waiting for background sync tasks", system='sync', logLevel=logging.DEBUG)
+        log.msg("waiting for background sync tasks", system='sync', logLevel=DEBUG)
 
         # wait for all async synchronization tasks to finish
         for c, deferred in sync_actions:
             try:
                 yield deferred
+            except OperationRemoteError as ore:
+                if ore.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
+                    log.err(system='sync')
+                else:
+                    log.msg(str(ore), system='sync', logLevel=ERROR)
             except Exception as e:
                 log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
                 if get_config().getboolean('debug', 'print_exceptions'):
@@ -180,7 +191,7 @@ class SyncDaemonProcess(DaemonProcess):
             else:
                 log.msg("Syncing was ok for compute: '%s'" % c, system='sync')
 
-        log.msg("synced", system='sync', logLevel=logging.DEBUG)
+        log.msg("synced", system='sync', logLevel=DEBUG)
 
     @defer.inlineCallbacks
     def _getSyncActions(self):
