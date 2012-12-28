@@ -17,6 +17,7 @@ from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
+from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent,
                                      ModelModifiedEvent, IModelMovedEvent, TmpObj, alsoProvides,
                                      noLongerProvides)
@@ -143,6 +144,34 @@ class UndeployAction(Action):
             cmd.write("changed state from deployed to undeployed\n")
 
         yield finalize_vm()
+
+
+class MigrateAction(Action):
+    context(IVirtualCompute)
+
+    action('migrate')
+
+    def arguments(self):
+        parser = VirtualConsoleArgumentParser()
+        parser.add_argument('dest_path')
+        return parser
+
+    def get_name(self, *args):
+        return self._name
+
+    @db.ro_transact(proxy=False)
+    def get_subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__.__parent__))
+
+    @registered_process(get_name, get_subject)
+    @defer.inlineCallbacks
+    def execute(self, cmd, args):
+        name = yield db.ro_transact(lambda: self.context.__name__)()
+        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+        log.msg('Migrate args: %s' % args, system='migrate')
+        log.msg('Migrate name=%s parent=%s' % (name, parent), system='migrate')
+        #submitter = IVirtualizationContainerSubmitter(parent)
+        #yield submitter.submit(IMigrateVM, name, args)
 
 
 class InfoAction(Action):
@@ -543,15 +572,11 @@ class SyncAction(Action):
         yield update_templates()
 
 
-@subscribe(ICompute, IModelMovedEvent)
+@subscribe(IVirtualCompute, IModelMovedEvent)
 @defer.inlineCallbacks
 def handle_compute_migrate(compute, event):
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
-    try:
-        yield submitter.submit(IMigrateVM, compute.__name__, event.toContainer)
-    except Exception:
-        # TODO: rollback local changes
-        raise
+    yield submitter.submit(IMigrateVM, compute.__name__, event.toContainer)
 
 
 @subscribe(ICompute, IModelModifiedEvent)
@@ -586,7 +611,8 @@ def handle_compute_state_change_request(compute, event):
     except Exception:
         compute.effective_state = event.original['state']
         raise
-    compute.effective_state = event.modified['state']
+    else:
+        compute.effective_state = event.modified['state']
 
     handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
                                        {'effective_state': compute.effective_state}))
