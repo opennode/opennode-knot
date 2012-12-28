@@ -36,7 +36,6 @@ def format_error(e):
     return (": ".join(msg for msg in e.args if isinstance(msg, str) and not msg.startswith('  File "/')))
 
 
-
 @defer.inlineCallbacks
 def register_machine(host, mgt_stack=None):
 
@@ -168,10 +167,14 @@ class MigrateAction(Action):
     def execute(self, cmd, args):
         name = yield db.ro_transact(lambda: self.context.__name__)()
         parent = yield db.ro_transact(lambda: self.context.__parent__)()
-        log.msg('Migrate args: %s' % args, system='migrate')
-        log.msg('Migrate name=%s parent=%s' % (name, parent), system='migrate')
-        #submitter = IVirtualizationContainerSubmitter(parent)
-        #yield submitter.submit(IMigrateVM, name, args)
+        @db.ro_transact
+        def get_dest_hostname():
+            target = cmd.traverse(args.dest_path)
+            return target.hostname
+        submitter = IVirtualizationContainerSubmitter(parent)
+        hostname = yield get_dest_hostname()
+        log.msg('Initiating migration for %s to %s' % (name, hostname), system='migrate')
+        yield submitter.submit(IMigrateVM, name, hostname)
 
 
 class InfoAction(Action):
