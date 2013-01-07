@@ -6,8 +6,9 @@ from twisted.python import log
 from zope.component import provideSubscriptionAdapter
 from zope.interface import implements
 
-from opennode.knot.backend import func as func_backend
 from opennode.knot.backend import salt as salt_backend
+from opennode.knot.backend import func as func_backend
+
 from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.model.compute import ICompute
@@ -138,7 +139,7 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def run(self):
-        if get_config().getboolean('debug', 'sync_disabled'):
+        if get_config().getboolean('debug', 'sync_disabled', default=False):
             log('sync is disabled for debugging purposes', 'sync', logLevel=WARN)
             return
 
@@ -166,7 +167,7 @@ class SyncDaemonProcess(DaemonProcess):
         hosts_to_delete = [(host, hostname) for host, hostname in (yield get_manageable_machines())
                            if hostname not in accepted]
         log.msg('Hosts to delete: %s' % (hosts_to_delete), system='sync')
-        # cleanup machines not known from func or salt
+        # cleanup machines not known by func or salt
         yield delete_machines(hosts_to_delete)
         yield salt_backend.machines.import_machines(accepted_salt)
         yield func_backend.machines.import_machines(accepted_func)
