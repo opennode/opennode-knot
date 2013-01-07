@@ -4,7 +4,7 @@ from grokcore.component import context, subscribe
 from twisted.internet import defer
 
 import salt.config
-from salt.cli.key import Key
+from salt.key import Key
 
 from opennode.knot.backend.compute import format_error
 from opennode.knot.model.compute import ICompute
