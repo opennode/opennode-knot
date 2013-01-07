@@ -134,7 +134,6 @@ class SyncVmsAction(Action):
     @defer.inlineCallbacks
     def _sync_vms(self, cmd):
         submitter = IVirtualizationContainerSubmitter(self.context)
-
         remote_vms = yield submitter.submit(IListVMS)
         yield self._sync_vms_2(remote_vms)
 
@@ -146,6 +145,7 @@ class SyncVmsAction(Action):
         local_uuids = set(i.__name__ for i in local_vms)
 
         if not self.context._p_jar:
+            log.msg('_p_jar is undefined for %s' % (self.context), system='syncvms')
             return
 
         machines = self.context._p_jar.root()['oms_root']['machines']
