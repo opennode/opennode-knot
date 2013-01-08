@@ -1,9 +1,9 @@
 from datetime import datetime
 from grokcore.component.directive import context
-from logging import DEBUG, ERROR, WARN
+from logging import ERROR, WARN
 from twisted.internet import defer
 from twisted.python import log
-from zope.component import provideSubscriptionAdapter, getUtility
+from zope.component import provideSubscriptionAdapter, getAllUtilitiesRegisteredFor
 from zope.interface import implements
 
 from opennode.knot.backend.compute import SyncAction
@@ -167,14 +167,23 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def sync(self):
-        log.msg('Synchronizing. Machines before cleanup: %s' %
+        log.msg('Synchronizing. Machines: %s' %
                 (yield get_manageable_machine_hostnames()), system='sync')
-        key_manager = getUtility(IKeyManager)
-        accepted = key_manager.get_accepted_machines()
-        yield self.cleanup(accepted)
-        key_manager.import_machines(accepted)
-        sync_actions = (yield self._getSyncActions())
 
+        kml = getAllUtilitiesRegisteredFor(IKeyManager)
+
+        accepted = set()
+
+        for key_manager in kml:
+            local_accepted = key_manager.get_accepted_machines()
+            yield key_manager.import_machines(local_accepted)
+            accepted = accepted.union(local_accepted)
+
+        log.msg('All hosts accepted: %s' % accepted, system='sync')
+
+        yield self.cleanup(accepted)
+
+        sync_actions = (yield self._getSyncActions())
         for c, deferred in sync_actions:
             try:
                 yield deferred
