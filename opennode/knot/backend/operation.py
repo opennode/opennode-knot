@@ -95,7 +95,7 @@ class IRebootVM(IJob):
 
 
 class IGetSignedCertificateNames(IJob):
-    """Contact certmaster."""
+    """Get accepted cert names"""
 
 
 class IGetIncomingHosts(IJob):
