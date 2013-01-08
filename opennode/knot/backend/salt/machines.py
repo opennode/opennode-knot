@@ -1,12 +1,14 @@
 from __future__ import absolute_import
 import logging
 
-from grokcore.component import context
+from grokcore.component import context, implements
 import salt.config
 from salt.cli.key import Key
 from salt.utils import parsers
 from twisted.internet import defer
+from zope.component import provideUtility
 
+from opennode.knot.model.backend import IKeyManager
 from opennode.knot.backend.compute import register_machine
 from opennode.knot.model.machines import IncomingMachines, BaseIncomingMachines
 from opennode.knot.model.compute import ISaltInstalled
@@ -70,11 +72,15 @@ class RegisteredMachinesSalt(object):
         return SaltKeyAdapter().getAcceptedKeyNames()
 
 
-def get_accepted_machines():
-    return RegisteredMachinesSalt()._get()
+class SaltKeyManager(object):
+    implements(IKeyManager)
 
+    def get_accepted_machines(self):
+        return RegisteredMachinesSalt()._get()
 
-@defer.inlineCallbacks
-def import_machines(accepted):
-    for host in accepted:
-        yield register_machine(host, mgt_stack=ISaltInstalled)
+    @defer.inlineCallbacks
+    def import_machines(self, accepted):
+        for host in accepted:
+            yield register_machine(host, mgt_stack=ISaltInstalled)
+
+provideUtility(SaltKeyManager())

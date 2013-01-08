@@ -47,7 +47,7 @@ class IGetHostMetrics(IJob):
 
 
 class IGetDiskUsage(IJob):
-    """Returns func disk usage."""
+    """Returns disk usage."""
 
 
 class IGetLocalTemplates(IJob):
