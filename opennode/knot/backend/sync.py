@@ -141,10 +141,6 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def run(self):
-        if get_config().getboolean('debug', 'sync_disabled', default=False):
-            log.msg('sync is disabled for debugging purposes', system='sync', logLevel=WARN)
-            return
-
         while True:
             try:
                 if not self.paused:
