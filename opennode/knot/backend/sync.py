@@ -3,16 +3,15 @@ from grokcore.component.directive import context
 from logging import DEBUG, ERROR, WARN
 from twisted.internet import defer
 from twisted.python import log
-from zope.component import provideSubscriptionAdapter
+from zope.component import provideSubscriptionAdapter, getUtility
 from zope.interface import implements
 
-from opennode.knot.backend import salt as salt_backend
-from opennode.knot.backend import func as func_backend
-
+#from opennode.knot.backend import salt as salt_backend
+#from opennode.knot.backend import func as func_backend
 from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend.operation import OperationRemoteError
-from opennode.knot.model.compute import ICompute
-from opennode.knot.model.compute import IManageable
+from opennode.knot.model.backend import IKeyManager
+from opennode.knot.model.compute import ICompute, IManageable
 from opennode.knot.utils.icmp import ping
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -146,9 +145,7 @@ class SyncDaemonProcess(DaemonProcess):
         while True:
             try:
                 if not self.paused:
-                    log.msg("yielding sync", system='sync', logLevel=DEBUG)
                     yield self.sync()
-                    log.msg("sync yielded", system='sync', logLevel=DEBUG)
             except Exception:
                 if get_config().getboolean('debug', 'print_exceptions'):
                     log.err(system='sync')
@@ -156,25 +153,24 @@ class SyncDaemonProcess(DaemonProcess):
             yield async_sleep(self.interval)
 
     @defer.inlineCallbacks
-    def sync(self):
-        log.msg("syncing", system='sync')
-
-        log.msg('Machines before cleanup: %s' % (yield get_manageable_machines()), system='sync')
-        accepted_salt = salt_backend.machines.get_accepted_machines()
-        accepted_func = func_backend.machines.get_accepted_machines()
-
-        accepted = accepted_salt.union(set(accepted_func))
+    def cleanup(self, accepted):
         hosts_to_delete = [(host, hostname) for host, hostname in (yield get_manageable_machines())
                            if hostname not in accepted]
+
         log.msg('Hosts to delete: %s' % (hosts_to_delete), system='sync')
         # cleanup machines not known by func or salt
         yield delete_machines(hosts_to_delete)
-        yield salt_backend.machines.import_machines(accepted_salt)
-        yield func_backend.machines.import_machines(accepted_func)
 
+    @defer.inlineCallbacks
+    def sync(self):
+        log.msg("Synchronizing", system='sync')
+        log.msg('Machines before cleanup: %s' % (yield get_manageable_machines()), system='sync')
+        key_manager = getUtility(IKeyManager)
+        accepted = key_manager.get_accepted_machines()
+        yield self.cleanup(accepted)
+        key_manager.import_machines(accepted)
         sync_actions = (yield self._getSyncActions())
-
-        log.msg("waiting for background sync tasks", system='sync', logLevel=DEBUG)
+        log.msg("Waiting for background sync tasks", system='sync', logLevel=DEBUG)
 
         # wait for all async synchronization tasks to finish
         for c, deferred in sync_actions:

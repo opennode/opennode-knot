@@ -43,7 +43,6 @@ class ISaltInstalled(IManageable):
     """Marker for SaltStack-controlled computes."""
 
 
-
 class ICompute(Interface):
     # Network parameters
     hostname = schema.TextLine(

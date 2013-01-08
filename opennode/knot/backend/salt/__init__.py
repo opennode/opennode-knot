@@ -37,11 +37,11 @@ class SaltMultiprocessingClient(multiprocessing.Process):
     def run(self):
         client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
         try:
-            log.msg('running action: %s args: %s' % (self.action, self.args), system= 'salt',
+            log.msg('running action: %s args: %s' % (self.action, self.args), system='salt',
                     logLevel=logging.DEBUG)
             data = client.cmd(self.hostname, self.action, arg=self.args)
         except SystemExit as e:
-            log.err('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system= 'salt')
+            log.err('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system='salt')
             self.q.put(cPickle.dumps({}))
         else:
             pdata = cPickle.dumps(data)
@@ -62,7 +62,7 @@ class SaltExecutor(object):
         self.client = None
 
 
-class AsyncSaltExecutor(SaltExecutor):
+class AsynchronousSaltExecutor(SaltExecutor):
     interval = 0.1
 
     def __init__(self, hostname, action, interaction):
@@ -107,7 +107,7 @@ class AsyncSaltExecutor(SaltExecutor):
             self.deferred.callback(data[hostkey])
 
 
-class SyncSaltExecutor(SaltExecutor):
+class SynchronousSaltExecutor(SaltExecutor):
 
     # Contains a blacklist of host which had strange problems with salt
     # so we temporarily avoid calling them again until the blacklist TTL expires
@@ -193,8 +193,8 @@ class SaltBase(Adapter):
     action = None
     __executor__ = None
 
-    executor_classes = {'sync': SyncSaltExecutor,
-                        'async': AsyncSaltExecutor}
+    executor_classes = {'sync': SynchronousSaltExecutor,
+                        'async': AsynchronousSaltExecutor}
 
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
@@ -233,8 +233,8 @@ ACTIONS = {
 }
 
 OVERRIDE_EXECUTORS = {
-    IDeployVM: AsyncSaltExecutor,
-    IUndeployVM: AsyncSaltExecutor
+    IDeployVM: AsynchronousSaltExecutor,
+    IUndeployVM: AsynchronousSaltExecutor
 }
 
 

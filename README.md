@@ -1,8 +1,9 @@
 OpenNode Knot
 -------------
 
-OpenNode Knot is a plugin for [OpenNode Management Service](https://github.com/opennode/opennode-management/), which
-allows to monitor and manage virtualized data center. Primary target are servers running OpenNode6 OS.
+OpenNode Knot is a plugin for [OpenNode Management
+Service](https://github.com/opennode/opennode-management/), which allows to monitor and manage virtualized
+data center. Primary target are servers running OpenNode6 OS.
 
 Functionality includes:
 
@@ -14,8 +15,8 @@ Functionality includes:
 Requirements
 ============
 
-Knot is a plugin of OMS and inherits its requirements. In addition, Fedora Func and Certmaster packages are required
-to be installed as Knot relies on Func/Certmaster RPC system.
+Knot is a plugin of OMS and inherits its requirements. In addition, Salt is required to be installed as Knot
+relies on Salt as an RPC system.
 
 Setup
 =====
