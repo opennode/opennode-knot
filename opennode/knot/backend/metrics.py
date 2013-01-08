@@ -1,4 +1,3 @@
-
 from grokcore.component import Adapter, context
 from twisted.internet import defer
 from twisted.python import log
@@ -75,7 +74,7 @@ provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(P
 
 
 class VirtualComputeMetricGatherer(Adapter):
-    """Gathers VM metrics through functionality exposed by the host compute via func."""
+    """Gathers VM metrics using IVirtualizationContainerSubmitter"""
 
     implements(IMetricsGatherer)
     context(IManageable)
