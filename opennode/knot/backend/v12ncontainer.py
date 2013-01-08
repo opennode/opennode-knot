@@ -145,7 +145,7 @@ class SyncVmsAction(Action):
         local_uuids = set(i.__name__ for i in local_vms)
 
         if not self.context._p_jar:
-            log.msg('_p_jar is undefined for %s' % (self.context), system='syncvms')
+            log.msg('_p_jar is undefined for %s' % (self.context), system='v12n')
             return
 
         machines = self.context._p_jar.root()['oms_root']['machines']

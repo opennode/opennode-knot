@@ -28,14 +28,11 @@ class MetricsDaemonProcess(DaemonProcess):
 
     def __init__(self):
         super(MetricsDaemonProcess, self).__init__()
-
-        config = get_config()
-        self.interval = config.getint('metrics', 'interval')
+        self.interval = get_config().getint('metrics', 'interval')
 
     @defer.inlineCallbacks
     def run(self):
         while True:
-            yield async_sleep(self.interval)
             try:
                 # Currently we have special codes for gathering info about machines
                 # hostinginv VM, in future here we'll traverse the whole zodb and search for gatherers
@@ -44,6 +41,8 @@ class MetricsDaemonProcess(DaemonProcess):
                     yield self.gather_machines()
             except Exception :
                 self.log_err()
+
+            yield async_sleep(self.interval)
 
     def log_msg(self, msg, **kwargs):
         log.msg(msg, system='metrics', **kwargs)

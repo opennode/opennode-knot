@@ -6,8 +6,6 @@ from twisted.python import log
 from zope.component import provideSubscriptionAdapter, getUtility
 from zope.interface import implements
 
-#from opennode.knot.backend import salt as salt_backend
-#from opennode.knot.backend import func as func_backend
 from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.model.backend import IKeyManager
@@ -125,6 +123,11 @@ def delete_machines(delete_list):
         del oms_machines[host.__name__]
 
 
+@defer.inlineCallbacks
+def get_manageable_machine_hostnames():
+    defer.returnValue(map(lambda h: h[0].hostname, (yield get_manageable_machines())))
+
+
 class SyncDaemonProcess(DaemonProcess):
     implements(IProcess)
 
@@ -139,7 +142,7 @@ class SyncDaemonProcess(DaemonProcess):
     @defer.inlineCallbacks
     def run(self):
         if get_config().getboolean('debug', 'sync_disabled', default=False):
-            log('sync is disabled for debugging purposes', 'sync', logLevel=WARN)
+            log.msg('sync is disabled for debugging purposes', system='sync', logLevel=WARN)
             return
 
         while True:
@@ -157,22 +160,21 @@ class SyncDaemonProcess(DaemonProcess):
         hosts_to_delete = [(host, hostname) for host, hostname in (yield get_manageable_machines())
                            if hostname not in accepted]
 
-        log.msg('Hosts to delete: %s' % (hosts_to_delete), system='sync')
-        # cleanup machines not known by func or salt
-        yield delete_machines(hosts_to_delete)
+        if hosts_to_delete:
+            log.msg('Deleting hosts: %s' % (hosts_to_delete), system='sync')
+            # cleanup machines not known by agents
+            yield delete_machines(hosts_to_delete)
 
     @defer.inlineCallbacks
     def sync(self):
-        log.msg("Synchronizing", system='sync')
-        log.msg('Machines before cleanup: %s' % (yield get_manageable_machines()), system='sync')
+        log.msg('Synchronizing. Machines before cleanup: %s' %
+                (yield get_manageable_machine_hostnames()), system='sync')
         key_manager = getUtility(IKeyManager)
         accepted = key_manager.get_accepted_machines()
         yield self.cleanup(accepted)
         key_manager.import_machines(accepted)
         sync_actions = (yield self._getSyncActions())
-        log.msg("Waiting for background sync tasks", system='sync', logLevel=DEBUG)
 
-        # wait for all async synchronization tasks to finish
         for c, deferred in sync_actions:
             try:
                 yield deferred
@@ -187,8 +189,6 @@ class SyncDaemonProcess(DaemonProcess):
                     log.err(system='sync')
             else:
                 log.msg("Syncing was ok for compute: '%s'" % c, system='sync')
-
-        log.msg("synced", system='sync', logLevel=DEBUG)
 
     @defer.inlineCallbacks
     def _getSyncActions(self):

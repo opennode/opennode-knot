@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-
 from grokcore.component import context
 from zope import schema
 from zope.component import provideSubscriptionAdapter

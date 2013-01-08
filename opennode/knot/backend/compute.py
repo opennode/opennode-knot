@@ -188,7 +188,7 @@ class InfoAction(Action):
 
     @db.ro_transact(proxy=False)
     def get_subject(self, *args, **kwargs):
-        return self.context.__parent__
+        return tuple((self.context.__parent__,))
 
     @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
@@ -359,7 +359,7 @@ class SyncAction(Action):
             if self.context.ipv4_address:
                 address = self.context.ipv4_address.split('/')[0]
         except Exception:
-            log.err(system='sync')
+            log.err(system='sync-consoles')
         ssh_console = SshConsole('ssh', 'root', address, 22)
         self.context.consoles.add(ssh_console)
 
@@ -438,9 +438,9 @@ class SyncAction(Action):
             uptime = yield IGetHWUptime(self.context).run()
             disk_usage = yield IGetDiskUsage(self.context).run()
         except OperationRemoteError as e:
-            log.msg(e.message, system='sync')
+            log.msg(e.message, system='sync-hw')
             if e.remote_tb:
-                log.msg(e.remote_tb, system='sync')
+                log.msg(e.remote_tb, system='sync-hw')
             return
 
         # TODO: Improve error handling
@@ -458,7 +458,7 @@ class SyncAction(Action):
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
         if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
-            log.err('Nothing to update: info does not include required data', system='sync')
+            log.msg('Nothing to update: info does not include required data', system='sync-hw')
             return
 
         if IVirtualCompute.providedBy(self.context):
