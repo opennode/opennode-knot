@@ -1,6 +1,6 @@
 from datetime import datetime
 from grokcore.component.directive import context
-from logging import ERROR, WARN
+from logging import ERROR
 from twisted.internet import defer
 from twisted.python import log
 from zope.component import provideSubscriptionAdapter, getAllUtilitiesRegisteredFor
@@ -30,6 +30,10 @@ class PingCheckAction(Action):
         super(PingCheckAction, self).__init__(*args, **kwargs)
         config = get_config()
         self.mem_limit = config.getint('pingcheck', 'mem_limit')
+
+    @db.ro_transact(proxy=False)
+    def subject(self, args):
+        return tuple((self.context, ))
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
@@ -172,8 +176,10 @@ class SyncDaemonProcess(DaemonProcess):
 
         for key_manager in kml:
             local_accepted = key_manager.get_accepted_machines()
-            yield key_manager.import_machines(local_accepted)
-            accepted = accepted.union(local_accepted)
+            log.msg('Local accepted on %s: %s' % (key_manager, local_accepted), system='sync')
+            if local_accepted is not None:
+                yield key_manager.import_machines(local_accepted)
+                accepted = accepted.union(local_accepted)
 
         log.msg('All hosts accepted: %s' % accepted, system='sync')
 

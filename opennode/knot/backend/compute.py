@@ -11,7 +11,8 @@ from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStar
                                              IDeployVM, IUndeployVM, IGetLocalTemplates, IGetDiskUsage,
                                              IGetRoutes, IGetHWUptime, IMigrateVM, OperationRemoteError)
 from opennode.knot.model.compute import IManageable
-from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute, IUndeployed, IDeployed, IDeploying
+from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
+from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
@@ -23,7 +24,6 @@ from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IM
                                      noLongerProvides)
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
-from opennode.oms.model.model.proc import registered_process
 from opennode.oms.util import blocking_yield, get_u, get_i, get_f, exception_logger
 from opennode.oms.zodb import db
 
@@ -63,16 +63,11 @@ class DeployAction(Action):
 
     action('deploy')
 
-    def get_name(self, *args):
-        return self._name
-
     @db.ro_transact(proxy=False)
-    def get_subject(self, *args, **kwargs):
+    def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
-    @exception_logger
     def execute(self, cmd, args):
         template = yield db.ro_transact(lambda: self.context.template)()
 
@@ -86,7 +81,6 @@ class DeployAction(Action):
 
         # XXX: TODO resolve template object from the template name
         # and take the template name from the object
-        #template = cmd.traverse(self.context.template)
         @db.ro_transact(proxy=False)
         def get_parameters():
             return dict(template_name=self.context.template,
@@ -97,11 +91,11 @@ class DeployAction(Action):
                         autostart=self.context.autostart,
                         ip_address=self.context.ipv4_address.split('/')[0],)
 
-        parent = yield db.ro_transact(lambda: self.context.__parent__)()
         yield mark_as_deploying()
         vm_parameters = yield get_parameters()
-
+        parent = yield db.ro_transact(lambda: self.context.__parent__)()
         res = yield IVirtualizationContainerSubmitter(parent).submit(IDeployVM, vm_parameters)
+        log.msg('IDeployVM result: %s' % res, system='deploy-action')
         cmd.write('%s\n' % (res,))
 
         @db.transact
@@ -119,18 +113,14 @@ class UndeployAction(Action):
 
     action('undeploy')
 
-    def get_name(self, *args):
-        return self._name
-
     @db.ro_transact(proxy=False)
-    def get_subject(self, *args, **kwargs):
+    def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name = yield db.ro_transact(lambda: self.context.__name__)()
-        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
+                                                     self.context.__parent__))()
 
         submitter = IVirtualizationContainerSubmitter(parent)
         res = yield submitter.submit(IUndeployVM, name)
@@ -155,18 +145,14 @@ class MigrateAction(Action):
         parser.add_argument('dest_path')
         return parser
 
-    def get_name(self, *args):
-        return self._name
-
     @db.ro_transact(proxy=False)
-    def get_subject(self, *args, **kwargs):
+    def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name = yield db.ro_transact(lambda: self.context.__name__)()
-        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
+                                                     self.context.__parent__))()
         @db.ro_transact
         def get_dest_hostname():
             target = cmd.traverse(args.dest_path)
@@ -183,18 +169,14 @@ class InfoAction(Action):
 
     action('info')
 
-    def get_name(self, *args):
-        return self._name
-
     @db.ro_transact(proxy=False)
-    def get_subject(self, *args, **kwargs):
+    def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__,))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name = yield db.ro_transact(lambda: self.context.__name__)()
-        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
+                                                     self.context.__parent__))()
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
@@ -213,20 +195,16 @@ class ComputeAction(Action):
     context(IVirtualCompute)
     baseclass()
 
-    def get_name(self, *args):
-        return getattr(self, 'action_name', self._name)
-
     @db.ro_transact(proxy=False)
-    def get_subject(self, *args, **kwargs):
+    def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         action_name = getattr(self, 'action_name', self._name + "ing")
 
-        name = yield db.ro_transact(lambda: self.context.__name__)()
-        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
+                                                     self.context.__parent__))()
 
         cmd.write("%s %s\n" % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
@@ -281,14 +259,10 @@ class SyncAction(Action):
 
     action('sync')
 
-    def get_name(self, *args):
-        return self._name
-
     @db.ro_transact(proxy=False)
-    def get_subject(self, *args, **kwargs):
+    def subject(self, *args, **kwargs):
         return tuple((self.context,))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         default = yield self.default_console()
