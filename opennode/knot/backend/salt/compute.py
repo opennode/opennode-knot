@@ -14,7 +14,6 @@ from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import IModelDeletedEvent
 from opennode.oms.model.model.actions import Action, action
-from opennode.oms.model.model.proc import registered_process
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
@@ -25,17 +24,14 @@ class AcceptHostRequestAction(Action):
 
     action('accept')
 
-    def get_name(self, *args):
-        return self._name
-
-    def get_subject(self, *args, **kwargs):
-        return self.context
+    @db.ro_transact(proxy=False)
+    def subject(self, *args, **kwargs):
+        return tuple((self.context, ))
 
     @db.transact
     def execute(self, cmd, args):
         blocking_yield(self._execute(cmd, args))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         try:
@@ -54,17 +50,14 @@ class RejectHostRequestAction(Action):
 
     action('reject')
 
-    def get_name(self, *args):
-        return self._name
-
-    def get_subject(self, *args, **kwargs):
+    @db.ro_transact(proxy=False)
+    def subject(self, *args, **kwargs):
         return self.context
 
     @db.transact
     def execute(self, cmd, args):
         blocking_yield(self._execute(cmd, args))
 
-    @registered_process(get_name, get_subject)
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         try:
