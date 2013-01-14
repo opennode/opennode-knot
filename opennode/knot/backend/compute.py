@@ -69,7 +69,7 @@ class DeployAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        template = yield db.ro_transact(lambda: self.context.template)()
+        template = yield db.get(self.context, 'template')
 
         if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
@@ -93,7 +93,7 @@ class DeployAction(Action):
 
         yield mark_as_deploying()
         vm_parameters = yield get_parameters()
-        parent = yield db.ro_transact(lambda: self.context.__parent__)()
+        parent = yield db.get(self.context, '__parent__')
         res = yield IVirtualizationContainerSubmitter(parent).submit(IDeployVM, vm_parameters)
         log.msg('IDeployVM result: %s' % res, system='deploy-action')
         cmd.write('%s\n' % (res,))
@@ -103,7 +103,7 @@ class DeployAction(Action):
             noLongerProvides(self.context, IDeploying)
             noLongerProvides(self.context, IUndeployed)
             alsoProvides(self.context, IDeployed)
-            cmd.write("changed state from undeployed to deployed\n")
+            cmd.write("Changed state from undeployed to deployed\n")
 
         yield finalize_vm()
 
@@ -488,14 +488,7 @@ class SyncAction(Action):
                 url_to_backend_type = dict((v, k) for k, v in backends.items())
                 backend_type = url_to_backend_type[vms_types[0]]
 
-                # XXX: this should work but it doesn't, please check
-                # TODO: requires a blocking_yield?
-                #yield db.transact(lambda: self.context.add(VirtualizationContainer(backend_type)))
-
-                @db.transact
-                def create_vms():
-                    self.context.add(VirtualizationContainer(unicode(backend_type)))
-                yield create_vms()
+                yield db.transact(self.context.add, VirtualizationContainer(unicode(backend_type)))
 
     @defer.inlineCallbacks
     def sync_vms(self):
