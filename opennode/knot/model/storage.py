@@ -4,7 +4,7 @@ from opennode.oms.model.model.base import Model
 
 
 class Storage(Model):
-    def __init__(self, size, state):
+    def __init__(self, size, state, local='local'):
         self.id = 1  # UID
         self.name = "Local storage"  # description
         self.path = '/storagemount/local'

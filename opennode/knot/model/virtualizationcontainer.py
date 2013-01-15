@@ -5,10 +5,11 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
+from opennode.knot.model.compute import IVirtualCompute, IInCompute
+from opennode.knot.model.hangar import IInHangar
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.byname import ByNameContainerExtension
-from opennode.knot.model.compute import IVirtualCompute, IInCompute
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.security.directives import permissions
 
@@ -18,7 +19,7 @@ class IVirtualizationContainer(Interface):
 
 
 class VirtualizationContainer(Container):
-    implements(IVirtualizationContainer, IInCompute)
+    implements(IVirtualizationContainer, IInCompute, IInHangar)
     permissions(dict(backend=('read', 'modify')))
 
     __contains__ = IVirtualCompute
@@ -26,10 +27,10 @@ class VirtualizationContainer(Container):
     def __init__(self, backend):
         super(VirtualizationContainer, self).__init__()
         self.backend = backend
-        self.__name__ = 'vms'
+        self.__name__ = 'vms-%s' % backend
 
     def __str__(self):
-        return 'virtualizationcontainer%s' % self.__name__
+        return 'virtualizationcontainer-%s' % self.__name__
 
 
 class VirtualizationContainerTags(ModelTags):

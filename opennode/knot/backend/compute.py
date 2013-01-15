@@ -17,6 +17,8 @@ from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, V
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
+
+from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent,
@@ -58,6 +60,66 @@ def register_machine(host, mgt_stack=None):
         yield update()
 
 
+def find_compute_v12n_container(compute, backend):
+    for v12nc in compute:
+        if IVirtualizationContainer.providedBy(v12nc) and v12nc.backend == backend:
+            log.msg('%s   >>   %s' % (compute, v12nc), system='action')
+            return v12nc
+
+
+class AllocateAction(Action):
+    context(IUndeployed)
+    action('allocate')
+
+    @db.ro_transact(proxy=False)
+    def subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__.__parent__,))
+
+    @defer.inlineCallbacks
+    def execute(self, cmd, args):
+        @db.ro_transact
+        def get_matching_machines(container):
+            all_machines = db.get_root()['oms_root']['machines']
+            param = unicode(get_config().getstring('allocate', 'diskspace_filter_param',
+                                                   default=u'/storage'))
+
+            if param not in self.context.diskspace:
+                raise KeyError(param)
+
+            log.msg('%s in %s' % (param, self.context.diskspace), system='allocate-action')
+            log.msg('Searching in: %s' % (map(lambda m: (m, (
+                         self.context.memory_usage < getattr(m, 'memory', None),
+                         self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
+                         self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)))
+
+            return filter(lambda m: (ICompute.providedBy(m) and
+                                     find_compute_v12n_container(m, container) and
+                                     self.context.memory_usage < m.memory and
+                                     self.context.diskspace[param] < m.diskspace.get(param, 0) and
+                                     self.context.num_cores <= m.num_cores), all_machines)
+
+        vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
+        machines = yield get_matching_machines(vmsbackend)
+
+        if len(machines) <= 0:
+            log.msg('Found no fitting machines to allocate to. Action aborted.', system='allocate-action')
+            cmd.write('Found no fitting machines to allocate to. Aborting.\n')
+            return
+
+        @db.ro_transact
+        def rank(machines):
+            return sorted(machines, key=lambda m: m.__name__)
+
+        best = (yield rank(machines))[0]
+
+        log.msg('Found %s as the best candidate. Attempting to allocate...' % best, system='allocate-action')
+
+        bestvmscontainer = yield db.ro_transact(find_compute_v12n_container)(best, vmsbackend)
+        log.msg('V12N Container: %s' % bestvmscontainer, system='allocate-action')
+
+        yield DeployAction(self.context).execute(DetachedProtocol(), bestvmscontainer)
+
+
 class DeployAction(Action):
     context(IUndeployed)
 
@@ -75,12 +137,7 @@ class DeployAction(Action):
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
             return
 
-        @db.transact
-        def mark_as_deploying():
-            alsoProvides(self.context, IDeploying)
-
-        # XXX: TODO resolve template object from the template name
-        # and take the template name from the object
+        # XXX: TODO resolve template object from the template name and take the template name from the object
         @db.ro_transact(proxy=False)
         def get_parameters():
             return dict(template_name=self.context.template,
@@ -91,10 +148,14 @@ class DeployAction(Action):
                         autostart=self.context.autostart,
                         ip_address=self.context.ipv4_address.split('/')[0],)
 
-        yield mark_as_deploying()
+        if IVirtualizationContainer.providedBy(args):
+            target = args
+        else:
+            target = yield db.get(self.context, '__parent__')
+
+        yield db.transact(alsoProvides)(self.context, IDeploying)
         vm_parameters = yield get_parameters()
-        parent = yield db.get(self.context, '__parent__')
-        res = yield IVirtualizationContainerSubmitter(parent).submit(IDeployVM, vm_parameters)
+        res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
         log.msg('IDeployVM result: %s' % res, system='deploy-action')
         cmd.write('%s\n' % (res,))
 
@@ -119,8 +180,8 @@ class UndeployAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
 
         submitter = IVirtualizationContainerSubmitter(parent)
         res = yield submitter.submit(IUndeployVM, name)
@@ -147,18 +208,20 @@ class MigrateAction(Action):
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
-        return tuple((self.context.__parent__.__parent__))
+        return tuple((self.context.__parent__.__parent__,))
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
         @db.ro_transact
         def get_dest_hostname():
-            target = cmd.traverse(args.dest_path)
+            target = (args.__parent__ if IVirtualizationContainer.providedBy(args)
+                      else cmd.traverse(args.dest_path))
             return target.hostname
+
+        parent = yield db.get(self.context, '__parent__')
         submitter = IVirtualizationContainerSubmitter(parent)
         hostname = yield get_dest_hostname()
+        name = yield db.get(self.context, '__name__')
         log.msg('Initiating migration for %s to %s' % (name, hostname), system='migrate')
         yield submitter.submit(IMigrateVM, name, hostname)
 
@@ -175,8 +238,8 @@ class InfoAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
@@ -203,8 +266,8 @@ class ComputeAction(Action):
     def execute(self, cmd, args):
         action_name = getattr(self, 'action_name', self._name + "ing")
 
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
 
         cmd.write("%s %s\n" % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
@@ -372,7 +435,6 @@ class SyncAction(Action):
                     self.context.__parent__.__parent__.hostname, int(console['port'])))
 
         # XXX TODO: handle removal of consoles when they are no longer reported from upstream
-
         # networks
         for interface in vm['interfaces']:
             if not self.context.interfaces[interface['name']]:
@@ -382,7 +444,6 @@ class SyncAction(Action):
                 self.context.interfaces.add(iface)
 
         # XXX TODO: handle removal of interfaces when they are no longer reported from upstream
-
         # XXX hack, openvz specific
         compute.cpu_info = self.context.__parent__.__parent__.cpu_info
         compute.memory = vm['memory']
@@ -488,13 +549,16 @@ class SyncAction(Action):
                 url_to_backend_type = dict((v, k) for k, v in backends.items())
                 backend_type = url_to_backend_type[vms_types[0]]
 
-                yield db.transact(self.context.add, VirtualizationContainer(unicode(backend_type)))
+                @db.transact
+                def add_container(backend_type):
+                    self.context.add(VirtualizationContainer(unicode(backend_type)))
 
-    @defer.inlineCallbacks
+                yield add_container(backend_type)
+
     def sync_vms(self):
         vms = self.context['vms']
         if vms:
-            yield SyncVmsAction(vms).execute(DetachedProtocol(), object())
+            return SyncVmsAction(vms).execute(DetachedProtocol(), object())
 
     @defer.inlineCallbacks
     def sync_templates(self):
@@ -543,10 +607,9 @@ class SyncAction(Action):
 
 
 @subscribe(IVirtualCompute, IModelMovedEvent)
-@defer.inlineCallbacks
 def handle_compute_migrate(compute, event):
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
-    yield submitter.submit(IMigrateVM, compute.__name__, event.toContainer)
+    return submitter.submit(IMigrateVM, compute.__name__, event.toContainer)
 
 
 @subscribe(ICompute, IModelModifiedEvent)
