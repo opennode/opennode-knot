@@ -115,7 +115,7 @@ def get_manageable_machines():
     return res
 
 
-@db.ro_transact
+@db.transact
 def delete_machines(delete_list):
     oms_machines = db.get_root()['oms_root']['machines']
 

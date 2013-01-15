@@ -25,11 +25,13 @@ class AcceptHostRequestAction(Action):
 
     action('accept')
 
+    @db.ro_transact
     def get_name(self, *args):
         return self._name
 
+    @db.ro_transact
     def get_subject(self, *args, **kwargs):
-        return self.context
+        return tuple((self.context, ))
 
     @db.transact
     def execute(self, cmd, args):
@@ -42,8 +44,7 @@ class AcceptHostRequestAction(Action):
             c_path = get_config().get('salt', 'master_config_path', '/etc/salt/master')
             opts = salt.config.client_config(c_path)
             key = Key(opts)
-            key._cli_opts(accept=self.context.hostname)
-            yield key.run()
+            yield key.accept(self.context.hostname)
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
 
@@ -54,11 +55,13 @@ class RejectHostRequestAction(Action):
 
     action('reject')
 
+    @db.ro_transact
     def get_name(self, *args):
         return self._name
 
+    @db.ro_transact
     def get_subject(self, *args, **kwargs):
-        return self.context
+        return tuple((self.context, ))
 
     @db.transact
     def execute(self, cmd, args):
@@ -71,8 +74,7 @@ class RejectHostRequestAction(Action):
             c_path = get_config().get('salt', 'master_config_path', '/etc/salt/master')
             opts = salt.config.client_config(c_path)
             key = Key(opts)
-            key._cli_opts(reject=self.context.hostname)
-            yield key.run()
+            yield key.reject(self.context.hostname)
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
 
@@ -82,3 +84,4 @@ def delete_compute(model, event):
     if ISaltInstalled.providedBy(model):
         blocking_yield(RejectHostRequestAction(
             IncomingMachineRequest(model.hostname)).execute(DetachedProtocol(), object()))
+

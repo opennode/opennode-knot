@@ -37,7 +37,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
     def run(self):
         client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
         try:
-            log.msg('running action: %s args: %s' % (self.action, self.args), system='salt',
+            log.msg('running action against "%s": %s args: %s' % (self.hostname, self.action, self.args), system= 'salt',
                     logLevel=logging.DEBUG)
             data = client.cmd(self.hostname, self.action, arg=self.args)
         except SystemExit as e:

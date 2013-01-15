@@ -167,6 +167,7 @@ class MigrateAction(Action):
     def execute(self, cmd, args):
         name = yield db.ro_transact(lambda: self.context.__name__)()
         parent = yield db.ro_transact(lambda: self.context.__parent__)()
+
         @db.ro_transact
         def get_dest_hostname():
             target = cmd.traverse(args.dest_path)
