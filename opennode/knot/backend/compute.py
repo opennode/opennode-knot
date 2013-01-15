@@ -616,3 +616,4 @@ def create_virtual_compute(model, event):
         return
 
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
+
