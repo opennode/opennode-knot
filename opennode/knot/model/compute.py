@@ -222,14 +222,15 @@ class Compute(Container):
     }
     swap_size = 4192
 
+    # empty values for metrics
     uptime = None
-    cpu_usage = (0.1, 0.11, 0.14)
-    memory_usage = 773.2
-    network_usage = (5.2 * M, 1.9 * M)
+    cpu_usage = (0.0, 0.0, 0.0)
+    memory_usage = 0.0
+    network_usage = (0.0, 0.0)
     diskspace_usage = {
-        u'root': 249.0,
-        u'boot': 49.3,
-        u'storage': 748.3,
+        u'root': 0.0,
+        u'boot': 0.0,
+        u'storage': 0.0,
     }
 
     cpu_limit = 1.0
