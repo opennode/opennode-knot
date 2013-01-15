@@ -1,9 +1,10 @@
 from grokcore.component import context, subscribe, baseclass
-import netaddr
+from logging import DEBUG
 from twisted.internet import defer
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
+import netaddr
 
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
 from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
@@ -63,7 +64,6 @@ def register_machine(host, mgt_stack=None):
 def find_compute_v12n_container(compute, backend):
     for v12nc in compute:
         if IVirtualizationContainer.providedBy(v12nc) and v12nc.backend == backend:
-            log.msg('%s   >>   %s' % (compute, v12nc), system='action')
             return v12nc
 
 
@@ -86,11 +86,11 @@ class AllocateAction(Action):
             if param not in self.context.diskspace:
                 raise KeyError(param)
 
-            log.msg('%s in %s' % (param, self.context.diskspace), system='allocate-action')
             log.msg('Searching in: %s' % (map(lambda m: (m, (
                          self.context.memory_usage < getattr(m, 'memory', None),
                          self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
-                         self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)))
+                         self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
+                    logLevel=DEBUG)
 
             return filter(lambda m: (ICompute.providedBy(m) and
                                      find_compute_v12n_container(m, container) and
@@ -102,7 +102,7 @@ class AllocateAction(Action):
         machines = yield get_matching_machines(vmsbackend)
 
         if len(machines) <= 0:
-            log.msg('Found no fitting machines to allocate to. Action aborted.', system='allocate-action')
+            log.msg('Found no fitting machines to allocate to. Action aborted.', system='action-allocate')
             cmd.write('Found no fitting machines to allocate to. Aborting.\n')
             return
 
@@ -112,10 +112,10 @@ class AllocateAction(Action):
 
         best = (yield rank(machines))[0]
 
-        log.msg('Found %s as the best candidate. Attempting to allocate...' % best, system='allocate-action')
+        log.msg('Found %s as the best candidate. Attempting to allocate...' % (best),
+                system='action-allocate')
 
         bestvmscontainer = yield db.ro_transact(find_compute_v12n_container)(best, vmsbackend)
-        log.msg('V12N Container: %s' % bestvmscontainer, system='allocate-action')
 
         yield DeployAction(self.context).execute(DetachedProtocol(), bestvmscontainer)
 
@@ -156,7 +156,7 @@ class DeployAction(Action):
         yield db.transact(alsoProvides)(self.context, IDeploying)
         vm_parameters = yield get_parameters()
         res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
-        log.msg('IDeployVM result: %s' % res, system='deploy-action')
+        log.msg('IDeployVM result: %s' % res, system='action-deploy')
         cmd.write('%s\n' % (res,))
 
         @db.transact
@@ -222,7 +222,7 @@ class MigrateAction(Action):
         submitter = IVirtualizationContainerSubmitter(parent)
         hostname = yield get_dest_hostname()
         name = yield db.get(self.context, '__name__')
-        log.msg('Initiating migration for %s to %s' % (name, hostname), system='migrate')
+        log.msg('Initiating migration for %s to %s' % (name, hostname), system='action-migrate')
         yield submitter.submit(IMigrateVM, name, hostname)
 
 
