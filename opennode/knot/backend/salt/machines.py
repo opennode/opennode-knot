@@ -3,7 +3,7 @@ import logging
 
 from grokcore.component import context, implements, name, GlobalUtility
 import salt.config
-from salt.cli.key import Key
+from salt.key import Key
 from salt.utils import parsers
 from twisted.internet import defer
 
@@ -34,13 +34,13 @@ class SaltKeyAdapter(Key, parsers.ConfigDirMixIn):
         self.options = DummyOptions()
         keys_config = salt.config.master_config(self.get_config_file_path('master'))
         Key.__init__(self, keys_config)
-        self.REJECTED = 'rej'
-        self.ACCEPTED = 'acc'
-        self.UNACCEPTED = 'pre'
+        self.REJECTED = 'minions_rejected'
+        self.ACCEPTED = 'minions'
+        self.UNACCEPTED = 'minions_pre'
 
     def _getKeyNames(self, ktype):
         try:
-            return self._keys(ktype)
+            return self.list_keys()[ktype]
         except SystemExit:
             logging.error('Salt terminated trying to retrieve unaccepted keys.')
 
@@ -82,3 +82,4 @@ class SaltKeyManager(GlobalUtility):
     def import_machines(self, accepted):
         for host in accepted:
             yield register_machine(host, mgt_stack=ISaltInstalled)
+

@@ -4,7 +4,7 @@ from grokcore.component import context, subscribe
 from twisted.internet import defer
 
 import salt.config
-from salt.cli.key import Key
+from salt.key import Key
 
 from opennode.knot.backend.compute import format_error
 from opennode.knot.model.compute import ICompute
@@ -38,8 +38,7 @@ class AcceptHostRequestAction(Action):
             c_path = get_config().get('salt', 'master_config_path', '/etc/salt/master')
             opts = salt.config.client_config(c_path)
             key = Key(opts)
-            key._cli_opts(accept=self.context.hostname)
-            yield key.run()
+            yield key.accept(self.context.hostname)
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
 
@@ -64,8 +63,7 @@ class RejectHostRequestAction(Action):
             c_path = get_config().get('salt', 'master_config_path', '/etc/salt/master')
             opts = salt.config.client_config(c_path)
             key = Key(opts)
-            key._cli_opts(reject=self.context.hostname)
-            yield key.run()
+            yield key.reject(self.context.hostname)
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
 
@@ -75,3 +73,4 @@ def delete_compute(model, event):
     if ISaltInstalled.providedBy(model):
         blocking_yield(RejectHostRequestAction(
             IncomingMachineRequest(model.hostname)).execute(DetachedProtocol(), object()))
+
