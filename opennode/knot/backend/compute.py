@@ -119,8 +119,8 @@ class UndeployAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
 
         submitter = IVirtualizationContainerSubmitter(parent)
         res = yield submitter.submit(IUndeployVM, name)
@@ -151,8 +151,8 @@ class MigrateAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
         @db.ro_transact
         def get_dest_hostname():
             target = cmd.traverse(args.dest_path)
@@ -175,12 +175,12 @@ class InfoAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
-            # TODO: not efficient, improve
+            # TODO: not efficient, improve by executing in parallel
             for vm in (yield submitter.submit(IListVMS)):
                 if vm['uuid'] == name:
                     max_key_len = max(len(key) for key in vm)
@@ -202,9 +202,8 @@ class ComputeAction(Action):
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         action_name = getattr(self, 'action_name', self._name + "ing")
-
-        name, parent = yield db.ro_transact(lambda: (self.context.__name__,
-                                                     self.context.__parent__))()
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
 
         cmd.write("%s %s\n" % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
@@ -345,10 +344,12 @@ class SyncAction(Action):
 
     @defer.inlineCallbacks
     def _sync_virtual(self):
-        submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
-        # TODO: not efficient but for now it's not important to add an ad-hoc func method for this.
+        parent = yield db.get(self.context, '__parent__')
+        name = yield db.get(self.context, '__name__')
+        submitter = IVirtualizationContainerSubmitter(parent)
+        # TODO: gather VMs in parallel, eliminating most of the network roundtrip overhead
         for vm in (yield submitter.submit(IListVMS)):
-            if vm['uuid'] == self.context.__name__:
+            if vm['uuid'] == name:
                 yield self._sync_vm(vm)
 
     @db.transact

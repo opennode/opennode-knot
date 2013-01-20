@@ -51,7 +51,6 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 class SaltExecutor(object):
     client = None
 
-    @db.assert_transact
     def _get_client(self):
         """Returns an instance of Salt Stack LocalClient."""
         if not self.client:
@@ -73,17 +72,13 @@ class AsynchronousSaltExecutor(SaltExecutor):
     def run(self, *args, **kwargs):
         self.deferred = defer.Deferred()
 
-        @db.ro_transact
-        def spawn():
-            client = self._get_client()
-            client.provide_args(self.hostname, self.action, args)
-            client.start()
-            self.poll()
+        client = self._get_client()
+        client.provide_args(self.hostname, self.action, args)
+        client.start()
+        self.poll()
 
-        spawn()
         return self.deferred
 
-    @db.ro_transact
     def poll(self):
         done = not self._get_client().is_alive()
 
