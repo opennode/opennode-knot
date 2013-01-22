@@ -160,7 +160,7 @@ class MigrateAction(Action):
         submitter = IVirtualizationContainerSubmitter(parent)
         hostname = yield get_dest_hostname()
         log.msg('Initiating migration for %s to %s' % (name, hostname), system='migrate')
-        yield submitter.submit(IMigrateVM, name, hostname)
+        yield submitter.submit(IMigrateVM, name, hostname, False, True)
 
 
 class InfoAction(Action):
