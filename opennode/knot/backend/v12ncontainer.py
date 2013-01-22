@@ -133,10 +133,10 @@ class SyncVmsAction(Action):
     def _sync_vms(self, cmd):
         submitter = IVirtualizationContainerSubmitter(self.context)
         remote_vms = yield submitter.submit(IListVMS)
-        yield self._sync_vms_2(remote_vms)
+        yield self._sync_vms_transact(remote_vms)
 
     @db.transact
-    def _sync_vms_2(self, remote_vms):
+    def _sync_vms_transact(self, remote_vms):
         local_vms = [i for i in self.context.listcontent() if IVirtualCompute.providedBy(i)]
 
         remote_uuids = set(i['uuid'] for i in remote_vms)
@@ -174,7 +174,7 @@ class SyncVmsAction(Action):
 
         for vm_uuid in local_uuids.difference(remote_uuids):
             if IDeploying.providedBy(self.context[vm_uuid]):
-                log.msg("don't delete undeployed VM while in IDeploying state", system='v12n')
+                log.msg("Don't delete undeployed VM while in IDeploying state", system='v12n')
                 continue
 
             noLongerProvides(self.context[vm_uuid], IDeployed)
@@ -220,9 +220,8 @@ class SyncVmsAction(Action):
                 cls = BridgeInterface
 
             iface_node = cls(interface['name'], None, interface.get('mac', None), 'active')
+            iface_node.ipv4_address = interface['ip'] if 'ip' in interface else ''
 
-            if 'ip' in interface:
-                iface_node.ipv4_address = interface['ip']
             if interface['type'] == 'bridge':
                 iface_node.members = interface['members']
 
@@ -235,16 +234,8 @@ class SyncVmsAction(Action):
         for iface_name in remote_names.intersection(local_names):
             interface = ifaces_by_name[iface_name]
             iface_node = local_interfaces[iface_name]
-
-            if 'ip' in interface:
-                iface_node.ipv4_address = interface['ip']
-            else:
-                iface_node.ipv4_address = ''
-
-            if 'mac' in interface:
-                iface_node.hw_address = interface['mac']
-            else:
-                iface_node.hw_address = ''
+            iface_node.ipv4_address = interface['ip'] if 'ip' in interface else ''
+            iface_node.hw_address = interface['mac'] if 'mac' in interface else ''
 
             if interface.get('primary'):
                 iface_node.primary = True

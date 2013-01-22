@@ -164,7 +164,8 @@ class IDeploying(Interface):
 class Compute(Container):
     """A compute node."""
 
-    implements(ICompute, IDisplayName, IMarkable)
+    from opennode.knot.model.hangar import IInHangar
+    implements(ICompute, IDisplayName, IMarkable, IInHangar)
     permissions(dict(hostname = ('read', 'modify'),
                      ipv4_address = ('read', 'modify'),
                      ipv6_address = ('read', 'modify'),
@@ -194,7 +195,7 @@ class Compute(Container):
     __contains__ = IInCompute
 
     __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IZabbixConfiguration, IManageable,
-                  ISaltInstalled, IFuncInstalled]
+                   ISaltInstalled, IFuncInstalled]
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
