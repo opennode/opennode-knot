@@ -88,7 +88,7 @@ class VirtualComputeMetricGatherer(Adapter):
 
         @db.ro_transact
         def get_vms():
-            return self.context['vms']
+            return self.context['vms-openvz']
         vms = yield get_vms()
 
         # get the metrics for all running VMS
