@@ -546,7 +546,7 @@ class SyncAction(Action):
 
     @defer.inlineCallbacks
     def ensure_vms(self):
-        if not self.context['vms'] and any_stack_installed(self.context):
+        if not self.context['vms-openvz'] and any_stack_installed(self.context):
             vms_types = yield IGetVirtualizationContainers(self.context).run()
             if vms_types:
                 url_to_backend_type = dict((v, k) for k, v in backends.items())
@@ -559,16 +559,16 @@ class SyncAction(Action):
                 yield add_container(backend_type)
 
     def sync_vms(self):
-        vms = self.context['vms']
+        vms = self.context['vms-openvz']
         if vms:
             return SyncVmsAction(vms).execute(DetachedProtocol(), object())
 
     @defer.inlineCallbacks
     def sync_templates(self):
-        if not self.context['vms']:
+        if not self.context['vms-openvz']:
             return
 
-        submitter = IVirtualizationContainerSubmitter(self.context['vms'])
+        submitter = IVirtualizationContainerSubmitter(self.context['vms-openvz'])
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:
