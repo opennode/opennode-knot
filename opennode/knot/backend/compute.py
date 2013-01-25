@@ -214,17 +214,31 @@ class MigrateAction(Action):
     def execute(self, cmd, args):
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
+
         @db.ro_transact
-        def get_dest_hostname():
-            target = (args.__parent__ if IVirtualizationContainer.providedBy(args)
-                      else cmd.traverse(args.dest_path))
+        def get_dest():
+            return (args.__parent__ if IVirtualizationContainer.providedBy(args)
+                          else cmd.traverse(args.dest_path))
+
+        @db.ro_transact
+        def get_hostname(target):
             return target.hostname
 
         parent = yield db.get(self.context, '__parent__')
         submitter = IVirtualizationContainerSubmitter(parent)
-        hostname = yield get_dest_hostname()
-        log.msg('Initiating migration for %s to %s' % (name, hostname), system='migrate')
-        yield submitter.submit(IMigrateVM, name, hostname, False, True)
+        destination = yield get_dest()
+        destination_hostname = yield get_hostname(destination)
+        log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
+        yield submitter.submit(IMigrateVM, name, destination_hostname, False, True)
+
+        vms = follow_symlinks(destination['vms'])
+        log.msg('Migration finished. Checking... %s' % vms, system='migrate')
+        submitter = IVirtualizationContainerSubmitter(vms)
+        vmlist = yield submitter.submit(IListVMS)
+        if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
+            cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
+            #raise Exception('Failed migration of %s to %s' % (name, destination_hostname))
+        log.msg('Migration successful!', system='migate')
 
 
 class InfoAction(Action):
