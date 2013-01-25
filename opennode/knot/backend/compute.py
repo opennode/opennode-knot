@@ -212,19 +212,40 @@ class MigrateAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name = yield db.get(self.context, '__name__')
-        parent = yield db.get(self.context, '__parent__')
+
         @db.ro_transact
-        def get_dest_hostname():
-            target = (args.__parent__ if IVirtualizationContainer.providedBy(args)
-                      else cmd.traverse(args.dest_path))
+        def get_dest():
+            return (args.__parent__ if IVirtualizationContainer.providedBy(args)
+                          else cmd.traverse(args.dest_path))
+
+        @db.ro_transact
+        def get_hostname(target):
             return target.hostname
 
+        name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
         submitter = IVirtualizationContainerSubmitter(parent)
-        hostname = yield get_dest_hostname()
-        log.msg('Initiating migration for %s to %s' % (name, hostname), system='migrate')
-        yield submitter.submit(IMigrateVM, name, hostname, False, True)
+        destination = yield get_dest()
+        destination_hostname = yield get_hostname(destination)
+        log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
+        yield submitter.submit(IMigrateVM, name, destination_hostname, False, True)
+
+        vms = follow_symlinks(destination['vms'])
+        log.msg('Migration finished. Checking... %s' % vms, system='migrate')
+        submitter = IVirtualizationContainerSubmitter(vms)
+        vmlist = yield submitter.submit(IListVMS)
+        if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
+            cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
+        else:
+            @db.transact
+            def mv():
+                try:
+                    vms.add(self.context)
+                except KeyError: # this may have been done already by sync
+                    pass
+            yield mv()
+
+        log.msg('Migration successful!', system='migate')
 
 
 class InfoAction(Action):
@@ -412,8 +433,9 @@ class SyncAction(Action):
         parent = yield db.get(self.context, '__parent__')
         name = yield db.get(self.context, '__name__')
         submitter = IVirtualizationContainerSubmitter(parent)
-        # TODO: gather VMs in parallel, eliminating most of the network roundtrip overhead
-        for vm in (yield submitter.submit(IListVMS)):
+        # TODO: sync VMs in parallel, eliminating most of the network roundtrip overhead
+        vmlist = yield submitter.submit(IListVMS)
+        for vm in vmlist:
             if vm['uuid'] == name:
                 yield self._sync_vm(vm)
 
@@ -546,7 +568,7 @@ class SyncAction(Action):
 
     @defer.inlineCallbacks
     def ensure_vms(self):
-        if not self.context['vms-openvz'] and any_stack_installed(self.context):
+        if not follow_symlinks(self.context['vms']) and any_stack_installed(self.context):
             vms_types = yield IGetVirtualizationContainers(self.context).run()
             if vms_types:
                 url_to_backend_type = dict((v, k) for k, v in backends.items())
@@ -554,21 +576,24 @@ class SyncAction(Action):
 
                 @db.transact
                 def add_container(backend_type):
-                    self.context.add(VirtualizationContainer(unicode(backend_type)))
+                    vms = VirtualizationContainer(unicode(backend_type))
+                    self.context.add(vms)
+                    if not self.context['vms']:
+                        self.context.add(Symlink('vms', self.context[vms.__name__]))
 
                 yield add_container(backend_type)
 
     def sync_vms(self):
-        vms = self.context['vms-openvz']
+        vms = follow_symlinks(self.context['vms'])
         if vms:
             return SyncVmsAction(vms).execute(DetachedProtocol(), object())
 
     @defer.inlineCallbacks
     def sync_templates(self):
-        if not self.context['vms-openvz']:
+        if not follow_symlinks(self.context['vms']):
             return
 
-        submitter = IVirtualizationContainerSubmitter(self.context['vms-openvz'])
+        submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:

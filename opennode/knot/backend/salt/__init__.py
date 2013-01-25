@@ -98,6 +98,9 @@ class AsynchronousSaltExecutor(SaltExecutor):
         elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
             self.deferred.errback(OperationRemoteError(msg="Remote error on %s" % hostkey,
                                                        remote_tb=data[hostkey]))
+        elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+            self.deferred.errback(OperationRemoteError(msg="Remote error on %s: module unavailable" %
+                                                       hostkey))
         else:
             self.deferred.callback(data[hostkey])
 
