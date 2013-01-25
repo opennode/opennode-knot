@@ -212,8 +212,6 @@ class MigrateAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        name = yield db.get(self.context, '__name__')
-        parent = yield db.get(self.context, '__parent__')
 
         @db.ro_transact
         def get_dest():
@@ -224,6 +222,7 @@ class MigrateAction(Action):
         def get_hostname(target):
             return target.hostname
 
+        name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
         submitter = IVirtualizationContainerSubmitter(parent)
         destination = yield get_dest()
@@ -237,7 +236,15 @@ class MigrateAction(Action):
         vmlist = yield submitter.submit(IListVMS)
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
             cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
-            #raise Exception('Failed migration of %s to %s' % (name, destination_hostname))
+        else:
+            @db.transact
+            def mv():
+                try:
+                    vms.add(self.context)
+                except KeyError: # this may have been done already by sync
+                    pass
+            yield mv()
+
         log.msg('Migration successful!', system='migate')
 
 
