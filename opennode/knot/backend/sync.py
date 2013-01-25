@@ -181,13 +181,15 @@ class SyncDaemonProcess(DaemonProcess):
                 yield key_manager.import_machines(local_accepted)
                 accepted = accepted.union(local_accepted)
 
-        log.msg('All hosts accepted: %s' % accepted, system='sync')
+        log.msg('Hosts accepted: %s' % accepted, system='sync')
 
         yield self.cleanup(accepted)
 
         sync_actions = (yield self._getSyncActions())
+
         for c, deferred in sync_actions:
             try:
+                log.msg("Syncing started: '%s'" % c, system='sync')
                 yield deferred
             except OperationRemoteError as ore:
                 if ore.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
@@ -199,7 +201,7 @@ class SyncDaemonProcess(DaemonProcess):
                 if get_config().getboolean('debug', 'print_exceptions'):
                     log.err(system='sync')
             else:
-                log.msg("Syncing was ok for compute: '%s'" % c, system='sync')
+                log.msg("Syncing completed: '%s'" % c, system='sync')
 
     @defer.inlineCallbacks
     def _getSyncActions(self):

@@ -46,15 +46,14 @@ class VirtualizationContainerSubmitter(Adapter):
 
         @d
         def on_error(e):
-            e.trap(Exception)
+            e.trap(OperationRemoteError)
             try:
                 e.raiseException()
             except OperationRemoteError as ore:
                 log.msg(e, _why='Remote error', system='v12n-submitter')
                 if ore.remote_tb:
                     log.msg(ore.remote_tb, system='v12n-submitter')
-            except Exception:
-                log.err(system='v12n-submitter')
+                raise
 
         res = yield d
         defer.returnValue(res)
