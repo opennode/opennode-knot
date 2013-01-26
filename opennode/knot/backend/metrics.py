@@ -91,6 +91,8 @@ class VirtualComputeMetricGatherer(Adapter):
             return follow_symlinks(self.context['vms'])
         vms = yield get_vms()
 
+        name = yield db.get(self.context, 'hostname')
+
         # get the metrics for all running VMS
         if not vms or self.context.state != u'active':
             return
@@ -98,9 +100,10 @@ class VirtualComputeMetricGatherer(Adapter):
         metrics = yield IVirtualizationContainerSubmitter(vms).submit(IGetGuestMetrics)
 
         if not metrics:
-            log.msg('No vm metrics received', system='metrics')
+            log.msg('No vm metrics received for %s' % name, system='metrics-vm')
             return
 
+        log.msg('VM metrics received for %s: %s' % (name, metrics), system='metrics-vm')
         timestamp = int(time.time() * 1000)
 
         # db transact is needed only to traverse the zodb.
@@ -123,7 +126,9 @@ class VirtualComputeMetricGatherer(Adapter):
     def gather_phy(self):
         try:
             data = yield IGetHostMetrics(self.context).run()
+            name = yield db.get(self.context, 'hostname')
 
+            log.msg('Got data for metrics of %s: %s' % (name, data), system='metrics-phy')
             timestamp = int(time.time() * 1000)
 
             # db transact is needed only to traverse the zodb.
@@ -135,14 +140,13 @@ class VirtualComputeMetricGatherer(Adapter):
                     for k in data:
                         if host_metrics[k]:
                             streams.append((IStream(host_metrics[k]), (timestamp, data[k])))
-
                 return streams
 
             for stream, data_point in (yield get_streams()):
                 stream.add(data_point)
         except OperationRemoteError as e:
-            log.msg(e, system='metrics')
+            log.msg(e, system='metrics-phy')
         except Exception:
-            log.msg("Error gathering phy metrics", system='metrics')
+            log.msg("Error gathering phy metrics", system='metrics-phy')
             if get_config().getboolean('debug', 'print_exceptions'):
                 log.err(system='metrics')
