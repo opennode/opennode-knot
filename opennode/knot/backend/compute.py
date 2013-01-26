@@ -232,7 +232,7 @@ class MigrateAction(Action):
 
         vms = follow_symlinks(destination['vms'])
         log.msg('Migration finished. Checking... %s' % vms, system='migrate')
-        submitter = IVirtualizationContainerSubmitter(vms)
+        submitter = IVirtualizationContainerSubmitter(vms.__parent__)
         vmlist = yield submitter.submit(IListVMS)
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
             cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
@@ -241,11 +241,10 @@ class MigrateAction(Action):
             def mv():
                 try:
                     vms.add(self.context)
-                except KeyError: # this may have been done already by sync
+                    log.msg('Migration finished successfully, model moved.', system='migrate')
+                except KeyError:  # this may have been done already by sync
                     pass
             yield mv()
-
-        log.msg('Migration successful!', system='migate')
 
 
 class InfoAction(Action):
