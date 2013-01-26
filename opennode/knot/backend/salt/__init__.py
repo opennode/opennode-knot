@@ -155,6 +155,9 @@ class SynchronousSaltExecutor(SaltExecutor):
             if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
                 raise OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])
 
+            if type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+                raise OperationRemoteError(msg="Remote error on %s: module unavailable" % hostkey)
+
             return data[hostkey]
 
         @defer.inlineCallbacks
