@@ -236,6 +236,7 @@ class MigrateAction(Action):
         vmlist = yield submitter.submit(IListVMS)
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
             cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
+            defer.returnValue(None)
         else:
             @db.transact
             def mv():
