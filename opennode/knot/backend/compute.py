@@ -228,11 +228,11 @@ class MigrateAction(Action):
         destination = yield get_dest()
         destination_hostname = yield get_hostname(destination)
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
-        yield submitter.submit(IMigrateVM, name, destination_hostname, False, True)
+        yield submitter.submit(IMigrateVM, name, destination_hostname, False, False)
 
         vms = follow_symlinks(destination['vms'])
         log.msg('Migration finished. Checking... %s' % vms, system='migrate')
-        submitter = IVirtualizationContainerSubmitter(vms.__parent__)
+        submitter = IVirtualizationContainerSubmitter(destination)
         vmlist = yield submitter.submit(IListVMS)
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
             cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
