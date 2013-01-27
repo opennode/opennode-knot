@@ -214,7 +214,7 @@ class MigrateAction(Action):
     def execute(self, cmd, args):
 
         @db.ro_transact
-        def get_dest():
+        def get_destination():
             return (args.__parent__ if IVirtualizationContainer.providedBy(args)
                           else cmd.traverse(args.dest_path))
 
@@ -224,16 +224,19 @@ class MigrateAction(Action):
 
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
-        submitter = IVirtualizationContainerSubmitter(parent)
-        destination = yield get_dest()
+
+        destination = yield get_destination()
         destination_hostname = yield get_hostname(destination)
+
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
-        yield submitter.submit(IMigrateVM, name, destination_hostname, False, False)
+        source_submitter = IVirtualizationContainerSubmitter(parent)
+        yield source_submitter.submit(IMigrateVM, name, destination_hostname, False, False)
 
         vms = follow_symlinks(destination['vms'])
         log.msg('Migration finished. Checking... %s' % vms, system='migrate')
-        submitter = IVirtualizationContainerSubmitter(destination)
-        vmlist = yield submitter.submit(IListVMS)
+        dest_submitter = IVirtualizationContainerSubmitter(vms)
+        vmlist = yield dest_submitter.submit(IListVMS)
+
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
             cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
             defer.returnValue(None)
@@ -243,8 +246,8 @@ class MigrateAction(Action):
                 try:
                     vms.add(self.context)
                     log.msg('Migration finished successfully, model moved.', system='migrate')
-                except KeyError:  # this may have been done already by sync
-                    pass
+                except KeyError:
+                    log.msg('Migration finished successfully, model NOT moved.', system='migrate')
             yield mv()
 
 
