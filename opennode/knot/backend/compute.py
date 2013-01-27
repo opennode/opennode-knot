@@ -216,39 +216,52 @@ class MigrateAction(Action):
         @db.ro_transact
         def get_destination():
             return (args.__parent__ if IVirtualizationContainer.providedBy(args)
-                          else cmd.traverse(args.dest_path))
+                  else cmd.traverse(args.dest_path))
 
         @db.ro_transact
         def get_hostname(target):
             return target.hostname
 
         name = yield db.get(self.context, '__name__')
-        parent = yield db.get(self.context, '__parent__')
+        source_vms = yield db.get(self.context, '__parent__')
 
         destination = yield get_destination()
+        assert ICompute.providedBy(destination), 'Destination must be a Compute'
+        assert not IVirtualCompute.providedBy(destination), 'Cannot migrate to a VM'
         destination_hostname = yield get_hostname(destination)
+        destination_vms = follow_symlinks(destination['vms'])
+        assert (yield db.get(destination_vms, 'backend')) == (yield db.get(source_vms, 'backend')),\
+                'Destination backend is different from source'
 
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
-        source_submitter = IVirtualizationContainerSubmitter(parent)
+
+        source_submitter = IVirtualizationContainerSubmitter(source_vms)
         yield source_submitter.submit(IMigrateVM, name, destination_hostname, False, False)
 
-        vms = follow_symlinks(destination['vms'])
-        log.msg('Migration finished. Checking... %s' % vms, system='migrate')
-        dest_submitter = IVirtualizationContainerSubmitter(vms)
+        log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
+
+        dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
         vmlist = yield dest_submitter.submit(IListVMS)
 
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
             cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
             defer.returnValue(None)
         else:
+            log.msg('Migration finished successfully!', system='migrate')
             @db.transact
-            def mv():
+            def mv(dest):
+                machines = db.get_root()['oms_root']['machines']
+                find_compute = lambda m: m.__name__ == dest.__name__ and ICompute.providedBy(m)
                 try:
-                    vms.add(self.context)
-                    log.msg('Migration finished successfully, model moved.', system='migrate')
+                    destination_compute = filter(find_compute, machines)[0]
+                    dvms = follow_symlinks(destination_compute['vms'])
+                    dvms.add(self.context)
+                    log.msg('Model moved.', system='migrate')
+                except IndexError:
+                    log.msg('Model NOT moved: destination compute or vms do not exist', system='migrate')
                 except KeyError:
-                    log.msg('Migration finished successfully, model NOT moved.', system='migrate')
-            yield mv()
+                    log.msg('Model NOT moved: already moved by sync?', system='migrate')
+            yield mv(destination)
 
 
 class InfoAction(Action):
