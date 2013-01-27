@@ -257,7 +257,7 @@ class MigrateAction(Action):
                 computes = db.get_root()['oms_root']['computes']
                 try:
                     destination_compute = machines[destination.__name__]
-                    vm_compute = computes[self.context.__name__]
+                    vm_compute = follow_symlinks(computes[self.context.__name__])
                     dvms = follow_symlinks(destination_compute['vms'])
                     dvms.add(vm_compute)
                     log.msg('Model moved.', system='migrate')
