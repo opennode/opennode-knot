@@ -637,12 +637,6 @@ class SyncAction(Action):
         yield update_templates()
 
 
-@subscribe(IVirtualCompute, IModelMovedEvent)
-def handle_compute_migrate(compute, event):
-    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
-    return submitter.submit(IMigrateVM, compute.__name__, event.toContainer)
-
-
 @subscribe(ICompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
