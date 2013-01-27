@@ -1,5 +1,5 @@
 from grokcore.component import context, subscribe, baseclass
-from logging import DEBUG
+from logging import DEBUG, ERROR
 from twisted.internet import defer
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
@@ -23,8 +23,7 @@ from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.model.form import (IModelModifiedEvent, IModelDeletedEvent, IModelCreatedEvent,
-                                     ModelModifiedEvent, IModelMovedEvent, TmpObj, alsoProvides,
-                                     noLongerProvides)
+                                     ModelModifiedEvent, TmpObj, alsoProvides, noLongerProvides)
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.util import blocking_yield, get_u, get_i, get_f, exception_logger
@@ -235,8 +234,12 @@ class MigrateAction(Action):
 
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
-        source_submitter = IVirtualizationContainerSubmitter(source_vms)
-        yield source_submitter.submit(IMigrateVM, name, destination_hostname, False, False)
+        try:
+            source_submitter = IVirtualizationContainerSubmitter(source_vms)
+            yield source_submitter.submit(IMigrateVM, name, destination_hostname, False, False)
+        except OperationRemoteError:
+            cmd.write('Failed migration of %s to %s: remote error\n' % (str(name), str(destination_hostname)))
+            defer.returnValue(None)
 
         log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
 
@@ -244,23 +247,25 @@ class MigrateAction(Action):
         vmlist = yield dest_submitter.submit(IListVMS)
 
         if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
-            cmd.write('Failed migration of %s to %s' % (name, destination_hostname))
+            cmd.write('Failed migration of %s to %s\n' % (name, destination_hostname))
             defer.returnValue(None)
         else:
             log.msg('Migration finished successfully!', system='migrate')
             @db.transact
-            def mv(dest):
+            def mv():
                 machines = db.get_root()['oms_root']['machines']
+                computes = db.get_root()['oms_root']['computes']
                 try:
-                    destination_compute = machines[dest.__name__]
+                    destination_compute = machines[destination.__name__]
+                    vm_compute = computes[self.context.__name__]
                     dvms = follow_symlinks(destination_compute['vms'])
-                    dvms.add(self.context)
+                    dvms.add(vm_compute)
                     log.msg('Model moved.', system='migrate')
                 except IndexError:
                     log.msg('Model NOT moved: destination compute or vms do not exist', system='migrate')
                 except KeyError:
                     log.msg('Model NOT moved: already moved by sync?', system='migrate')
-            yield mv(destination)
+            yield mv()
 
 
 class InfoAction(Action):
