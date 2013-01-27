@@ -251,9 +251,8 @@ class MigrateAction(Action):
             @db.transact
             def mv(dest):
                 machines = db.get_root()['oms_root']['machines']
-                find_compute = lambda m: m.__name__ == dest.__name__ and ICompute.providedBy(m)
                 try:
-                    destination_compute = filter(find_compute, machines)[0]
+                    destination_compute = machines[dest.__name__]
                     dvms = follow_symlinks(destination_compute['vms'])
                     dvms.add(self.context)
                     log.msg('Model moved.', system='migrate')
