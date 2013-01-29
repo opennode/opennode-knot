@@ -35,17 +35,20 @@ class SaltMultiprocessingClient(multiprocessing.Process):
         self.args = args
 
     def run(self):
-        client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
         try:
-            log.msg('running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
-                    system='salt', logLevel=logging.DEBUG)
-            data = client.cmd(self.hostname, self.action, arg=self.args)
-        except SystemExit as e:
-            log.err('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system='salt')
-            self.q.put(cPickle.dumps({}))
-        else:
-            pdata = cPickle.dumps(data)
-            self.q.put(pdata)
+            client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
+            try:
+                log.msg('running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
+                        system='salt', logLevel=logging.DEBUG)
+                data = client.cmd(self.hostname, self.action, arg=self.args)
+            except SystemExit as e:
+                log.msg('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system='salt')
+                self.q.put(cPickle.dumps({}))
+            else:
+                pdata = cPickle.dumps(data)
+                self.q.put(pdata)
+        except Exception:
+            log.err(system='salt-err')
 
 
 class SaltExecutor(object):
@@ -173,8 +176,7 @@ class SynchronousSaltExecutor(SaltExecutor):
                         system='salt')
                 if blacklist_enabled:
                     if self.hostname not in whitelist:
-                        log.msg("blacklisting %s for %s s" % (self.hostname, blacklist_ttl),
-                                system='salt')
+                        log.msg("blacklisting %s for %s s" % (self.hostname, blacklist_ttl), system='salt')
                         self.host_blacklist[self.hostname] = time.time()
                     else:
                         log.msg("host %s not blacklisted because in 'timeout_whitelist'" % self.hostname,

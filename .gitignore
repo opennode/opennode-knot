@@ -7,3 +7,4 @@ develop-eggs
 eggs
 parts
 .*.swp
+*.orig
