@@ -6,11 +6,25 @@ from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
 import netaddr
 
-from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter, backends, SyncVmsAction
-from opennode.knot.backend.operation import (IGetVirtualizationContainers, IStartVM, IShutdownVM, IDestroyVM,
-                                             ISuspendVM, IResumeVM, IListVMS, IRebootVM, IGetComputeInfo,
-                                             IDeployVM, IUndeployVM, IGetLocalTemplates, IGetDiskUsage,
-                                             IGetRoutes, IGetHWUptime, IMigrateVM, OperationRemoteError)
+from opennode.knot.backend.v12ncontainer import (IVirtualizationContainerSubmitter,
+                                                 backends,
+                                                 SyncVmsAction)
+from opennode.knot.backend.operation import (IGetVirtualizationContainers,
+                                             IStartVM,
+                                             IShutdownVM,
+                                             IDestroyVM,
+                                             ISuspendVM,
+                                             IResumeVM,
+                                             IListVMS,
+                                             IRebootVM,
+                                             IGetComputeInfo,
+                                             IDeployVM,
+                                             IUndeployVM,
+                                             IGetLocalTemplates,
+                                             IGetDiskUsage,
+                                             IUpdateVM,
+                                             IMigrateVM,
+                                             OperationRemoteError)
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
@@ -475,7 +489,7 @@ class SyncAction(Action):
                 self.context.consoles.add(TtyConsole('tty%s' % idx, console['pty']))
             if console['type'] == 'openvz' and not self.context.consoles['tty%s' % idx]:
                 self.context.consoles.add(OpenVzConsole('tty%s' % idx, console['cid']))
-            if console['type'] == 'vnc'  and not self.context.consoles['vnc']:
+            if console['type'] == 'vnc' and not self.context.consoles['vnc']:
                 self.context.consoles.add(VncConsole(
                     self.context.__parent__.__parent__.hostname, int(console['port'])))
 
@@ -526,8 +540,8 @@ class SyncAction(Action):
         # TODO: Improve error handling
         def disk_info(aspect):
             res = dict((unicode(k), round(float(v[aspect]) / 1024, 2))
-                   for k, v in disk_usage.items()
-                   if v['device'].startswith('/dev/'))
+                       for k, v in disk_usage.items()
+                       if v['device'].startswith('/dev/'))
             res[u'total'] = sum([0.0] + res.values())
             return res
 
@@ -668,7 +682,7 @@ def handle_compute_state_change_request(compute, event):
         action_mapping = {'inactive': {'active': IStartVM},
                           'suspended': {'active': IResumeVM},
                           'active': {'inactive': IShutdownVM,
-                                     'suspended': ISuspendVM},}
+                                     'suspended': ISuspendVM}}
 
         action = action_mapping.get(original, {}).get(modified, None)
         return action
@@ -715,3 +729,26 @@ def create_virtual_compute(model, event):
 
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
 
+
+@subscribe(IVirtualCompute, IModelModifiedEvent)
+@defer.inlineCallbacks
+def handle_virtual_compute_config_change_request(compute, event):
+    update_param_whitelist = ['cpu_limit',
+                              'memory',
+                              'num_cores',
+                              'swap_size']
+
+    params_to_update = filter(lambda k, v: k in update_param_whitelist, event.modified.iteritems())
+
+    if len(params_to_update) == 0:
+        return
+
+    update_values = [v for k, v in sorted(params_to_update, key=lambda k, v: k)]
+
+    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
+    try:
+        yield submitter.submit(IUpdateVM, compute.__name__, *update_values)
+    except Exception:
+        for mk, mv in event.modified.iteritems():
+            setattr(compute, mk, event.original[mk])
+        raise

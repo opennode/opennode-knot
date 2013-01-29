@@ -8,7 +8,7 @@ from zope.interface import Interface, implements
 from opennode.knot.model.compute import Compute
 from opennode.knot.model.hangar import Hangar
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import  Container, ContainerInjector, ReadonlyContainer
+from opennode.oms.model.model.base import Container, ContainerInjector, ReadonlyContainer
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.security.directives import permissions
