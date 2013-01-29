@@ -10,13 +10,32 @@ import logging
 import multiprocessing
 import time
 
-from opennode.knot.backend.operation import (IGetComputeInfo, IStartVM, IShutdownVM, IDestroyVM, ISuspendVM,
-                                             IResumeVM, IRebootVM, IListVMS, IHostInterfaces, IDeployVM,
-                                             IUndeployVM, IGetGuestMetrics, IGetHostMetrics,
-                                             IGetLocalTemplates, IMinion, IGetSignedCertificateNames,
-                                             IGetVirtualizationContainers, IGetDiskUsage, IGetRoutes,
-                                             IGetIncomingHosts, ICleanupHost, IMigrateVM,
-                                             IAcceptIncomingHost, IGetHWUptime, OperationRemoteError)
+from opennode.knot.backend.operation import (IGetComputeInfo,
+                                             IStartVM,
+                                             IShutdownVM,
+                                             IDestroyVM,
+                                             ISuspendVM,
+                                             IResumeVM,
+                                             IRebootVM,
+                                             IListVMS,
+                                             IHostInterfaces,
+                                             IDeployVM,
+                                             IUndeployVM,
+                                             IGetGuestMetrics,
+                                             IGetHostMetrics,
+                                             IGetLocalTemplates,
+                                             IMinion,
+                                             IGetSignedCertificateNames,
+                                             IGetVirtualizationContainers,
+                                             IGetDiskUsage,
+                                             IGetRoutes,
+                                             IGetIncomingHosts,
+                                             ICleanupHost,
+                                             IMigrateVM,
+                                             IAcceptIncomingHost,
+                                             IGetHWUptime,
+                                             IUpdateVM,
+                                             OperationRemoteError)
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
 from opennode.oms.util import timeout, TimeoutException
@@ -41,7 +60,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
                     system='salt', logLevel=logging.DEBUG)
             data = client.cmd(self.hostname, self.action, arg=self.args)
         except SystemExit as e:
-            log.err('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system='salt')
+            log.msg('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system='salt')
             self.q.put(cPickle.dumps({}))
         else:
             pdata = cPickle.dumps(data)
@@ -230,7 +249,8 @@ ACTIONS = {
     IStartVM: 'onode.vm_start_vm',
     ISuspendVM: 'onode.vm_suspend_vm',
     IUndeployVM: 'onode.vm_undeploy_vm',
-    IMigrateVM: 'onode.vm_migrate'
+    IMigrateVM: 'onode.vm_migrate',
+    IUpdateVM: 'onode.host_update_vm'
 }
 
 OVERRIDE_EXECUTORS = {
