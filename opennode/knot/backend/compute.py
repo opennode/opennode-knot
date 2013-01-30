@@ -1,5 +1,5 @@
 from grokcore.component import context, subscribe, baseclass
-from logging import DEBUG, ERROR
+from logging import DEBUG
 from twisted.internet import defer
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
@@ -22,6 +22,8 @@ from opennode.knot.backend.operation import (IGetVirtualizationContainers,
                                              IUndeployVM,
                                              IGetLocalTemplates,
                                              IGetDiskUsage,
+                                             IGetHWUptime,
+                                             IGetRoutes,
                                              IUpdateVM,
                                              IMigrateVM,
                                              OperationRemoteError)
