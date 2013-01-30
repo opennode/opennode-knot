@@ -80,7 +80,10 @@ class SaltExecutor(object):
         return self.client
 
     def _destroy_client(self):
-        self.client = None
+        if self.client is not None:
+            self.client.terminate()
+            self.client = None
+
 
 
 class AsynchronousSaltExecutor(SaltExecutor):
@@ -188,8 +191,6 @@ class SynchronousSaltExecutor(SaltExecutor):
                 res = yield spawn()
                 defer.returnValue(res)
             except TimeoutException as e:
-                client = self._get_client()
-                client.terminate()
                 self._destroy_client()
                 log.msg("Got timeout while executing %s on %s (%s)" % (self.action, self.hostname, e),
                         system='salt')

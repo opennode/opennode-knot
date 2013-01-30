@@ -6,7 +6,9 @@ import salt.config
 from salt.key import Key
 
 from opennode.knot.backend.compute import format_error
-from opennode.knot.model.machines import IIncomingMachineRequest, IncomingMachineRequest
+from opennode.knot.model.machines import IIncomingMachineRequest
+from opennode.knot.model.machines import IncomingMachineRequest
+from opennode.knot.model.compute import ICompute
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -62,4 +64,3 @@ def delete_compute(model, event):
     if ISaltInstalled.providedBy(model):
         blocking_yield(RejectHostRequestAction(
             IncomingMachineRequest(model.hostname)).execute(DetachedProtocol(), object()))
-
