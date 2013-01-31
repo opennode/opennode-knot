@@ -166,30 +166,30 @@ class Compute(Container):
 
     from opennode.knot.model.hangar import IInHangar
     implements(ICompute, IDisplayName, IMarkable, IInHangar)
-    permissions(dict(hostname = ('read', 'modify'),
-                     ipv4_address = ('read', 'modify'),
-                     ipv6_address = ('read', 'modify'),
-                     nameservers = ('read', 'modify'),
-                     dns_domains = ('read', 'modify'),
-                     architecture = ('read', 'modify'),
-                     cpu_info = ('read', 'modify'),
-                     os_release = ('read', 'modify'),
-                     kernel = ('read', 'modify'),
-                     state = ('read', 'modify'),
-                     effective_state = ('read', 'modify'),
-                     num_cores = ('read', 'modify'),
-                     memory = ('read', 'modify'),
-                     diskspace = ('read', 'modify'),
-                     network = ('read', 'modify'),
-                     uptime = ('read', 'modify'),
-                     swap_size = ('read', 'modify'),
-                     cpu_usage = ('read'),
-                     memory_usage = ('read'),
-                     diskspace_usage = ('read'),
-                     network_usage = ('read'),
-                     cpu_limit = ('read', 'modify'),
-                     template = ('read', 'modify'),
-                     autostart = ('read', 'modify'),
+    permissions(dict(hostname=('read', 'modify'),
+                     ipv4_address=('read', 'modify'),
+                     ipv6_address=('read', 'modify'),
+                     nameservers=('read', 'modify'),
+                     dns_domains=('read', 'modify'),
+                     architecture=('read', 'modify'),
+                     cpu_info=('read', 'modify'),
+                     os_release=('read', 'modify'),
+                     kernel=('read', 'modify'),
+                     state=('read', 'modify'),
+                     effective_state=('read', 'modify'),
+                     num_cores=('read', 'modify'),
+                     memory=('read', 'modify'),
+                     diskspace=('read', 'modify'),
+                     network=('read', 'modify'),
+                     uptime=('read', 'modify'),
+                     swap_size=('read', 'modify'),
+                     cpu_usage=('read'),
+                     memory_usage=('read'),
+                     diskspace_usage=('read'),
+                     network_usage=('read'),
+                     cpu_limit=('read', 'modify'),
+                     template=('read', 'modify'),
+                     autostart=('read', 'modify'),
                      ))
 
     __contains__ = IInCompute
@@ -453,6 +453,7 @@ class ComputeTasks(ReadonlyContainer):
         from opennode.oms.zodb import db
         processes = db.get_root()['oms_root']['proc']
         tasks = {}
+
         def collect(container):
             seen = set()
             for item in container.listcontent():

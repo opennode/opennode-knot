@@ -21,7 +21,7 @@ def ping(dest_addr, timeout=2, count=2, psize=64):
                 log.msg("ping %s failed. (socket error: '%s')" % (dest_addr, e[1]), system='ping')
                 break
 
-            if delay != None:
+            if delay is not None:
                 delay = delay * 1000
                 plist.append(delay)
 

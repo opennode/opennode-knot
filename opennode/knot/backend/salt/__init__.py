@@ -1,13 +1,14 @@
 from __future__ import absolute_import
 
 from grokcore.component import Adapter, context, baseclass
-from salt.client import LocalClient
 from twisted.internet import defer, threads, reactor
 from twisted.python import log
 from zope.interface import classImplements
 import cPickle
 import logging
 import multiprocessing
+import Queue
+import subprocess
 import time
 
 from opennode.knot.backend.operation import (IGetComputeInfo,
@@ -55,19 +56,60 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 
     def run(self):
         try:
+            from salt.client import LocalClient
             client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
             try:
-                log.msg('running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
-                        system='salt', logLevel=logging.DEBUG)
+                log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
+                        system='salt-local', logLevel=logging.DEBUG)
                 data = client.cmd(self.hostname, self.action, arg=self.args)
             except SystemExit as e:
-                log.msg('failed action: %s on host: %s (%s)' % (self.action, self.hostname, e), system='salt')
+                log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
+                        system='salt-local')
                 self.q.put(cPickle.dumps({}))
             else:
                 pdata = cPickle.dumps(data)
                 self.q.put(pdata)
         except Exception:
-            log.err(system='salt-err')
+            log.err(system='salt-local')
+
+
+class SaltRemoteClient(object):
+    def __init__(self):
+        self.q = Queue.Queue()
+
+    def provide_args(self, hostname, action, args):
+        self.hostname = hostname
+        self.action = action
+        self.args = args
+
+    def run(self):
+        try:
+            try:
+                log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
+                        system='salt-remote', logLevel=logging.DEBUG)
+                cmd = get_config().get('salt', 'remote_command', 'salt')
+                # XXX: instead of raw+eval (which is dangerous) we could use json or yaml
+                output = subprocess.check_output(cmd.split(' ') +
+                                                 ['--no-color', '--out=raw', self.hostname, self.action] +
+                                                 map(str, self.args))
+                data = eval(output)
+            except subprocess.CalledProcessError as e:
+                log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
+                        system='salt-remote')
+                self.q.put(cPickle.dumps({}))
+            else:
+                pdata = cPickle.dumps(data)
+                self.q.put(pdata)
+        except Exception:
+            log.err(system='salt-remote')
+
+    start = run
+
+    def join(self):
+        pass
+
+    def terminate(self):
+        pass
 
 
 class SaltExecutor(object):
@@ -76,14 +118,16 @@ class SaltExecutor(object):
     def _get_client(self):
         """Returns an instance of Salt Stack LocalClient."""
         if not self.client:
-            self.client = SaltMultiprocessingClient()
+            if get_config().get('salt', 'remote_command', None):
+                self.client = SaltRemoteClient()
+            else:
+                self.client = SaltMultiprocessingClient()
         return self.client
 
     def _destroy_client(self):
         if self.client is not None:
             self.client.terminate()
             self.client = None
-
 
 
 class AsynchronousSaltExecutor(SaltExecutor):
