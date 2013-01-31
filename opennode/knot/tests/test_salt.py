@@ -23,8 +23,9 @@ def make_compute(hostname=u'tux-for-test', state=u'active', memory=2000):
 def test_get_info():
     compute = make_compute(hostname=u'localhost')
     alsoProvides(compute, ISaltInstalled)
-    job = IGetComputeInfo(compute, None)
-    job.run()
+    res = yield IGetComputeInfo(compute, None).run()
+    print IGetComputeInfo(compute, None)
+    assert res[1]['name'] == 'localhost'
 
 
 @run_in_reactor

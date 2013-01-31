@@ -39,7 +39,7 @@ class MetricsDaemonProcess(DaemonProcess):
                 # and maintain the gatherers via add/remove events.
                 if not self.paused:
                     yield self.gather_machines()
-            except Exception :
+            except Exception:
                 self.log_err()
 
             yield async_sleep(self.interval)
@@ -58,7 +58,7 @@ class MetricsDaemonProcess(DaemonProcess):
 
             oms_root = db.get_root()['oms_root']
             res = filter(None, (queryAdapter(follow_symlinks(i), IMetricsGatherer)
-                                        for i in oms_root['computes'].listcontent()))
+                                for i in oms_root['computes'].listcontent()))
             return res
 
         for i in (yield get_gatherers()):

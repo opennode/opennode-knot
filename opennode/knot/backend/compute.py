@@ -101,11 +101,11 @@ class AllocateAction(Action):
             if param not in self.context.diskspace:
                 raise KeyError(param)
 
-            log.msg('Searching in: %s' % (map(lambda m: (m, (
-                         self.context.memory_usage < getattr(m, 'memory', None),
-                         self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
-                         self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
-                    logLevel=DEBUG)
+            log.msg('Searching in: %s' % (
+                map(lambda m: (m, (self.context.memory_usage < getattr(m, 'memory', None),
+                                   self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
+                                   self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
+                logLevel=DEBUG)
 
             return filter(lambda m: (ICompute.providedBy(m) and
                                      find_compute_v12n_container(m, container) and
@@ -231,7 +231,7 @@ class MigrateAction(Action):
         @db.ro_transact
         def get_destination():
             return (args.__parent__ if IVirtualizationContainer.providedBy(args)
-                  else cmd.traverse(args.dest_path))
+                    else cmd.traverse(args.dest_path))
 
         @db.ro_transact
         def get_hostname(target):
@@ -254,7 +254,8 @@ class MigrateAction(Action):
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
             yield source_submitter.submit(IMigrateVM, name, destination_hostname, False, False)
         except OperationRemoteError:
-            cmd.write('Failed migration of %s to %s: remote error\n' % (str(name), str(destination_hostname)))
+            cmd.write('Failed migration of %s to %s: remote error\n' % (str(name),
+                                                                        str(destination_hostname)))
             defer.returnValue(None)
 
         log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
@@ -267,6 +268,7 @@ class MigrateAction(Action):
             defer.returnValue(None)
         else:
             log.msg('Migration finished successfully!', system='migrate')
+
             @db.transact
             def mv():
                 machines = db.get_root()['oms_root']['machines']
@@ -713,12 +715,12 @@ def handle_compute_state_change_request(compute, event):
 def delete_virtual_compute(model, event):
     if IDeployed.providedBy(model):
         log.msg('deleting compute %s which is in IDeployed state, shutting down and '
-               'undeploying first' % model.hostname, system='compute_backend')
+                'undeploying first' % model.hostname, system='compute_backend')
         blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()), timeout=20000)
         blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()), timeout=20000)
     else:
         log.msg('deleting compute %s which is already in IUndeployed state' %
-               model.hostname, system='compute_backend')
+                model.hostname, system='compute_backend')
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
