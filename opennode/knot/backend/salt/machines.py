@@ -1,21 +1,37 @@
 from __future__ import absolute_import
 import logging
+import subprocess
 
 from grokcore.component import context, implements, name, GlobalUtility
-import salt.config
-from salt.key import Key
-from salt.utils import parsers
+
+try:
+    from salt.config import master_config
+    from salt.key import Key
+    from salt.utils.parsers import ConfigDirMixIn
+except ImportError:
+    # Missing salt on local machine
+    master_config = lambda x: None
+
+    class ConfigDirMixIn(object):
+        """ Missing Salt """
+
+    class Key(object):
+        """ Missing Salt """
+
 from twisted.internet import defer
+from twisted.python import log
 
 from opennode.knot.model.backend import IKeyManager
 from opennode.knot.backend.compute import register_machine
 from opennode.knot.model.machines import IncomingMachines, BaseIncomingMachines
 from opennode.knot.model.compute import ISaltInstalled
+from opennode.oms.config import get_config
 from opennode.oms.model.model.base import ContainerInjector
 
 
 class DummyOptions(object):
     """ Dummy OptionParser placeholder """
+
     def _dummycall(self, *args, **kwargs):
         pass
 
@@ -27,16 +43,16 @@ class DummyOptions(object):
         return None
 
 
-class SaltKeyAdapter(Key, parsers.ConfigDirMixIn):
+class SaltKeyAdapter(Key, ConfigDirMixIn):
     """ Adaptor for Salt key management logic """
+    REJECTED = 'minions_rejected'
+    ACCEPTED = 'minions'
+    UNACCEPTED = 'minions_pre'
 
     def __init__(self):
         self.options = DummyOptions()
-        keys_config = salt.config.master_config(self.get_config_file_path('master'))
+        keys_config = master_config(self.get_config_file_path('master'))
         Key.__init__(self, keys_config)
-        self.REJECTED = 'minions_rejected'
-        self.ACCEPTED = 'minions'
-        self.UNACCEPTED = 'minions_pre'
 
     def _getKeyNames(self, ktype):
         try:
@@ -54,11 +70,36 @@ class SaltKeyAdapter(Key, parsers.ConfigDirMixIn):
         return self._getKeyNames(self.REJECTED)
 
 
+class RemoteSaltKeyAdapter(object):
+    """ Adaptor for remote Salt key management """
+    REJECTED = 'minions_rejected'
+    ACCEPTED = 'minions'
+    UNACCEPTED = 'minions_pre'
+
+    def _getKeyNames(self, ktype):
+        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        output = subprocess.check_output(remote_salt_key_cmd.split(' ') + ['--no-color', '--out=raw'])
+        log.msg('Salt output: %s' % output, system='action-accept')
+
+    def getUnacceptedKeyNames(self):
+        return self._getKeyNames(self.UNACCEPTED)
+
+    def getAcceptedKeyNames(self):
+        return self._getKeyNames(self.ACCEPTED)
+
+    def getRejectedKeyNames(self):
+        return self._getKeyNames(self.REJECTED)
+
+
 class IncomingMachinesSalt(BaseIncomingMachines):
     __name__ = 'salt'
 
     def _get(self):
-        return SaltKeyAdapter().getUnacceptedKeyNames()
+        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        if remote_salt_key_cmd:
+            return RemoteSaltKeyAdapter().getUnacceptedKeyNames()
+        else:
+            return SaltKeyAdapter().getUnacceptedKeyNames()
 
 
 class IncomingMachinesSaltInjector(ContainerInjector):
@@ -68,7 +109,13 @@ class IncomingMachinesSaltInjector(ContainerInjector):
 
 class RegisteredMachinesSalt(object):
     def _get(self):
-        return SaltKeyAdapter().getAcceptedKeyNames()
+        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        if remote_salt_key_cmd:
+            return RemoteSaltKeyAdapter().getAcceptedKeyNames()
+        else:
+            return SaltKeyAdapter().getAcceptedKeyNames()
+
+
 
 
 class SaltKeyManager(GlobalUtility):

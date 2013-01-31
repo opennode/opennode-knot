@@ -91,7 +91,7 @@ class SaltRemoteClient(object):
                 # XXX: instead of raw+eval (which is dangerous) we could use json or yaml
                 output = subprocess.check_output(cmd.split(' ') +
                                                  ['--no-color', '--out=raw', self.hostname, self.action] +
-                                                 list(self.args))
+                                                 map(str, self.args))
                 data = eval(output)
             except subprocess.CalledProcessError as e:
                 log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
