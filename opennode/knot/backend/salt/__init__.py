@@ -57,7 +57,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
     def run(self):
         try:
             from salt.client import LocalClient
-            client = LocalClient(c_path=get_config().get('salt', 'master_config_path', '/etc/salt/master'))
+            client = LocalClient(c_path=get_config().getstring('salt', 'master_config_path', '/etc/salt/master'))
             try:
                 log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
                         system='salt-local', logLevel=logging.DEBUG)
@@ -87,7 +87,7 @@ class SaltRemoteClient(object):
             try:
                 log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
                         system='salt-remote', logLevel=logging.DEBUG)
-                cmd = get_config().get('salt', 'remote_command', 'salt')
+                cmd = get_config().getstring('salt', 'remote_command', 'salt')
                 # XXX: instead of raw+eval (which is dangerous) we could use json or yaml
                 output = subprocess.check_output(cmd.split(' ') +
                                                  ['--no-color', '--out=raw', self.hostname, self.action] +
@@ -118,7 +118,7 @@ class SaltExecutor(object):
     def _get_client(self):
         """Returns an instance of Salt Stack LocalClient."""
         if not self.client:
-            if get_config().get('salt', 'remote_command', None):
+            if get_config().getstring('salt', 'remote_command', None):
                 self.client = SaltRemoteClient()
             else:
                 self.client = SaltMultiprocessingClient()
@@ -189,7 +189,7 @@ class SynchronousSaltExecutor(SaltExecutor):
         hard_timeout = get_config().getint('salt', 'hard_timeout')
         blacklist_enabled = get_config().getboolean('salt', 'timeout_blacklist')
         blacklist_ttl = get_config().getint('salt', 'timeout_blacklist_ttl')
-        whitelist = [i.strip() for i in get_config().get('salt', 'timeout_whitelist').split(',')]
+        whitelist = [i.strip() for i in get_config().getstring('salt', 'timeout_whitelist').split(',')]
 
         now = time.time()
         until = self.host_blacklist.get(self.hostname, 0) + blacklist_ttl
@@ -313,7 +313,7 @@ def _generate_classes():
         cls_name = 'Salt%s' % interface.__name__[1:]
         cls = type(cls_name, (SaltBase, ), dict(action=action))
         classImplements(cls, interface)
-        executor = get_config().get('salt', 'executor_class')
+        executor = get_config().getstring('salt', 'executor_class', 'sync')
         cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, SaltBase.executor_classes[executor])
         globals()[cls_name] = cls
 _generate_classes()

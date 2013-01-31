@@ -32,7 +32,7 @@ class BaseHostRequestAction(Action):
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         hostname = yield db.get(self.context, 'hostname')
-        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
         if remote_salt_key_cmd:
             try:
                 output = subprocess.check_output([remote_salt_key_cmd, self._remote_option, hostname,
@@ -44,7 +44,7 @@ class BaseHostRequestAction(Action):
             try:
                 import salt.config
                 from salt.key import Key
-                c_path = get_config().get('salt', 'master_config_path', '/etc/salt/master')
+                c_path = get_config().getstring('salt', 'master_config_path', '/etc/salt/master')
                 opts = salt.config.client_config(c_path)
                 yield getattr(Key(opts), self._action)(hostname)
             except Exception as e:

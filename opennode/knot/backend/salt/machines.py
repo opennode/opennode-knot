@@ -77,7 +77,7 @@ class RemoteSaltKeyAdapter(object):
     UNACCEPTED = 'minions_pre'
 
     def _getKeyNames(self, ktype):
-        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
         output = subprocess.check_output(remote_salt_key_cmd.split(' ') + ['--no-color', '--out=raw'])
         log.msg('Salt output: %s' % output, system='action-accept')
         data = eval(output)
@@ -97,7 +97,7 @@ class IncomingMachinesSalt(BaseIncomingMachines):
     __name__ = 'salt'
 
     def _get(self):
-        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
         if remote_salt_key_cmd:
             return RemoteSaltKeyAdapter().getUnacceptedKeyNames()
         else:
@@ -111,7 +111,7 @@ class IncomingMachinesSaltInjector(ContainerInjector):
 
 class RegisteredMachinesSalt(object):
     def _get(self):
-        remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
+        remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
         if remote_salt_key_cmd:
             return RemoteSaltKeyAdapter().getAcceptedKeyNames()
         else:
