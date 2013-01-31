@@ -80,6 +80,8 @@ class RemoteSaltKeyAdapter(object):
         remote_salt_key_cmd = get_config().get('salt', 'remote_key_command', None)
         output = subprocess.check_output(remote_salt_key_cmd.split(' ') + ['--no-color', '--out=raw'])
         log.msg('Salt output: %s' % output, system='action-accept')
+        data = eval(output)
+        return data[ktype]
 
     def getUnacceptedKeyNames(self):
         return self._getKeyNames(self.UNACCEPTED)
@@ -114,8 +116,6 @@ class RegisteredMachinesSalt(object):
             return RemoteSaltKeyAdapter().getAcceptedKeyNames()
         else:
             return SaltKeyAdapter().getAcceptedKeyNames()
-
-
 
 
 class SaltKeyManager(GlobalUtility):
