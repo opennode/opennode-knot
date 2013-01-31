@@ -82,4 +82,3 @@ class SaltKeyManager(GlobalUtility):
     def import_machines(self, accepted):
         for host in accepted:
             yield register_machine(host, mgt_stack=ISaltInstalled)
-

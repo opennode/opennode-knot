@@ -51,7 +51,6 @@ class BaseHostRequestAction(Action):
                 cmd.write("%s\n" % format_error(e))
 
 
-
 class AcceptHostRequestAction(BaseHostRequestAction):
     """Accept request of the host for joining OMS/Salt"""
     action('accept')
