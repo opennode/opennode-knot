@@ -742,16 +742,16 @@ def handle_virtual_compute_config_change_request(compute, event):
                               'num_cores',
                               'swap_size']
 
-    params_to_update = filter(lambda k, v: k in update_param_whitelist, event.modified.iteritems())
+    params_to_update = filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems())
 
     if len(params_to_update) == 0:
         return
 
-    update_values = [v for k, v in sorted(params_to_update, key=lambda k, v: k)]
+    update_values = [v for k, v in sorted(params_to_update, key=lambda (k, v): k)]
 
-    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
+    submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:
-        yield submitter.submit(IUpdateVM, compute.__name__, *update_values)
+        yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), *update_values)
     except Exception:
         for mk, mv in event.modified.iteritems():
             setattr(compute, mk, event.original[mk])
