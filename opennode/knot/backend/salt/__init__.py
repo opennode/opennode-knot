@@ -277,7 +277,9 @@ class SynchronousSaltExecutor(SaltExecutor):
         try:
             import subprocess
             # TODO: provide a hint for the hook by passing in salt/remote_command value
-            subprocess.check_call(['./scripts/hooks/salt_stall'])
+            script = get_config().getstring('salt', 'salt_countermeasure_script',
+                                            './scripts/hooks/salt_stall')
+            subprocess.check_call(script.split(' '))
             self.stall_countermeasure_applied = time.time()
             defer.returnValue((yield self.run(*args, **kwargs)))
         except Exception:
