@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ssh root@ondev service salt-master restart

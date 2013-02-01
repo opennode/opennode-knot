@@ -57,7 +57,8 @@ class SaltMultiprocessingClient(multiprocessing.Process):
     def run(self):
         try:
             from salt.client import LocalClient
-            client = LocalClient(c_path=get_config().getstring('salt', 'master_config_path', '/etc/salt/master'))
+            client = LocalClient(c_path=get_config().getstring('salt', 'master_config_path',
+                                                               '/etc/salt/master'))
             try:
                 log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
                         system='salt-local', logLevel=logging.DEBUG)
@@ -110,6 +111,9 @@ class SaltRemoteClient(object):
 
     def terminate(self):
         pass
+
+    def is_alive(self):
+        return False
 
 
 class SaltExecutor(object):
@@ -168,6 +172,7 @@ class AsynchronousSaltExecutor(SaltExecutor):
             self.deferred.errback(OperationRemoteError(msg="Remote error on %s" % hostkey,
                                                        remote_tb=data[hostkey]))
         elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+            # TODO: mark the host as unmanageable (agent modules are missing)
             self.deferred.errback(OperationRemoteError(msg="Remote error on %s: module unavailable" %
                                                        hostkey))
         else:
@@ -179,6 +184,7 @@ class SynchronousSaltExecutor(SaltExecutor):
     # Contains a blacklist of host which had strange problems with salt
     # so we temporarily avoid calling them again until the blacklist TTL expires
     host_blacklist = {}
+    stall_countermeasure_applied = None
 
     def __init__(self, hostname, action, interaction):
         self.hostname = hostname
@@ -187,9 +193,7 @@ class SynchronousSaltExecutor(SaltExecutor):
 
     def run(self, *args, **kwargs):
         hard_timeout = get_config().getint('salt', 'hard_timeout')
-        blacklist_enabled = get_config().getboolean('salt', 'timeout_blacklist')
         blacklist_ttl = get_config().getint('salt', 'timeout_blacklist_ttl')
-        whitelist = [i.strip() for i in get_config().getstring('salt', 'timeout_whitelist').split(',')]
 
         now = time.time()
         until = self.host_blacklist.get(self.hostname, 0) + blacklist_ttl
@@ -198,7 +202,7 @@ class SynchronousSaltExecutor(SaltExecutor):
             raise Exception("Host %s was temporarily blacklisted. %s s to go" % (self.hostname, until - now))
 
         if self.hostname in self.host_blacklist:
-            log.msg("removing %s from blacklist" % self.hostname, system='salt', logLevel=logging.DEBUG)
+            log.msg("Removing '%s' from blacklist" % self.hostname, system='salt', logLevel=logging.DEBUG)
             del self.host_blacklist[self.hostname]
 
         @timeout(hard_timeout)
@@ -225,6 +229,7 @@ class SynchronousSaltExecutor(SaltExecutor):
                 raise OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])
 
             if type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+                # TODO: mark the host as unmanageable (agent modules are missing)
                 raise OperationRemoteError(msg="Remote error on %s: module unavailable" % hostkey)
 
             return data[hostkey]
@@ -236,20 +241,47 @@ class SynchronousSaltExecutor(SaltExecutor):
                 defer.returnValue(res)
             except TimeoutException as e:
                 self._destroy_client()
-                log.msg("Got timeout while executing %s on %s (%s)" % (self.action, self.hostname, e),
+                log.msg("Timeout while executing '%s' on '%s' (%s)" % (self.action, self.hostname, e),
                         system='salt')
-                if blacklist_enabled:
-                    if self.hostname not in whitelist:
-                        log.msg("blacklisting %s for %s s" % (self.hostname, blacklist_ttl), system='salt')
-                        self.host_blacklist[self.hostname] = time.time()
-                    else:
-                        log.msg("host %s not blacklisted because in 'timeout_whitelist'" % self.hostname,
-                                system='salt')
-                raise
+                self.blacklist(blacklist_ttl)
+                res = yield self.launch_stall_countermeasure(*args, **kwargs)
+                defer.returnValue(res)
 
         self.deferred = spawn_handle_timeout()
 
         return self.deferred
+
+    def blacklist(self, blacklist_ttl):
+        blacklist_enabled = get_config().getboolean('salt', 'timeout_blacklist')
+        whitelist = [i.strip() for i in get_config().getstring('salt', 'timeout_whitelist').split(',')]
+        if blacklist_enabled:
+            if self.hostname not in whitelist:
+                log.msg("blacklisting %s for %s s" % (self.hostname, blacklist_ttl), system='salt')
+                self.host_blacklist[self.hostname] = time.time()
+            else:
+                log.msg("host %s is whitelisted" % self.hostname, system='salt')
+
+    @defer.inlineCallbacks
+    def launch_stall_countermeasure(self, *args, **kwargs):
+        if self.stall_countermeasure_applied is not None:
+            now = time.time()
+            ttl = get_config().getint('salt', 'timeout_blacklist_ttl', 600)
+            if now > self.stall_countermeasure_applied + ttl:
+                log.msg('Last stall countermeasure has been applied %s seconds ago. Reapplying.' %
+                    (self.stall_countermeasure_applied - now), system='salt')
+                self.stall_countermeasure_applied = None
+            else:
+                log.msg('Salt stall countermeasure seems ineffective, %s is down maybe?' % (self.hostname),
+                        system='salt')
+                raise TimeoutException()
+        try:
+            import subprocess
+            # TODO: provide a hint for the hook by passing in salt/remote_command value
+            subprocess.check_call(['./scripts/hooks/salt_stall'])
+            self.stall_countermeasure_applied = time.time()
+            defer.returnValue((yield self.run(*args, **kwargs)))
+        except Exception:
+            log.err(system='salt-stall')
 
 
 class SaltBase(Adapter):
