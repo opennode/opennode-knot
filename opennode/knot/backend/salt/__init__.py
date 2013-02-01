@@ -281,6 +281,7 @@ class SynchronousSaltExecutor(SaltExecutor):
                                             './scripts/hooks/salt_stall')
             subprocess.check_call(script.split(' '))
             self.stall_countermeasure_applied = time.time()
+            log.msg('Stall countermeasure applied. Retrying...', system='salt')
             defer.returnValue((yield self.run(*args, **kwargs)))
         except Exception:
             log.err(system='salt-stall')
