@@ -49,9 +49,11 @@ class SaltMultiprocessingClient(multiprocessing.Process):
             log.err(system='salt-local')
 
 
-class SaltRemoteClient(object):
+class SaltRemoteClient(multiprocessing.Process):
+
     def __init__(self):
         self.q = Queue.Queue()
+        super(SaltRemoteClient, self).__init__()
 
     def provide_args(self, hostname, action, args):
         self.hostname = hostname
@@ -68,7 +70,10 @@ class SaltRemoteClient(object):
                 output = subprocess.check_output(cmd.split(' ') +
                                                  ['--no-color', '--out=raw', self.hostname, self.action] +
                                                  map(str, self.args))
-                data = eval(output)
+                if output:
+                    data = eval(output)
+                else:
+                    data = {}
             except subprocess.CalledProcessError as e:
                 log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
                         system='salt-remote')
@@ -78,17 +83,6 @@ class SaltRemoteClient(object):
                 self.q.put(pdata)
         except Exception:
             log.err(system='salt-remote')
-
-    start = run
-
-    def join(self):
-        pass
-
-    def terminate(self):
-        pass
-
-    def is_alive(self):
-        return False
 
 
 class SaltExecutor(object):
@@ -123,6 +117,7 @@ class AsynchronousSaltExecutor(SaltExecutor):
         client = self._get_client()
         client.provide_args(self.hostname, self.action, args)
         client.start()
+
         self.poll()
 
         return self.deferred
@@ -145,11 +140,11 @@ class AsynchronousSaltExecutor(SaltExecutor):
             self.deferred.errback(op.OperationRemoteError(msg='Remote returned empty response'))
         elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
             self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s" % hostkey,
-                                                       remote_tb=data[hostkey]))
+                                                          remote_tb=data[hostkey]))
         elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
             # TODO: mark the host as unmanageable (agent modules are missing)
             self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s: module unavailable" %
-                                                       hostkey))
+                                                          hostkey))
         else:
             self.deferred.callback(data[hostkey])
 
@@ -189,6 +184,7 @@ class SynchronousSaltExecutor(SaltExecutor):
             client.provide_args(self.hostname, self.action, args)
             client.start()
             client.join()
+
             pdata = client.q.get()
             data = cPickle.loads(pdata)
             hostkey = self.hostname
@@ -200,14 +196,16 @@ class SynchronousSaltExecutor(SaltExecutor):
                 raise op.OperationRemoteError(
                     msg='Response for %s on \'%s%s\' was empty' % (hostkey, self.action, args))
 
-            if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
+            hdata = data[hostkey]
+
+            if type(hdata) is str and hdata.startswith('Traceback'):
                 raise op.OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])
 
-            if type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+            if type(hdata) is str and hdata.endswith('is not available.'):
                 # TODO: mark the host as unmanageable (agent modules are missing)
                 raise op.OperationRemoteError(msg="Remote error on %s: module unavailable" % hostkey)
 
-            return data[hostkey]
+            return hdata
 
         @defer.inlineCallbacks
         def spawn_handle_timeout():
@@ -243,19 +241,18 @@ class SynchronousSaltExecutor(SaltExecutor):
             ttl = get_config().getint('salt', 'timeout_blacklist_ttl', 600)
             if now > self.stall_countermeasure_applied + ttl:
                 log.msg('Last stall countermeasure has been applied %s seconds ago. Reapplying.' %
-                    (self.stall_countermeasure_applied - now), system='salt')
-                self.stall_countermeasure_applied = None
+                        (now - self.stall_countermeasure_applied), system='salt')
             else:
                 log.msg('Salt stall countermeasure seems ineffective, %s is down maybe?' % (self.hostname),
                         system='salt')
                 raise TimeoutException()
         try:
             import subprocess
+            self.stall_countermeasure_applied = time.time()
             # TODO: provide a hint for the hook by passing in salt/remote_command value
             script = get_config().getstring('salt', 'salt_countermeasure_script',
                                             './scripts/hooks/salt_stall')
             subprocess.check_call(script.split(' '))
-            self.stall_countermeasure_applied = time.time()
             log.msg('Stall countermeasure applied. Retrying...', system='salt')
             defer.returnValue((yield self.run(*args, **kwargs)))
         except Exception:
