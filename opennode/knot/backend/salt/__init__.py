@@ -11,32 +11,7 @@ import Queue
 import subprocess
 import time
 
-from opennode.knot.backend.operation import (IGetComputeInfo,
-                                             IStartVM,
-                                             IShutdownVM,
-                                             IDestroyVM,
-                                             ISuspendVM,
-                                             IResumeVM,
-                                             IRebootVM,
-                                             IListVMS,
-                                             IHostInterfaces,
-                                             IDeployVM,
-                                             IUndeployVM,
-                                             IGetGuestMetrics,
-                                             IGetHostMetrics,
-                                             IGetLocalTemplates,
-                                             IMinion,
-                                             IGetSignedCertificateNames,
-                                             IGetVirtualizationContainers,
-                                             IGetDiskUsage,
-                                             IGetRoutes,
-                                             IGetIncomingHosts,
-                                             ICleanupHost,
-                                             IMigrateVM,
-                                             IAcceptIncomingHost,
-                                             IGetHWUptime,
-                                             IUpdateVM,
-                                             OperationRemoteError)
+from opennode.knot.backend import operation as op
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
 from opennode.oms.util import timeout, TimeoutException
@@ -167,13 +142,13 @@ class AsynchronousSaltExecutor(SaltExecutor):
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
         if hostkey not in data:
-            self.deferred.errback(OperationRemoteError(msg='Remote returned empty response'))
+            self.deferred.errback(op.OperationRemoteError(msg='Remote returned empty response'))
         elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
-            self.deferred.errback(OperationRemoteError(msg="Remote error on %s" % hostkey,
+            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s" % hostkey,
                                                        remote_tb=data[hostkey]))
         elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
             # TODO: mark the host as unmanageable (agent modules are missing)
-            self.deferred.errback(OperationRemoteError(msg="Remote error on %s: module unavailable" %
+            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s: module unavailable" %
                                                        hostkey))
         else:
             self.deferred.callback(data[hostkey])
@@ -222,15 +197,15 @@ class SynchronousSaltExecutor(SaltExecutor):
                 hostkey = data.keys()[0]
 
             if hostkey not in data:
-                raise OperationRemoteError(
+                raise op.OperationRemoteError(
                     msg='Response for %s on \'%s%s\' was empty' % (hostkey, self.action, args))
 
             if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
-                raise OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])
+                raise op.OperationRemoteError(msg='Remote error on %s' % (hostkey), remote_tb=data[hostkey])
 
             if type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
                 # TODO: mark the host as unmanageable (agent modules are missing)
-                raise OperationRemoteError(msg="Remote error on %s: module unavailable" % hostkey)
+                raise op.OperationRemoteError(msg="Remote error on %s: module unavailable" % hostkey)
 
             return data[hostkey]
 
@@ -301,7 +276,7 @@ class SaltBase(Adapter):
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
         executor_class = self.__executor__
-        hostname = yield IMinion(self.context).hostname()
+        hostname = yield op.IMinion(self.context).hostname()
         interaction = db.context(self.context).get('interaction', None)
         executor = executor_class(hostname, self.action, interaction)
         res = yield executor.run(*args, **kwargs)
@@ -309,35 +284,35 @@ class SaltBase(Adapter):
 
 
 ACTIONS = {
-    IAcceptIncomingHost: 'saltmod.sign_hosts',
-    ICleanupHost: 'saltmod.cleanup_hosts',
-    IDeployVM: 'onode.vm_deploy_vm',
-    IDestroyVM: 'onode.vm_destroy_vm',
-    IGetComputeInfo: 'onode.hardware_info',
-    IGetDiskUsage: 'onode.host_disk_usage',
-    IGetGuestMetrics: 'onode.vm_metrics',
-    IGetHWUptime: 'onode.host_uptime',
-    IGetHostMetrics: 'onode.host_metrics',
-    IGetIncomingHosts: 'saltmod.get_hosts_to_sign',
-    IGetLocalTemplates: 'onode.vm_get_local_templates',
-    IGetRoutes: 'onode.network_show_routing_table',
-    IGetSignedCertificateNames: 'saltmod.get_signed_certs',
-    IGetVirtualizationContainers: 'onode.vm_autodetected_backends',
-    IHostInterfaces: 'onode.host_interfaces',
-    IListVMS: 'onode.vm_list_vms',
-    IRebootVM: 'onode.vm_reboot_vm',
-    IResumeVM: 'onode.vm_resume_vm',
-    IShutdownVM: 'onode.vm_shutdown_vm',
-    IStartVM: 'onode.vm_start_vm',
-    ISuspendVM: 'onode.vm_suspend_vm',
-    IUndeployVM: 'onode.vm_undeploy_vm',
-    IMigrateVM: 'onode.vm_migrate',
-    IUpdateVM: 'onode.host_update_vm'
+    op.IAcceptIncomingHost: 'saltmod.sign_hosts',
+    op.ICleanupHost: 'saltmod.cleanup_hosts',
+    op.IDeployVM: 'onode.vm_deploy_vm',
+    op.IDestroyVM: 'onode.vm_destroy_vm',
+    op.IGetComputeInfo: 'onode.hardware_info',
+    op.IGetDiskUsage: 'onode.host_disk_usage',
+    op.IGetGuestMetrics: 'onode.vm_metrics',
+    op.IGetHWUptime: 'onode.host_uptime',
+    op.IGetHostMetrics: 'onode.host_metrics',
+    op.IGetIncomingHosts: 'saltmod.get_hosts_to_sign',
+    op.IGetLocalTemplates: 'onode.vm_get_local_templates',
+    op.IGetRoutes: 'onode.network_show_routing_table',
+    op.IGetSignedCertificateNames: 'saltmod.get_signed_certs',
+    op.IGetVirtualizationContainers: 'onode.vm_autodetected_backends',
+    op.IHostInterfaces: 'onode.host_interfaces',
+    op.IListVMS: 'onode.vm_list_vms',
+    op.IRebootVM: 'onode.vm_reboot_vm',
+    op.IResumeVM: 'onode.vm_resume_vm',
+    op.IShutdownVM: 'onode.vm_shutdown_vm',
+    op.IStartVM: 'onode.vm_start_vm',
+    op.ISuspendVM: 'onode.vm_suspend_vm',
+    op.IUndeployVM: 'onode.vm_undeploy_vm',
+    op.IMigrateVM: 'onode.vm_migrate',
+    op.IUpdateVM: 'onode.host_update_vm'
 }
 
 OVERRIDE_EXECUTORS = {
-    IDeployVM: AsynchronousSaltExecutor,
-    IUndeployVM: AsynchronousSaltExecutor
+    op.IDeployVM: AsynchronousSaltExecutor,
+    op.IUndeployVM: AsynchronousSaltExecutor
 }
 
 
