@@ -320,7 +320,7 @@ def _generate_classes():
         cls_name = 'Salt%s' % interface.__name__[1:]
         cls = type(cls_name, (SaltBase, ), dict(action=action))
         classImplements(cls, interface)
-        executor = get_config().getstring('salt', 'executor_class', 'sync')
+        executor = get_config().getstring('salt', 'executor_class', 'async')
         cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, SaltBase.executor_classes[executor])
         globals()[cls_name] = cls
 _generate_classes()
