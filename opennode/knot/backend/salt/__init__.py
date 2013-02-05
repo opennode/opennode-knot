@@ -7,7 +7,6 @@ from zope.interface import classImplements
 import cPickle
 import logging
 import multiprocessing
-import Queue
 import subprocess
 import time
 
@@ -52,7 +51,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 class SaltRemoteClient(multiprocessing.Process):
 
     def __init__(self):
-        self.q = Queue.Queue()
+        self.q = multiprocessing.Queue()
         super(SaltRemoteClient, self).__init__()
 
     def provide_args(self, hostname, action, args):
@@ -86,11 +85,10 @@ class SaltRemoteClient(multiprocessing.Process):
 
 
 class SaltExecutor(object):
-    client = None
 
     def _get_client(self):
         """Returns an instance of Salt Stack LocalClient."""
-        if not self.client:
+        if getattr(self, 'client', None) is None:
             if get_config().getstring('salt', 'remote_command', None):
                 self.client = SaltRemoteClient()
             else:
@@ -98,7 +96,7 @@ class SaltExecutor(object):
         return self.client
 
     def _destroy_client(self):
-        if self.client is not None:
+        if getattr(self, 'client', None) is not None:
             self.client.terminate()
             self.client = None
 
@@ -110,6 +108,7 @@ class AsynchronousSaltExecutor(SaltExecutor):
         self.hostname = hostname
         self.action = action
         self.interaction = interaction
+        self.hard_timeout = get_config().getint('salt', 'hard_timeout')
 
     def run(self, *args, **kwargs):
         self.deferred = defer.Deferred()
@@ -118,17 +117,23 @@ class AsynchronousSaltExecutor(SaltExecutor):
         client.provide_args(self.hostname, self.action, args)
         client.start()
 
-        self.poll()
+        self.starttime = time.time()
+        reactor.callLater(self.interval, self.poll)
 
         return self.deferred
 
     def poll(self):
         done = not self._get_client().is_alive()
+        now = time.time()
 
         if done:
             pdata = self._get_client().q.get()
             results = cPickle.loads(pdata)
             self._fire_events(results)
+            return
+        elif self.starttime + self.hard_timeout < now:
+            log.msg("Timeout while executing '%s'@'%s'" % (self.action, self.hostname), system='salt-async')
+            self._destroy_client()
             return
 
         reactor.callLater(self.interval, self.poll)
@@ -211,6 +216,7 @@ class SynchronousSaltExecutor(SaltExecutor):
         def spawn_handle_timeout():
             try:
                 res = yield spawn()
+                log.msg('%s done' % self.action, system='salt-async')
                 defer.returnValue(res)
             except TimeoutException as e:
                 self._destroy_client()
@@ -220,6 +226,7 @@ class SynchronousSaltExecutor(SaltExecutor):
                 res = yield self.launch_stall_countermeasure(*args, **kwargs)
                 defer.returnValue(res)
 
+        log.msg('Running %s with sync' % self.action, system='salt-sync')
         self.deferred = spawn_handle_timeout()
 
         return self.deferred
