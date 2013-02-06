@@ -79,7 +79,6 @@ class RemoteSaltKeyAdapter(object):
     def _getKeyNames(self, ktype):
         remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
         output = subprocess.check_output(remote_salt_key_cmd.split(' ') + ['--no-color', '--out=raw'])
-        log.msg('Salt output: \'%s\'' % output, system='action-accept')
         if output:
             data = eval(output)
         else:
