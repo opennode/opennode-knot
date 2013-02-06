@@ -68,7 +68,7 @@ class SaltRemoteClient(multiprocessing.Process):
                 # XXX: instead of raw+eval (which is dangerous) we could use json or yaml
                 output = subprocess.check_output(cmd.split(' ') +
                                                  ['--no-color', '--out=raw', self.hostname, self.action] +
-                                                 map(str, self.args))
+                                                 map(lambda s: '"%s"' % s, map(str, self.args)))
                 if output:
                     data = eval(output)
                 else:
@@ -97,7 +97,6 @@ class SaltExecutor(object):
 
     def _destroy_client(self):
         if getattr(self, 'client', None) is not None:
-            self.client.terminate()
             self.client = None
 
 
@@ -134,6 +133,8 @@ class AsynchronousSaltExecutor(SaltExecutor):
         elif self.starttime + self.hard_timeout < now:
             log.msg("Timeout while executing '%s'@'%s'" % (self.action, self.hostname), system='salt-async')
             self._destroy_client()
+            self.deferred.errback(op.OperationRemoteError(msg='Timeout waiting for response from %s (%s)' %
+                                                          (self.hostname, self.action)))
             return
 
         reactor.callLater(self.interval, self.poll)
@@ -142,14 +143,16 @@ class AsynchronousSaltExecutor(SaltExecutor):
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
         if hostkey not in data:
-            self.deferred.errback(op.OperationRemoteError(msg='Remote returned empty response'))
+            self.deferred.errback(op.OperationRemoteError(msg='Remote %s returned empty response (%s)' %
+                                                          (hostkey, self.action)))
         elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
-            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s" % hostkey,
+            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey,
+                                                                                         self.action),
                                                           remote_tb=data[hostkey]))
         elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
             # TODO: mark the host as unmanageable (agent modules are missing)
-            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s: module unavailable" %
-                                                          hostkey))
+            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
+                                                          (hostkey, self.action)))
         else:
             self.deferred.callback(data[hostkey])
 
@@ -311,7 +314,7 @@ ACTIONS = {
     op.ISuspendVM: 'onode.vm_suspend_vm',
     op.IUndeployVM: 'onode.vm_undeploy_vm',
     op.IMigrateVM: 'onode.vm_migrate',
-    op.IUpdateVM: 'onode.host_update_vm'
+    op.IUpdateVM: 'onode.vm_update_vm'
 }
 
 OVERRIDE_EXECUTORS = {
