@@ -675,12 +675,9 @@ class SyncAction(Action):
 @subscribe(ICompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
-    if not event.modified.get('state', None):
-        return
 
-    # handles events triggered by sync (ON-421)
-    if compute.effective_state == compute.state:
-        return
+    if not event.modified.get('state', None):
+        defer.returnValue(None)
 
     def get_action(original, modified):
         action_mapping = {'inactive': {'active': IStartVM},
@@ -696,7 +693,7 @@ def handle_compute_state_change_request(compute, event):
     action = get_action(original, modified)
 
     if not action:
-        return
+        defer.returnValue(None)
 
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
     try:
