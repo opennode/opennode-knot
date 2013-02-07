@@ -105,7 +105,7 @@ class AllocateAction(Action):
                 map(lambda m: (m, (self.context.memory_usage < getattr(m, 'memory', None),
                                    self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
                                    self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
-                logLevel=DEBUG)
+                logLevel=DEBUG, system='action-allocate')
 
             return filter(lambda m: (ICompute.providedBy(m) and
                                      find_compute_v12n_container(m, container) and
@@ -163,10 +163,8 @@ class DeployAction(Action):
                         autostart=self.context.autostart,
                         ip_address=self.context.ipv4_address.split('/')[0],)
 
-        if IVirtualizationContainer.providedBy(args):
-            target = args
-        else:
-            target = yield db.get(self.context, '__parent__')
+        target = (args if IVirtualizationContainer.providedBy(args)
+                  else (yield db.get(self.context, '__parent__')))
 
         yield db.transact(alsoProvides)(self.context, IDeploying)
         vm_parameters = yield get_parameters()
@@ -710,6 +708,9 @@ def handle_compute_state_change_request(compute, event):
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
 def delete_virtual_compute(model, event):
+    if not ICompute.providedBy(model.__parent__.__parent__):
+        return
+
     if IDeployed.providedBy(model):
         log.msg('deleting compute %s which is in IDeployed state, shutting down and '
                 'undeploying first' % model.hostname, system='compute_backend')
@@ -725,6 +726,10 @@ def create_virtual_compute(model, event):
     # TODO: maybe raise an exception here instead?
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
+
+    if not ICompute.providedBy(model.__parent__.__parent__):
+        return
+
     if IDeployed.providedBy(model):
         return
 
