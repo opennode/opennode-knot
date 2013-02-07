@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import subprocess
 
-from grokcore.component import context, subscribe
+from grokcore.component import context, subscribe, baseclass
 from twisted.internet import defer
 from twisted.python import log
 
@@ -21,6 +21,7 @@ from opennode.oms.zodb import db
 class BaseHostRequestAction(Action):
     """Base host request action class"""
     context(IIncomingMachineRequest)
+    baseclass()
 
     _action = None
     _remote_option = None
