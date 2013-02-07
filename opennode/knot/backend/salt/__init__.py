@@ -44,8 +44,9 @@ class SaltMultiprocessingClient(multiprocessing.Process):
             else:
                 pdata = cPickle.dumps(data)
                 self.q.put(pdata)
-        except Exception:
+        except Exception as e:
             log.err(system='salt-local')
+            self.q.put(cPickle.dumps({'_error': e}))
 
 
 class SaltRemoteClient(multiprocessing.Process):
@@ -80,8 +81,9 @@ class SaltRemoteClient(multiprocessing.Process):
             else:
                 pdata = cPickle.dumps(data)
                 self.q.put(pdata)
-        except Exception:
+        except Exception as e:
             log.err(system='salt-remote')
+            self.q.put(cPickle.dumps({'_error': e}))
 
 
 class SaltExecutor(object):
@@ -131,7 +133,8 @@ class AsynchronousSaltExecutor(SaltExecutor):
             self._fire_events(results)
             return
         elif self.starttime + self.hard_timeout < now:
-            log.msg("Timeout while executing '%s'@'%s'" % (self.action, self.hostname), system='salt-async')
+            log.msg("Timeout while executing '%s' @ '%s'" % (self.action, self.hostname),
+                    system='salt-async')
             self._destroy_client()
             self.deferred.errback(op.OperationRemoteError(msg='Timeout waiting for response from %s (%s)' %
                                                           (self.hostname, self.action)))
@@ -142,9 +145,10 @@ class AsynchronousSaltExecutor(SaltExecutor):
     def _fire_events(self, data):
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
-        if hostkey not in data:
-            self.deferred.errback(op.OperationRemoteError(msg='Remote %s returned empty response (%s)' %
-                                                          (hostkey, self.action)))
+        if '_error' in data:
+            self.deferred.errback(data['_error'])
+        elif hostkey not in data:
+            self.deferred.errback(op.OperationRemoteError(msg='Remote returned empty response'))
         elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
             self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey,
                                                                                          self.action),
@@ -199,6 +203,9 @@ class SynchronousSaltExecutor(SaltExecutor):
 
             if len(data.keys()) == 1:
                 hostkey = data.keys()[0]
+
+            if '_error' in data:
+                raise data['_error']
 
             if hostkey not in data:
                 raise op.OperationRemoteError(
