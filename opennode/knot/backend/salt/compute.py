@@ -6,10 +6,13 @@ from twisted.internet import defer
 from twisted.python import log
 
 from opennode.knot.backend.compute import format_error
-from opennode.knot.model.machines import IIncomingMachineRequest
-from opennode.knot.model.machines import IncomingMachineRequest
+from opennode.knot.backend.compute import register_machine
+from opennode.knot.backend.compute import SyncAction
+from opennode.knot.backend.sync import get_machine_by_hostname
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.compute import ISaltInstalled
+from opennode.knot.model.machines import IIncomingMachineRequest
+from opennode.knot.model.machines import IncomingMachineRequest
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import IModelDeletedEvent
@@ -52,11 +55,25 @@ class BaseHostRequestAction(Action):
                 cmd.write("%s\n" % format_error(e))
 
 
+
 class AcceptHostRequestAction(BaseHostRequestAction):
     """Accept request of the host for joining OMS/Salt"""
     action('accept')
     _action = 'accept'
     _remote_option = '-a'
+
+    @defer.inlineCallbacks
+    def execute(self, cmd, args):
+        yield BaseHostRequestAction.execute(self, cmd, args)
+        yield self.trigger_sync()
+
+    @defer.inlineCallbacks
+    def trigger_sync(self):
+        hostname = yield db.get(self.context, 'hostname')
+        # Acceptance of a new HN should trigger its syncing
+        yield register_machine(hostname, mgt_stack=ISaltInstalled)
+        compute = yield get_machine_by_hostname(hostname)
+        yield SyncAction(compute).execute(DetachedProtocol(), object())
 
 
 class RejectHostRequestAction(BaseHostRequestAction):
