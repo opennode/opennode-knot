@@ -19,7 +19,6 @@ except ImportError:
         """ Missing Salt """
 
 from twisted.internet import defer
-from twisted.python import log
 
 from opennode.knot.model.backend import IKeyManager
 from opennode.knot.backend.compute import register_machine
