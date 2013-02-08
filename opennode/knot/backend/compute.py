@@ -487,8 +487,10 @@ class SyncAction(Action):
         compute.effective_state = compute.state
 
         # Ensure IDeployed marker is set, unless not in another state
-        if all(not m.providedBy(compute) for m in (IDeploying, IDeployed, IUndeployed)):
-            alsoProvides(IDeployed)
+        if not IDeployed.providedBy(compute):
+            noLongerProvides(self.context, IUndeployed)
+            noLongerProvides(self.context, IDeploying)
+            alsoProvides(self.context, IDeployed)
 
         for idx, console in enumerate(vm['consoles']):
             if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
