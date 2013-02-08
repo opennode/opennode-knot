@@ -486,6 +486,12 @@ class SyncAction(Action):
         compute.state = unicode(vm['state'])
         compute.effective_state = compute.state
 
+        # Ensure IDeployed marker is set, unless not in another state
+        if not IDeployed.providedBy(compute):
+            alsoProvides(IDeployed)
+            noLongerProvides(IUndeployed)
+            noLongerProvides(IDeploying)
+
         for idx, console in enumerate(vm['consoles']):
             if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
                 self.context.consoles.add(TtyConsole('tty%s' % idx, console['pty']))
