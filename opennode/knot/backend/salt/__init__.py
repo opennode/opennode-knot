@@ -5,6 +5,7 @@ from twisted.internet import defer, threads, reactor
 from twisted.python import log
 from zope.interface import classImplements
 import cPickle
+import json
 import logging
 import multiprocessing
 import subprocess
@@ -27,6 +28,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
         self.hostname = hostname
         self.action = action
         self.args = args
+        self.args.append('--out=raw')
 
     def run(self):
         try:
@@ -66,12 +68,11 @@ class SaltRemoteClient(multiprocessing.Process):
                 log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
                         system='salt-remote', logLevel=logging.DEBUG)
                 cmd = get_config().getstring('salt', 'remote_command', 'salt')
-                # XXX: instead of raw+eval (which is dangerous) we could use json or yaml
                 output = subprocess.check_output(cmd.split(' ') +
-                                                 ['--no-color', '--out=raw', self.hostname, self.action] +
+                                                 ['--no-color', '--out=json', self.hostname, self.action] +
                                                  map(lambda s: '"%s"' % s, map(str, self.args)))
                 if output:
-                    data = eval(output)
+                    data = json.loads(output)
                 else:
                     data = {}
             except subprocess.CalledProcessError as e:
