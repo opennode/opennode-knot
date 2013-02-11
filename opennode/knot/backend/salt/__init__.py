@@ -24,22 +24,17 @@ class SimpleSaltExecutor(object):
         self.interaction = interaction
 
     @defer.inlineCallbacks
-    def run(self):
-        try:
-            log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
-                    system='salt', logLevel=logging.DEBUG)
-            cmd = get_config().getstring('salt', 'remote_command', 'salt')
-            output = yield subprocess.async_check_output(cmd.split(' ') +
-                                 ['--no-color', '--out=json', self.hostname, self.action] +
-                                 map(lambda s: '"%s"' % s, map(str, self.args)))
-        except subprocess.CalledProcessError as e:
-            log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
-                    system='salt-remote')
-            raise
-        else:
-            data = json.loads(output) if output else {}
-            rdata = self._handle_errors(data)
-            defer.returnValue(rdata)
+    def run(self, *args, **kwargs):
+        self.args = args
+        log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
+                system='salt', logLevel=logging.DEBUG)
+        cmd = get_config().getstring('salt', 'remote_command', 'salt')
+        output = yield subprocess.async_check_output(cmd.split(' ') +
+                             ['--no-color', '--out=json', self.hostname, self.action] +
+                             map(lambda s: '"%s"' % s, map(str, self.args)))
+        data = json.loads(output) if output else {}
+        rdata = self._handle_errors(data)
+        defer.returnValue(rdata)
 
     def _handle_errors(self, data):
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]

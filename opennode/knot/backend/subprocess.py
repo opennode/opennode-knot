@@ -35,5 +35,5 @@ def async_check_output(args, ireactorprocess=None):
         ireactorprocess = reactor
 
     pprotocol = SubprocessProtocol()
-    ireactorprocess.spawnProcess(pprotocol, args[0], args)
+    ireactorprocess.spawnProcess(pprotocol, args[0], args, env=None)
     return pprotocol.d
