@@ -18,6 +18,10 @@ class SimpleSaltExecutor(object):
     """ Simple executor implementation.
     NOTE: Ignores hard_timeout configuration parameter and obsoletes other parameters under salt section
     """
+    def __init__(self, hostname, action, interaction):
+        self.hostname = hostname
+        self.action = action
+        self.interaction = interaction
 
     @defer.inlineCallbacks
     def run(self):
