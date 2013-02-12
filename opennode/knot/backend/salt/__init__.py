@@ -64,13 +64,12 @@ class SimpleSaltExecutor(object):
     def run(self, *args, **kwargs):
         self.args = args
         log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
-                system='salt', logLevel=logging.DEBUG)
+                system='salt-simple', logLevel=logging.DEBUG)
         cmd = get_config().getstring('salt', 'remote_command', 'salt')
         output = yield subprocess.async_check_output(cmd.split(' ') +
                              ['--no-color', '--out=json', self.hostname, self.action] +
                              map(lambda s: '"%s"' % s, map(str, self.args)))
         data = json.loads(output) if output else {}
-        log.msg('Salt output: %s' % data)
         rdata = self._handle_errors(data)
         defer.returnValue(rdata)
 
