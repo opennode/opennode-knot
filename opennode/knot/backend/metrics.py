@@ -103,7 +103,7 @@ class VirtualComputeMetricGatherer(Adapter):
             log.msg('No vm metrics received for %s' % name, system='metrics-vm')
             return
 
-        log.msg('VM metrics received for %s: %s' % (name, metrics), system='metrics-vm')
+        log.msg('VM metrics received for %s: %s' % (name, len(metrics)), system='metrics-vm')
         timestamp = int(time.time() * 1000)
 
         # db transact is needed only to traverse the zodb.
