@@ -231,6 +231,7 @@ class MigrateAction(Action):
         vmlist = yield dest_submitter.submit(IListVMS)
         defer.returnValue((yield db.get(self.context, '__name__')) in map(lambda x: x['uuid'], vmlist))
 
+
     @defer.inlineCallbacks
     def execute(self, cmd, args):
 
@@ -242,6 +243,10 @@ class MigrateAction(Action):
         @db.ro_transact
         def get_hostname(target):
             return target.hostname
+
+        def handle_error(msg):
+            log.msg(msg, system='migrate')
+            cmd.write(str(msg + '\n'))
 
         name = yield db.get(self.context, '__name__')
         source_vms = yield db.get(self.context, '__parent__')
@@ -257,22 +262,23 @@ class MigrateAction(Action):
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
         if (yield self._check_vm(destination_vms)):
-            cmd.write(str(u'Failed migration of %s to %s: destination already contains this VM\n' % (
-                name, destination_hostname)))
+            handle_error('Failed migration of %s to %s: destination already contains this VM' % (
+                name, destination_hostname))
             defer.returnValue(None)
 
         try:
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
             yield source_submitter.submit(IMigrateVM, name, destination_hostname, (not args.offline), False)
-        except OperationRemoteError:
-            cmd.write(str(u'Failed migration of %s to %s: remote error\n' % (name, destination_hostname)))
+        except OperationRemoteError as e:
+            handle_error('Failed migration of %s to %s: remote error %s' % (
+                name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
             defer.returnValue(None)
 
         log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
 
         if not (yield self._check_vm(destination_vms)):
-            cmd.write(str(u'Failed migration of %s to %s: VM not found in destination '
-                          'after migration attempt\n' % (name, destination_hostname)))
+            handle_error('Failed migration of %s to %s: VM not found in destination after migration '
+                         'attempt' % (name, destination_hostname))
             defer.returnValue(None)
         else:
             log.msg('Migration finished successfully!', system='migrate')
