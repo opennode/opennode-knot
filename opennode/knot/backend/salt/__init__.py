@@ -1,17 +1,54 @@
 from __future__ import absolute_import
 
 from grokcore.component import Adapter, context, baseclass
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from twisted.python import log
 from zope.interface import classImplements
+
+import cPickle
 import json
 import logging
+import multiprocessing
+import time
 
 from opennode.knot.backend import operation as op
 from opennode.knot.backend import subprocess
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
 from opennode.oms.zodb import db
+
+
+class SaltMultiprocessingClient(multiprocessing.Process):
+
+    def __init__(self):
+        self.q = multiprocessing.Queue()
+        super(SaltMultiprocessingClient, self).__init__()
+
+    def provide_args(self, hostname, action, args):
+        self.hostname = hostname
+        self.action = action
+        self.args = args
+        #self.args = args + ('--out=raw',)
+
+    def run(self):
+        try:
+            from salt.client import LocalClient
+            client = LocalClient(c_path=get_config().getstring('salt', 'master_config_path',
+                                                               '/etc/salt/master'))
+            try:
+                log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
+                        system='salt-local', logLevel=logging.DEBUG)
+                data = client.cmd(self.hostname, self.action, arg=self.args)
+            except SystemExit as e:
+                log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
+                        system='salt-local')
+                self.q.put(cPickle.dumps({}))
+            else:
+                pdata = cPickle.dumps(data)
+                self.q.put(pdata)
+        except Exception as e:
+            log.err(system='salt-local')
+            self.q.put(cPickle.dumps({'_error': e}))
 
 
 class SimpleSaltExecutor(object):
@@ -33,6 +70,7 @@ class SimpleSaltExecutor(object):
                              ['--no-color', '--out=json', self.hostname, self.action] +
                              map(lambda s: '"%s"' % s, map(str, self.args)))
         data = json.loads(output) if output else {}
+        log.msg('Salt output: %s' % data)
         rdata = self._handle_errors(data)
         defer.returnValue(rdata)
 
@@ -54,6 +92,78 @@ class SimpleSaltExecutor(object):
         return data[hostkey]
 
 
+class SaltExecutor(object):
+
+    def _get_client(self):
+        """Returns an instance of Salt Stack LocalClient."""
+        if getattr(self, 'client', None) is None:
+            self.client = SaltMultiprocessingClient()
+        return self.client
+
+    def _destroy_client(self):
+        if getattr(self, 'client', None) is not None:
+            self.client = None
+
+
+class AsynchronousSaltExecutor(SaltExecutor):
+    interval = 0.1
+
+    def __init__(self, hostname, action, interaction):
+        self.hostname = hostname
+        self.action = action
+        self.interaction = interaction
+        self.hard_timeout = get_config().getint('salt', 'hard_timeout')
+
+    def run(self, *args, **kwargs):
+        self.deferred = defer.Deferred()
+
+        client = self._get_client()
+        client.provide_args(self.hostname, self.action, args)
+        client.start()
+
+        self.starttime = time.time()
+        reactor.callLater(self.interval, self.poll)
+
+        return self.deferred
+
+    def poll(self):
+        done = not self._get_client().is_alive()
+        now = time.time()
+
+        if done:
+            pdata = self._get_client().q.get()
+            results = cPickle.loads(pdata)
+            self._fire_events(results)
+            return
+        elif self.starttime + self.hard_timeout < now:
+            log.msg("Timeout while executing '%s' @ '%s'" % (self.action, self.hostname),
+                    system='salt-async')
+            self._destroy_client()
+            self.deferred.errback(op.OperationRemoteError(msg='Timeout waiting for response from %s (%s)' %
+                                                          (self.hostname, self.action)))
+            return
+
+        reactor.callLater(self.interval, self.poll)
+
+    def _fire_events(self, data):
+        hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
+
+        if '_error' in data:
+            self.deferred.errback(data['_error'])
+        elif hostkey not in data:
+            self.deferred.errback(op.OperationRemoteError(msg='Remote returned empty response'))
+        elif type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
+            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey,
+                                                                                         self.action),
+                                                          remote_tb=data[hostkey]))
+        elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+            # TODO: mark the host as unmanageable (agent modules are missing)
+            self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
+                                                          (hostkey, self.action)))
+        else:
+            self.deferred.callback(data[hostkey])
+
+
 class SaltBase(Adapter):
     """Base class for all Salt method calls."""
     context(ISaltInstalled)
@@ -64,7 +174,7 @@ class SaltBase(Adapter):
 
     # 'sync' and 'async' are left for backwards compatibility with older configs
     executor_classes = {'sync': SimpleSaltExecutor,
-                        'async': SimpleSaltExecutor,
+                        'async': AsynchronousSaltExecutor,
                         'simple': SimpleSaltExecutor}
 
     @defer.inlineCallbacks
@@ -115,7 +225,7 @@ def _generate_classes():
         cls_name = 'Salt%s' % interface.__name__[1:]
         cls = type(cls_name, (SaltBase, ), dict(action=action))
         classImplements(cls, interface)
-        executor = get_config().getstring('salt', 'executor_class', 'simple')
+        executor = get_config().getstring('salt', 'executor_class', 'async')
         cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, SaltBase.executor_classes[executor])
         globals()[cls_name] = cls
 _generate_classes()
