@@ -67,7 +67,7 @@ class SimpleSaltExecutor(object):
                 system='salt-simple', logLevel=logging.DEBUG)
         cmd = get_config().getstring('salt', 'remote_command', 'salt')
         output = yield subprocess.async_check_output(cmd.split(' ') +
-                             ['--no-color', '--out=json', self.hostname, self.action] +
+                             ['--no-color', '--out=json', '--timeout=3200', self.hostname, self.action] +
                              map(lambda s: '"%s"' % s, map(str, self.args)))
         data = json.loads(output) if output else {}
         rdata = self._handle_errors(data)
@@ -224,7 +224,7 @@ def _generate_classes():
         cls_name = 'Salt%s' % interface.__name__[1:]
         cls = type(cls_name, (SaltBase, ), dict(action=action))
         classImplements(cls, interface)
-        executor = get_config().getstring('salt', 'executor_class', 'async')
+        executor = get_config().getstring('salt', 'executor_class', 'simple')
         cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, SaltBase.executor_classes[executor])
         globals()[cls_name] = cls
 _generate_classes()
