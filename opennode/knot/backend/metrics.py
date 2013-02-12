@@ -128,7 +128,7 @@ class VirtualComputeMetricGatherer(Adapter):
             data = yield IGetHostMetrics(self.context).run()
             name = yield db.get(self.context, 'hostname')
 
-            log.msg('Got data for metrics of %s: %s' % (name, data), system='metrics-phy')
+            log.msg('Got data for metrics of %s: %s' % (name, len(data)), system='metrics-phy')
             timestamp = int(time.time() * 1000)
 
             # db transact is needed only to traverse the zodb.
