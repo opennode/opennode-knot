@@ -257,22 +257,22 @@ class MigrateAction(Action):
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
         if (yield self._check_vm(destination_vms)):
-            cmd.write(u'Failed migration of %s to %s: destination already contains this VM\n' % (
-                name, destination_hostname))
+            cmd.write(str(u'Failed migration of %s to %s: destination already contains this VM\n' % (
+                name, destination_hostname)))
             defer.returnValue(None)
 
         try:
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
             yield source_submitter.submit(IMigrateVM, name, destination_hostname, (not args.offline), False)
         except OperationRemoteError:
-            cmd.write(u'Failed migration of %s to %s: remote error\n' % (name, destination_hostname))
+            cmd.write(str(u'Failed migration of %s to %s: remote error\n' % (name, destination_hostname)))
             defer.returnValue(None)
 
         log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
 
         if not (yield self._check_vm(destination_vms)):
-            cmd.write(u'Failed migration of %s to %s: VM not found in destination after migration attempt\n'
-                      % (name, destination_hostname))
+            cmd.write(str(u'Failed migration of %s to %s: VM not found in destination '
+                          'after migration attempt\n' % (name, destination_hostname)))
             defer.returnValue(None)
         else:
             log.msg('Migration finished successfully!', system='migrate')
