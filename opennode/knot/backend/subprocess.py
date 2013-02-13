@@ -5,6 +5,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.error import ProcessDone
 from twisted.internet.protocol import ProcessProtocol
 
+
 class SubprocessProtocol(ProcessProtocol):
     outBuffer = ""
     errBuffer = ""
@@ -23,6 +24,7 @@ class SubprocessProtocol(ProcessProtocol):
             self.d.callback(self.outBuffer)
         else:
             self.d.errback(reason)
+
 
 def async_check_output(args, ireactorprocess=None):
     """

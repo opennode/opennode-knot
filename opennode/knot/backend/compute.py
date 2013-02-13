@@ -231,7 +231,6 @@ class MigrateAction(Action):
         vmlist = yield dest_submitter.submit(IListVMS)
         defer.returnValue((yield db.get(self.context, '__name__')) in map(lambda x: x['uuid'], vmlist))
 
-
     @defer.inlineCallbacks
     def execute(self, cmd, args):
 
