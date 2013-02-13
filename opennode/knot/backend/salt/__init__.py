@@ -79,11 +79,11 @@ class SimpleSaltExecutor(object):
         if hostkey not in data:
             raise op.OperationRemoteError(msg='Remote returned empty response')
 
-        if type(data[hostkey]) is str and data[hostkey].startswith('Traceback'):
+        if type(data[hostkey]) in (str, unicode) and data[hostkey].startswith('Traceback'):
             raise op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey, self.action),
                                           remote_tb=data[hostkey])
 
-        if type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
+        if type(data[hostkey]) is (str, unicode) and data[hostkey].endswith('is not available.'):
             # TODO: mark the host as unmanageable (agent modules are missing)
             raise op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
                                           (hostkey, self.action))
