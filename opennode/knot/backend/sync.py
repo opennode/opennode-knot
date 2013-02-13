@@ -97,15 +97,14 @@ class PingCheckDaemonProcess(DaemonProcess):
             ping_actions.append((hostname,
                                  action.execute(DetachedProtocol(), object())))
 
-        # wait for all async synchronization tasks to finish
-        for c, deferred in ping_actions:
-            try:
-                yield deferred
-            except Exception as e:
-                log.msg("Got exception when pinging compute '%s': %s" % (c, e), system='ping-check')
-                if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(system='ping-check')
+        def handle_errors(e, c):
+            e.trap(Exception)
+            log.msg("Got exception when pinging compute '%s': %s" % (c, e), system='ping-check')
+            if get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='ping-check')
 
+        for c, deferred in ping_actions:
+            deferred.addErrback(handle_errors, c)
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
@@ -187,27 +186,33 @@ class SyncDaemonProcess(DaemonProcess):
 
         sync_actions = (yield self._getSyncActions())
 
-        for c, deferred in sync_actions:
-            try:
-                log.msg("Syncing started: '%s'" % c, system='sync')
-                yield deferred
-            except OperationRemoteError as ore:
-                if ore.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(system='sync')
-                else:
-                    log.msg(str(ore), system='sync', logLevel=ERROR)
-            except Exception as e:
-                log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
-                if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(system='sync')
+        def handle_remote_error(ore, c):
+            ore.trap(OperationRemoteError)
+            if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='sync')
             else:
-                log.msg("Syncing completed: '%s'" % c, system='sync')
+                log.msg(str(ore.value), system='sync', logLevel=ERROR)
+
+        def handle_error(e, c):
+            e.trap(Exception)
+            log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
+            if get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='sync')
+
+        def handle_success(r, c):
+            log.msg("Syncing completed: '%s'" % c, system='sync')
+
+        for c, deferred in sync_actions:
+            deferred.addCallback(handle_success, c)
+            deferred.addErrback(handle_remote_error, c)
+            deferred.addErrback(handle_error, c)
 
     @defer.inlineCallbacks
     def _getSyncActions(self):
         sync_actions = []
         for i, hostname in (yield get_manageable_machines()):
             action = SyncAction(i)
+            log.msg("Syncing started: '%s'" % hostname, system='sync')
             sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
 
         defer.returnValue(sync_actions)
