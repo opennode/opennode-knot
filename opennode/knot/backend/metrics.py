@@ -61,13 +61,14 @@ class MetricsDaemonProcess(DaemonProcess):
                                 for i in oms_root['computes'].listcontent()))
             return res
 
-        for i in (yield get_gatherers()):
-            try:
-                yield i.gather()
-            except Exception as e:
-                self.log_msg("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
-                self.log_err()
+        def handle_errors(e, i):
+            e.trap(Exception)
+            self.log_msg("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
+            self.log_err()
 
+        for i in (yield get_gatherers()):
+            d = i.gather()
+            d.addErrback(handle_errors, i)
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
 
