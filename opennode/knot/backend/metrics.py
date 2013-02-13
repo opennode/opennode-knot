@@ -28,7 +28,7 @@ class MetricsDaemonProcess(DaemonProcess):
 
     def __init__(self):
         super(MetricsDaemonProcess, self).__init__()
-        self.interval = get_config().getint('metrics', 'interval')
+        self.interval = get_config().getint('metrics', 'interval', '5')
 
     @defer.inlineCallbacks
     def run(self):
