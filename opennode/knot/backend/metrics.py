@@ -12,7 +12,7 @@ from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.model.stream import IStream
-from opennode.oms.util import subscription_factory, async_sleep
+from opennode.oms.util import subscription_factory, async_sleep, timeout
 from opennode.oms.zodb import db
 
 
@@ -28,7 +28,8 @@ class MetricsDaemonProcess(DaemonProcess):
 
     def __init__(self):
         super(MetricsDaemonProcess, self).__init__()
-        self.interval = get_config().getint('metrics', 'interval', '5')
+        self.interval = get_config().getint('metrics', 'interval')
+        self.outstanding_requests = {}
 
     @defer.inlineCallbacks
     def run(self):
@@ -61,13 +62,27 @@ class MetricsDaemonProcess(DaemonProcess):
                                 for i in oms_root['computes'].listcontent()))
             return res
 
-        for i in (yield get_gatherers()):
-            try:
-                yield i.gather()
-            except Exception as e:
-                self.log_msg("Got exception when gathering metrics compute '%s': %s" % (i.context, e))
-                self.log_err()
+        def handle_success(r, c):
+            self.log_msg('Metrics gathered for %s' % (c))
+            del self.outstanding_requests[c]
 
+        def handle_errors(e, c):
+            e.trap(Exception)
+            self.log_msg("Got exception when gathering metrics compute '%s': %s" % (c, e))
+            self.log_err()
+            del self.outstanding_requests[c]
+
+        gatherers = (yield get_gatherers())
+        for g in gatherers:
+            hostname = yield db.get(g.context, 'hostname')
+            if hostname not in self.outstanding_requests:
+                self.log_msg('Gathering metrics for %s' % hostname)
+                d = timeout(self.interval * 3)(g.gather)()
+                self.outstanding_requests[hostname] = d
+                d.addCallback(handle_success, hostname)
+                d.addErrback(handle_errors, hostname)
+            else:
+                self.log_msg('Skipping: another outstanding request to "%s" is found.' % (hostname))
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
 
