@@ -163,6 +163,11 @@ class DeployAction(Action):
                     'ip_address': self.context.ipv4_address.split('/')[0],
                     'passwd': getattr(self.context, 'root_password', None)}
 
+        @db.transact()
+        def cleanup():
+            if getattr(self.context, 'root_password', None) is not None:
+                self.context.root_password = None
+
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
 
@@ -170,6 +175,7 @@ class DeployAction(Action):
             yield db.transact(alsoProvides)(self.context, IDeploying)
             vm_parameters = yield get_parameters()
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
+            yield cleanup()
             log.msg('IDeployVM result: %s' % res, system='action-deploy')
 
             @db.transact
