@@ -80,6 +80,8 @@ class ICompute(Interface):
     effective_state = schema.TextLine(
         title=u"Effective state", readonly=True, required=False)
 
+    autostart = schema.Bool(title=u"Autostart", description=u"Start on boot", required=False)
+
     # Processing/network capabilities:
     num_cores = schema.Int(
         title=u"Num. Cores", description=u"Total number of cores across all CPUs",
@@ -137,8 +139,6 @@ class ICompute(Interface):
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
-
-    autostart = schema.Bool(title=u"Autostart", description=u"Start on boot", required=False)
 
     # VM only
     template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
