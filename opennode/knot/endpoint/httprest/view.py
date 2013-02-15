@@ -37,47 +37,46 @@ class VirtualizationContainerView(ContainerView):
         if not isinstance(data, dict):
             raise BadRequest("Input data must be a dictionary")
 
-        # cleanup hacks
-        data['state'] = 'active' if data['start_on_boot'] else 'inactive'
+        if 'state' not in data:
+            data['state'] = 'active' if data['start_on_boot'] else 'inactive'
+
         if data.get('diskspace'):
             data['diskspace'] = {'root': data['diskspace']}
 
         # XXX: ONC should send us a 'nameserver' list instead of this hackish dns1,dns2
-        nameservers = []
-        for k in ['dns1', 'dns2']:
-            if data.get(k, None):
-                nameservers.append(data[k])
-        data['nameservers'] = nameservers
+        if 'nameservers' not in data:
+            nameservers = []
+            for k in ['dns1', 'dns2']:
+                if data.get(k, None):
+                    nameservers.append(data[k])
 
-        # XXX: ONC should send 'autostart'
-        # XXX: since it's a IVirtualCompute specific field it cannot be entered during object creation
-        #      because `form` doesn't support yet optionl interfaces.
-        # data['autostart'] = data['start_on_boot']
-        autostart = data['start_on_boot']
+            data['nameservers'] = nameservers
 
-        for k in ['dns1', 'dns2', 'root_password', 'root_password_repeat', 'network-type', 'start_on_boot']:
+        if 'autostart' not in data:
+            data['autostart'] = data['start_on_boot']
+
+        assert data['root_password'] == data['root_password_repeat']
+        root_password = data['root_password']
+
+        for k in ('dns1', 'dns2', 'root_password', 'root_password_repeat', 'network-type', 'start_on_boot'):
             if k in data:
                 del data[k]
 
         form = ApplyRawData(data, model=Compute, marker=IVirtualCompute)
+
         if form.errors or not data.get('template'):
             template_error = [dict(id='template', msg="missing value")] if not data.get('template') else []
-            return {
-                'success': False,
-                'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + template_error}
+            return {'success': False,
+                    'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + template_error}
 
         compute = form.create()
 
-        compute.autostart = autostart
-
+        compute.root_password = root_password
         self.context.add(compute)
 
         data['id'] = compute.__name__
 
-        return {
-            'success': True,
-            'result': IHttpRestView(compute).render_GET(request)
-        }
+        return {'success': True, 'result': IHttpRestView(compute).render_GET(request)}
 
 
 class ComputeView(ContainerView):
