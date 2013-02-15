@@ -55,7 +55,6 @@ class BaseHostRequestAction(Action):
                 cmd.write("%s\n" % format_error(e))
 
 
-
 class AcceptHostRequestAction(BaseHostRequestAction):
     """Accept request of the host for joining OMS/Salt"""
     action('accept')
@@ -65,10 +64,6 @@ class AcceptHostRequestAction(BaseHostRequestAction):
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         yield BaseHostRequestAction.execute(self, cmd, args)
-        yield self.trigger_sync()
-
-    @defer.inlineCallbacks
-    def trigger_sync(self):
         hostname = yield db.get(self.context, 'hostname')
         # Acceptance of a new HN should trigger its syncing
         yield register_machine(hostname, mgt_stack=ISaltInstalled)
