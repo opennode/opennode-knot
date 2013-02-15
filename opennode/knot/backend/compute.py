@@ -152,16 +152,16 @@ class DeployAction(Action):
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
             return
 
-        # XXX: TODO resolve template object from the template name and take the template name from the object
         @db.ro_transact(proxy=False)
         def get_parameters():
-            return dict(template_name=self.context.template,
-                        hostname=self.context.hostname,
-                        vm_type=self.context.__parent__.backend,
-                        uuid=self.context.__name__,
-                        nameservers=db.remove_persistent_proxy(self.context.nameservers),
-                        autostart=self.context.autostart,
-                        ip_address=self.context.ipv4_address.split('/')[0],)
+            return {'template_name': self.context.template,
+                    'hostname': self.context.hostname,
+                    'vm_type': self.context.__parent__.backend,
+                    'uuid': self.context.__name__,
+                    'nameservers': db.remove_persistent_proxy(self.context.nameservers),
+                    'autostart': self.context.autostart,
+                    'ip_address': self.context.ipv4_address.split('/')[0],
+                    'passwd': getattr(self.context, 'root_password', None)}
 
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
@@ -759,6 +759,7 @@ def create_virtual_compute(model, event):
     if IDeployed.providedBy(model):
         return
 
+    log.msg('Deploying VM "%s"' % model, system='deploy')
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
 
 

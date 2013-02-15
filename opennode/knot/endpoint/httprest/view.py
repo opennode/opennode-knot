@@ -55,6 +55,9 @@ class VirtualizationContainerView(ContainerView):
         if 'autostart' not in data:
             data['autostart'] = data['start_on_boot']
 
+        assert data['root_password'] == data['root_password_repeat']
+        root_password = data['root_password']
+
         for k in ('dns1', 'dns2', 'root_password', 'root_password_repeat', 'network-type', 'start_on_boot'):
             if k in data:
                 del data[k]
@@ -68,6 +71,7 @@ class VirtualizationContainerView(ContainerView):
 
         compute = form.create()
 
+        compute.root_password = root_password
         self.context.add(compute)
 
         data['id'] = compute.__name__
