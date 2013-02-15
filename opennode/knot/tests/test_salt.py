@@ -74,7 +74,7 @@ def test_activate_compute():
     root = ElementTree.parse('/tmp/salt_vm_test_state.xml')
     for node in root.findall('domain'):
         if node.find('name').text == 'vm1':
-            assert node.attrib['state'] == 'active'
+            assert node.attrib['state'] == 'inactive'
             return
     assert False
 

@@ -16,7 +16,7 @@ from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
-from opennode.oms.util import subscription_factory, async_sleep
+from opennode.oms.util import subscription_factory, async_sleep, timeout
 from opennode.oms.zodb import db
 
 
@@ -66,6 +66,7 @@ class PingCheckDaemonProcess(DaemonProcess):
 
         config = get_config()
         self.interval = config.getint('pingcheck', 'interval')
+        self.outstanding_requests = {}
 
     @defer.inlineCallbacks
     def run(self):
@@ -94,18 +95,23 @@ class PingCheckDaemonProcess(DaemonProcess):
         ping_actions = []
         for i, hostname in (yield get_computes()):
             action = PingCheckAction(i)
-            ping_actions.append((hostname,
-                                 action.execute(DetachedProtocol(), object())))
+            d = timeout(self.interval * 3)(action.execute)(DetachedProtocol(), object())
+            self.outstanding_requests[hostname] = d
+            ping_actions.append((hostname, d))
 
-        # wait for all async synchronization tasks to finish
+        def handle_success(r, c):
+            del self.outstanding_requests[c]
+
+        def handle_errors(e, c):
+            e.trap(Exception)
+            log.msg("Got exception when pinging compute '%s': %s" % (c, e), system='ping-check')
+            if get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='ping-check')
+            del self.outstanding_requests[c]
+
         for c, deferred in ping_actions:
-            try:
-                yield deferred
-            except Exception as e:
-                log.msg("Got exception when pinging compute '%s': %s" % (c, e), system='ping-check')
-                if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(system='ping-check')
-
+            deferred.addCallback(handle_success, c)
+            deferred.addErrback(handle_errors, c)
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
 
@@ -148,6 +154,7 @@ class SyncDaemonProcess(DaemonProcess):
 
         config = get_config()
         self.interval = config.getint('sync', 'interval')
+        self.outstanding_requests = {}
 
     @defer.inlineCallbacks
     def run(self):
@@ -173,8 +180,7 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def sync(self):
-        log.msg('Synchronizing. Machines: %s' %
-                (yield get_manageable_machine_hostnames()), system='sync')
+        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
 
         kml = getAllUtilitiesRegisteredFor(IKeyManager)
 
@@ -193,28 +199,42 @@ class SyncDaemonProcess(DaemonProcess):
 
         sync_actions = (yield self._getSyncActions())
 
-        for c, deferred in sync_actions:
-            try:
-                log.msg("Syncing started: '%s'" % c, system='sync')
-                yield deferred
-            except OperationRemoteError as ore:
-                if ore.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(system='sync')
-                else:
-                    log.msg(str(ore), system='sync', logLevel=ERROR)
-            except Exception as e:
-                log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
-                if get_config().getboolean('debug', 'print_exceptions'):
-                    log.err(system='sync')
+        def handle_remote_error(ore, c):
+            ore.trap(OperationRemoteError)
+            if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='sync')
             else:
-                log.msg("Syncing completed: '%s'" % c, system='sync')
+                log.msg(str(ore.value), system='sync', logLevel=ERROR)
+            del self.outstanding_requests[c]
+
+        def handle_error(e, c):
+            e.trap(Exception)
+            log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
+            if get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='sync')
+            del self.outstanding_requests[c]
+
+        def handle_success(r, c):
+            log.msg("Syncing completed: '%s'" % c, system='sync')
+            del self.outstanding_requests[c]
+
+        for c, deferred in sync_actions:
+            deferred.addCallback(handle_success, c)
+            deferred.addErrback(handle_remote_error, c)
+            deferred.addErrback(handle_error, c)
 
     @defer.inlineCallbacks
     def _getSyncActions(self):
         sync_actions = []
         for i, hostname in (yield get_manageable_machines()):
-            action = SyncAction(i)
-            sync_actions.append((hostname, action.execute(DetachedProtocol(), object())))
+            if hostname not in self.outstanding_requests:
+                action = SyncAction(i)
+                log.msg("Syncing started: '%s'" % hostname, system='sync')
+                deferred = timeout(self.interval * 3)(action.execute)(DetachedProtocol(), object())
+                self.outstanding_requests[hostname] = deferred
+                sync_actions.append((hostname, deferred))
+            else:
+                log.msg("Syncing %s skipped: previous request not finished yet" % hostname, system='sync')
 
         defer.returnValue(sync_actions)
 

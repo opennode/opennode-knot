@@ -105,7 +105,7 @@ class AllocateAction(Action):
                 map(lambda m: (m, (self.context.memory_usage < getattr(m, 'memory', None),
                                    self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
                                    self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
-                logLevel=DEBUG)
+                logLevel=DEBUG, system='action-allocate')
 
             return filter(lambda m: (ICompute.providedBy(m) and
                                      find_compute_v12n_container(m, container) and
@@ -163,26 +163,29 @@ class DeployAction(Action):
                         autostart=self.context.autostart,
                         ip_address=self.context.ipv4_address.split('/')[0],)
 
-        if IVirtualizationContainer.providedBy(args):
-            target = args
-        else:
-            target = yield db.get(self.context, '__parent__')
+        target = (args if IVirtualizationContainer.providedBy(args)
+                  else (yield db.get(self.context, '__parent__')))
 
-        yield db.transact(alsoProvides)(self.context, IDeploying)
-        vm_parameters = yield get_parameters()
-        res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
-        log.msg('IDeployVM result: %s' % res, system='action-deploy')
-        cmd.write('%s\n' % (res,))
+        try:
+            yield db.transact(alsoProvides)(self.context, IDeploying)
+            vm_parameters = yield get_parameters()
+            res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
+            log.msg('IDeployVM result: %s' % res, system='action-deploy')
 
-        @db.transact
-        def finalize_vm():
-            noLongerProvides(self.context, IDeploying)
-            noLongerProvides(self.context, IUndeployed)
-            alsoProvides(self.context, IDeployed)
-            cmd.write("Changed state from undeployed to deployed\n")
+            @db.transact
+            def finalize_vm():
+                noLongerProvides(self.context, IDeploying)
+                noLongerProvides(self.context, IUndeployed)
+                alsoProvides(self.context, IDeployed)
+                log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
+                cmd.write("Changed state from undeployed to deployed\n")
 
-        yield finalize_vm()
-
+            yield finalize_vm()
+        finally:
+            @db.transact
+            def cleanup():
+                noLongerProvides(self.context, IDeploying)
+            yield cleanup()
 
 class UndeployAction(Action):
     context(IDeployed)
@@ -219,11 +222,19 @@ class MigrateAction(Action):
     def arguments(self):
         parser = VirtualConsoleArgumentParser()
         parser.add_argument('dest_path')
+        parser.add_argument('-o', '--offline', action='store_true', default=False,
+                            help="Force offline migration, shutdown VM before migrating")
         return parser
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
+
+    @defer.inlineCallbacks
+    def _check_vm(self, destination_vms):
+        dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
+        vmlist = yield dest_submitter.submit(IListVMS)
+        defer.returnValue((yield db.get(self.context, '__name__')) in map(lambda x: x['uuid'], vmlist))
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
@@ -236,6 +247,10 @@ class MigrateAction(Action):
         @db.ro_transact
         def get_hostname(target):
             return target.hostname
+
+        def handle_error(msg):
+            log.msg(msg, system='migrate')
+            cmd.write(str(msg + '\n'))
 
         name = yield db.get(self.context, '__name__')
         source_vms = yield db.get(self.context, '__parent__')
@@ -250,21 +265,24 @@ class MigrateAction(Action):
 
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
+        if (yield self._check_vm(destination_vms)):
+            handle_error('Failed migration of %s to %s: destination already contains this VM' % (
+                name, destination_hostname))
+            defer.returnValue(None)
+
         try:
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
-            yield source_submitter.submit(IMigrateVM, name, destination_hostname, False, False)
-        except OperationRemoteError:
-            cmd.write('Failed migration of %s to %s: remote error\n' % (str(name),
-                                                                        str(destination_hostname)))
+            yield source_submitter.submit(IMigrateVM, name, destination_hostname, (not args.offline), False)
+        except OperationRemoteError as e:
+            handle_error('Failed migration of %s to %s: remote error %s' % (
+                name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
             defer.returnValue(None)
 
         log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
 
-        dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
-        vmlist = yield dest_submitter.submit(IListVMS)
-
-        if (yield db.get(self.context, '__name__')) not in map(lambda x: x['uuid'], vmlist):
-            cmd.write('Failed migration of %s to %s\n' % (name, destination_hostname))
+        if not (yield self._check_vm(destination_vms)):
+            handle_error('Failed migration of %s to %s: VM not found in destination after migration '
+                         'attempt' % (name, destination_hostname))
             defer.returnValue(None)
         else:
             log.msg('Migration finished successfully!', system='migrate')
@@ -488,6 +506,12 @@ class SyncAction(Action):
         compute.state = unicode(vm['state'])
         compute.effective_state = compute.state
 
+        # Ensure IDeployed marker is set, unless not in another state
+        if not IDeployed.providedBy(compute):
+            noLongerProvides(self.context, IUndeployed)
+            noLongerProvides(self.context, IDeploying)
+            alsoProvides(self.context, IDeployed)
+
         for idx, console in enumerate(vm['consoles']):
             if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
                 self.context.consoles.add(TtyConsole('tty%s' % idx, console['pty']))
@@ -675,12 +699,9 @@ class SyncAction(Action):
 @subscribe(ICompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
-    if not event.modified.get('state', None):
-        return
 
-    # handles events triggered by sync (ON-421)
-    if compute.effective_state == compute.state:
-        return
+    if not event.modified.get('state', None):
+        defer.returnValue(None)
 
     def get_action(original, modified):
         action_mapping = {'inactive': {'active': IStartVM},
@@ -696,7 +717,7 @@ def handle_compute_state_change_request(compute, event):
     action = get_action(original, modified)
 
     if not action:
-        return
+        defer.returnValue(None)
 
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
     try:
@@ -713,6 +734,9 @@ def handle_compute_state_change_request(compute, event):
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
 def delete_virtual_compute(model, event):
+    if not ICompute.providedBy(model.__parent__.__parent__):
+        return
+
     if IDeployed.providedBy(model):
         log.msg('deleting compute %s which is in IDeployed state, shutting down and '
                 'undeploying first' % model.hostname, system='compute_backend')
@@ -728,6 +752,10 @@ def create_virtual_compute(model, event):
     # TODO: maybe raise an exception here instead?
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
+
+    if not ICompute.providedBy(model.__parent__.__parent__):
+        return
+
     if IDeployed.providedBy(model):
         return
 
