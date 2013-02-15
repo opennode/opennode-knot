@@ -16,7 +16,7 @@ from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
-from opennode.oms.util import subscription_factory, async_sleep, timeout
+from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
 
 
@@ -66,7 +66,6 @@ class PingCheckDaemonProcess(DaemonProcess):
 
         config = get_config()
         self.interval = config.getint('pingcheck', 'interval')
-        self.outstanding_requests = {}
 
     @defer.inlineCallbacks
     def run(self):
@@ -95,22 +94,16 @@ class PingCheckDaemonProcess(DaemonProcess):
         ping_actions = []
         for i, hostname in (yield get_computes()):
             action = PingCheckAction(i)
-            d = timeout(self.interval * 3)(action.execute)(DetachedProtocol(), object())
-            self.outstanding_requests[hostname] = d
+            d = action.execute(DetachedProtocol(), object())
             ping_actions.append((hostname, d))
-
-        def handle_success(r, c):
-            del self.outstanding_requests[c]
 
         def handle_errors(e, c):
             e.trap(Exception)
             log.msg("Got exception when pinging compute '%s': %s" % (c, e), system='ping-check')
             if get_config().getboolean('debug', 'print_exceptions'):
                 log.err(system='ping-check')
-            del self.outstanding_requests[c]
 
         for c, deferred in ping_actions:
-            deferred.addCallback(handle_success, c)
             deferred.addErrback(handle_errors, c)
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
@@ -224,7 +217,7 @@ class SyncDaemonProcess(DaemonProcess):
             if hostname not in self.outstanding_requests:
                 action = SyncAction(i)
                 log.msg("Syncing started: '%s'" % hostname, system='sync')
-                deferred = timeout(self.interval * 3)(action.execute)(DetachedProtocol(), object())
+                deferred = action.execute(DetachedProtocol(), object())
                 self.outstanding_requests[hostname] = deferred
                 sync_actions.append((hostname, deferred))
             else:
