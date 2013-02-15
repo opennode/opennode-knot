@@ -166,21 +166,26 @@ class DeployAction(Action):
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
 
-        yield db.transact(alsoProvides)(self.context, IDeploying)
-        vm_parameters = yield get_parameters()
-        res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
-        log.msg('IDeployVM result: %s' % res, system='action-deploy')
-        cmd.write('%s\n' % (res,))
+        try:
+            yield db.transact(alsoProvides)(self.context, IDeploying)
+            vm_parameters = yield get_parameters()
+            res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
+            log.msg('IDeployVM result: %s' % res, system='action-deploy')
 
-        @db.transact
-        def finalize_vm():
-            noLongerProvides(self.context, IDeploying)
-            noLongerProvides(self.context, IUndeployed)
-            alsoProvides(self.context, IDeployed)
-            cmd.write("Changed state from undeployed to deployed\n")
+            @db.transact
+            def finalize_vm():
+                noLongerProvides(self.context, IDeploying)
+                noLongerProvides(self.context, IUndeployed)
+                alsoProvides(self.context, IDeployed)
+                log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
+                cmd.write("Changed state from undeployed to deployed\n")
 
-        yield finalize_vm()
-
+            yield finalize_vm()
+        finally:
+            @db.transact
+            def cleanup():
+                noLongerProvides(self.context, IDeploying)
+            yield cleanup()
 
 class UndeployAction(Action):
     context(IDeployed)
