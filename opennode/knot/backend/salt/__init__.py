@@ -221,7 +221,7 @@ ACTIONS = {
 
 TIMEOUTS = {
     op.IMigrateVM: 3600,
-    op.IDeployVM: 300,
+    op.IDeployVM: 600,
 }
 
 
