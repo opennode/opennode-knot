@@ -163,7 +163,7 @@ class DeployAction(Action):
                     'ip_address': self.context.ipv4_address.split('/')[0],
                     'passwd': getattr(self.context, 'root_password', None)}
 
-        @db.transact()
+        @db.transact
         def cleanup():
             if getattr(self.context, 'root_password', None) is not None:
                 self.context.root_password = None
