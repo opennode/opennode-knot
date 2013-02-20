@@ -164,7 +164,7 @@ class DeployAction(Action):
                     'passwd': getattr(self.context, 'root_password', None)}
 
         @db.transact
-        def cleanup():
+        def cleanup_root_password():
             if getattr(self.context, 'root_password', None) is not None:
                 self.context.root_password = None
 
@@ -175,7 +175,7 @@ class DeployAction(Action):
             yield db.transact(alsoProvides)(self.context, IDeploying)
             vm_parameters = yield get_parameters()
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
-            yield cleanup()
+            yield cleanup_root_password()
             log.msg('IDeployVM result: %s' % res, system='action-deploy')
 
             @db.transact
@@ -189,9 +189,9 @@ class DeployAction(Action):
             yield finalize_vm()
         finally:
             @db.transact
-            def cleanup():
+            def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
-            yield cleanup()
+            yield cleanup_deploying()
 
 class UndeployAction(Action):
     context(IDeployed)
@@ -327,7 +327,7 @@ class InfoAction(Action):
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
-            # TODO: not efficient, improve by executing in parallel
+            # TODO: not efficient, improve
             for vm in (yield submitter.submit(IListVMS)):
                 if vm['uuid'] == name:
                     max_key_len = max(len(key) for key in vm)
