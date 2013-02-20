@@ -63,19 +63,17 @@ class SyncDaemonProcess(DaemonProcess):
             yield async_sleep(self.interval)
 
     @defer.inlineCallbacks
-    def cleanup(self, accepted):
+    def cleanup_machines(self, accepted):
         hosts_to_delete = [(host, hostname) for host, hostname in (yield get_manageable_machines())
                            if hostname not in accepted]
 
         if hosts_to_delete:
-            log.msg('Deleting hosts: %s' % (hosts_to_delete), system='sync')
+            log.msg('Deleting machines: %s' % (hosts_to_delete), system='sync')
             # cleanup machines not known by agents
             yield delete_machines(hosts_to_delete)
 
     @defer.inlineCallbacks
-    def sync(self):
-        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
-
+    def gather_machines(self):
         kml = getAllUtilitiesRegisteredFor(IKeyManager)
 
         accepted = set()
@@ -89,33 +87,39 @@ class SyncDaemonProcess(DaemonProcess):
 
         log.msg('Hosts accepted: %s' % accepted, system='sync')
 
-        yield self.cleanup(accepted)
+        yield self.cleanup_machines(accepted)
+
+    def handle_remote_error(self, ore, c):
+        ore.trap(OperationRemoteError)
+        if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
+            log.err(system='sync')
+        else:
+            log.msg(str(ore.value), system='sync', logLevel=ERROR)
+        del self.outstanding_requests[c]
+
+    def handle_error(self, e, c):
+        e.trap(Exception)
+        log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
+        if get_config().getboolean('debug', 'print_exceptions'):
+            log.err(system='sync')
+        del self.outstanding_requests[c]
+
+    def handle_success(self, r, c):
+        log.msg("Syncing completed: '%s'" % c, system='sync')
+        del self.outstanding_requests[c]
+
+    @defer.inlineCallbacks
+    def sync(self):
+        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
+
+        yield self.gather_machines()
 
         sync_actions = (yield self._getSyncActions())
 
-        def handle_remote_error(ore, c):
-            ore.trap(OperationRemoteError)
-            if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='sync')
-            else:
-                log.msg(str(ore.value), system='sync', logLevel=ERROR)
-            del self.outstanding_requests[c]
-
-        def handle_error(e, c):
-            e.trap(Exception)
-            log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
-            if get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='sync')
-            del self.outstanding_requests[c]
-
-        def handle_success(r, c):
-            log.msg("Syncing completed: '%s'" % c, system='sync')
-            del self.outstanding_requests[c]
-
         for c, deferred in sync_actions:
-            deferred.addCallback(handle_success, c)
-            deferred.addErrback(handle_remote_error, c)
-            deferred.addErrback(handle_error, c)
+            deferred.addCallback(self.handle_success, c)
+            deferred.addErrback(self.handle_remote_error, c)
+            deferred.addErrback(self.handle_error, c)
 
     @defer.inlineCallbacks
     def _getSyncActions(self):
