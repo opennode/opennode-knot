@@ -79,6 +79,31 @@ class VirtualizationContainerView(ContainerView):
         return {'success': True, 'result': IHttpRestView(compute).render_GET(request)}
 
 
+class HangarView(ContainerView):
+    context(Hangar)
+
+    def render_POST(self, request):
+        try:
+            data = json.load(request.content)
+        except ValueError:
+            raise BadRequest("Input data could not be parsed")
+
+        if not isinstance(data, dict):
+            raise BadRequest("Input data must be a dictionary")
+
+        form = ApplyRawData(data, model=VirtualizationContainer)
+
+        if form.errors or not data.get('backend'):
+            backend_error = [dict(id='backend', msg="missing value")] if not data.get('backend') else []
+            return {'success': False,
+                    'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + backend_error}
+
+        vms = form.create()
+        self.context.add(vms)
+
+        return {'success': True, 'result': IHttpRestView(vms).render_GET(request)}
+
+
 class ComputeView(ContainerView):
     context(Compute)
 
