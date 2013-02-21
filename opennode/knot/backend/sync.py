@@ -25,6 +25,12 @@ def get_manageable_machines():
     return res
 
 
+@db.ro_transact
+def get_machine_by_hostname(hostname):
+    machines_by_name = db.get_root()['oms_root']['machines']['by-name']
+    return follow_symlinks(machines_by_name[hostname])
+
+
 @db.transact
 def delete_machines(delete_list):
     oms_machines = db.get_root()['oms_root']['machines']
