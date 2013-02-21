@@ -96,11 +96,9 @@ class ComputeAction(Action):
         return self.context in self._lock_registry
 
     def lock(self):
-        """ with-statement support method """
         self._lock_registry[self.context] = defer.Deferred()
 
     def unlock(self, d):
-        """ with-statement support method """
         d.chainDeferred(self._lock_registry[self.context])
 
     def execute(self, cmd, args):
