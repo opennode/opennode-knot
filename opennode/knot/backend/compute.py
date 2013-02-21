@@ -106,7 +106,7 @@ class ComputeAction(Action):
     def execute(self, cmd, args):
         if self.locked():
             self._lock_registry[self.context].addBoth(lambda r: self.execute(cmd, args))
-            return
+            return self._lock_registry[self.context]
         self.lock()
         d = self._execute(cmd, args)
         self.unlock(d)
