@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from zope import schema
 from zope.interface import Interface, implements
 
 from opennode.knot.model.compute import IInCompute
@@ -8,7 +9,7 @@ from opennode.oms.security.directives import permissions
 
 
 class IHangar(Interface):
-    pass
+    backend = schema.TextLine(title=u"Backend", min_length=2)
 
 
 class IInHangar(Interface):

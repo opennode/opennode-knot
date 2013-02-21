@@ -12,7 +12,7 @@ from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.model.stream import IStream
-from opennode.oms.util import subscription_factory, async_sleep, timeout
+from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
 
 
@@ -77,12 +77,13 @@ class MetricsDaemonProcess(DaemonProcess):
             hostname = yield db.get(g.context, 'hostname')
             if hostname not in self.outstanding_requests:
                 self.log_msg('Gathering metrics for %s' % hostname)
-                d = timeout(self.interval * 3)(g.gather)()
+                d = g.gather()
                 self.outstanding_requests[hostname] = d
                 d.addCallback(handle_success, hostname)
                 d.addErrback(handle_errors, hostname)
             else:
                 self.log_msg('Skipping: another outstanding request to "%s" is found.' % (hostname))
+
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
 

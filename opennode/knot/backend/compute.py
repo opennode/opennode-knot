@@ -27,9 +27,9 @@ from opennode.knot.backend.operation import (IGetVirtualizationContainers,
                                              IUpdateVM,
                                              IMigrateVM,
                                              OperationRemoteError)
-from opennode.knot.model.compute import IManageable
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
+from opennode.knot.model.compute import IManageable
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
@@ -62,7 +62,7 @@ def register_machine(host, mgt_stack=None):
         machines = db.get_root()['oms_root']['machines']
         machine = follow_symlinks(machines['by-name'][host])
         if not mgt_stack.providedBy(machine):
-            return None
+            return
         return machine
 
     @db.transact
@@ -82,16 +82,68 @@ def find_compute_v12n_container(compute, backend):
             return v12nc
 
 
-class AllocateAction(Action):
-    context(IUndeployed)
-    action('allocate')
+class ComputeAction(Action):
+    context(ICompute)
+    baseclass()
+
+    _lock_registry = {}
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
-    @defer.inlineCallbacks
+    def locked(self):
+        return self.context in self._lock_registry
+
+    def lock(self):
+        self._lock_registry[self.context] = defer.Deferred()
+
+    def unlock(self, d):
+        d.chainDeferred(self._lock_registry[self.context])
+
     def execute(self, cmd, args):
+        if self.locked():
+            self._lock_registry[self.context].addBoth(lambda r: self.execute(cmd, args))
+            return self._lock_registry[self.context]
+        self.lock()
+        d = self._execute(cmd, args)
+        self.unlock(d)
+        return d
+
+    def _execute(self, cmd, args):
+        """ Must be overloaded by child classes """
+        raise NotImplementedError()
+
+
+class VComputeAction(ComputeAction):
+    """Common code for virtual compute actions."""
+    context(IVirtualCompute)
+    baseclass()
+
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        action_name = getattr(self, 'action_name', self._name + "ing")
+
+        name = yield db.get(self.context, '__name__')
+        parent = yield db.get(self.context, '__parent__')
+
+        cmd.write("%s %s\n" % (action_name, name))
+        submitter = IVirtualizationContainerSubmitter(parent)
+
+        try:
+            yield submitter.submit(self.job, name)
+        except Exception as e:
+            cmd.write("%s\n" % format_error(e))
+
+
+
+class AllocateAction(ComputeAction):
+    context(IUndeployed)
+    action('allocate')
+
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+
         @db.ro_transact
         def get_matching_machines(container):
             all_machines = db.get_root()['oms_root']['machines']
@@ -135,33 +187,42 @@ class AllocateAction(Action):
         yield DeployAction(self.context).execute(DetachedProtocol(), bestvmscontainer)
 
 
-class DeployAction(Action):
+class DeployAction(VComputeAction):
     context(IUndeployed)
 
     action('deploy')
 
-    @db.ro_transact(proxy=False)
-    def subject(self, *args, **kwargs):
-        return tuple((self.context.__parent__.__parent__,))
-
     @defer.inlineCallbacks
     def execute(self, cmd, args):
+        try:
+            self.context.lock()
+            yield self._execute(cmd, args)
+        finally:
+            self.context.unlock()
+
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
         template = yield db.get(self.context, 'template')
 
         if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
             return
 
-        # XXX: TODO resolve template object from the template name and take the template name from the object
         @db.ro_transact(proxy=False)
         def get_parameters():
-            return dict(template_name=self.context.template,
-                        hostname=self.context.hostname,
-                        vm_type=self.context.__parent__.backend,
-                        uuid=self.context.__name__,
-                        nameservers=db.remove_persistent_proxy(self.context.nameservers),
-                        autostart=self.context.autostart,
-                        ip_address=self.context.ipv4_address.split('/')[0],)
+            return {'template_name': self.context.template,
+                    'hostname': self.context.hostname,
+                    'vm_type': self.context.__parent__.backend,
+                    'uuid': self.context.__name__,
+                    'nameservers': db.remove_persistent_proxy(self.context.nameservers),
+                    'autostart': self.context.autostart,
+                    'ip_address': self.context.ipv4_address.split('/')[0],
+                    'passwd': getattr(self.context, 'root_password', None)}
+
+        @db.transact
+        def cleanup_root_password():
+            if getattr(self.context, 'root_password', None) is not None:
+                self.context.root_password = None
 
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
@@ -170,6 +231,7 @@ class DeployAction(Action):
             yield db.transact(alsoProvides)(self.context, IDeploying)
             vm_parameters = yield get_parameters()
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
+            yield cleanup_root_password()
             log.msg('IDeployVM result: %s' % res, system='action-deploy')
 
             @db.transact
@@ -183,21 +245,18 @@ class DeployAction(Action):
             yield finalize_vm()
         finally:
             @db.transact
-            def cleanup():
+            def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
-            yield cleanup()
+            yield cleanup_deploying()
 
-class UndeployAction(Action):
+
+class UndeployAction(VComputeAction):
     context(IDeployed)
 
     action('undeploy')
 
-    @db.ro_transact(proxy=False)
-    def subject(self, *args, **kwargs):
-        return tuple((self.context.__parent__.__parent__,))
-
     @defer.inlineCallbacks
-    def execute(self, cmd, args):
+    def _execute(self, cmd, args):
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
 
@@ -214,7 +273,7 @@ class UndeployAction(Action):
         yield finalize_vm()
 
 
-class MigrateAction(Action):
+class MigrateAction(VComputeAction):
     context(IVirtualCompute)
 
     action('migrate')
@@ -226,10 +285,6 @@ class MigrateAction(Action):
                             help="Force offline migration, shutdown VM before migrating")
         return parser
 
-    @db.ro_transact(proxy=False)
-    def subject(self, *args, **kwargs):
-        return tuple((self.context.__parent__.__parent__,))
-
     @defer.inlineCallbacks
     def _check_vm(self, destination_vms):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
@@ -237,7 +292,7 @@ class MigrateAction(Action):
         defer.returnValue((yield db.get(self.context, '__name__')) in map(lambda x: x['uuid'], vmlist))
 
     @defer.inlineCallbacks
-    def execute(self, cmd, args):
+    def _execute(self, cmd, args):
 
         @db.ro_transact
         def get_destination():
@@ -304,7 +359,7 @@ class MigrateAction(Action):
             yield mv()
 
 
-class InfoAction(Action):
+class InfoAction(VComputeAction):
     """This is a temporary command used to fetch realtime info"""
     context(IVirtualCompute)
 
@@ -315,13 +370,13 @@ class InfoAction(Action):
         return tuple((self.context.__parent__,))
 
     @defer.inlineCallbacks
-    def execute(self, cmd, args):
+    def _execute(self, cmd, args):
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
-            # TODO: not efficient, improve by executing in parallel
+            # TODO: not efficient, improve
             for vm in (yield submitter.submit(IListVMS)):
                 if vm['uuid'] == name:
                     max_key_len = max(len(key) for key in vm)
@@ -331,73 +386,46 @@ class InfoAction(Action):
             cmd.write("%s\n" % format_error(e))
 
 
-class ComputeAction(Action):
-    """Common code for virtual compute actions."""
-    context(IVirtualCompute)
-    baseclass()
-
-    @db.ro_transact(proxy=False)
-    def subject(self, *args, **kwargs):
-        return tuple((self.context.__parent__.__parent__,))
-
-    @defer.inlineCallbacks
-    def execute(self, cmd, args):
-        action_name = getattr(self, 'action_name', self._name + "ing")
-
-        name = yield db.get(self.context, '__name__')
-        parent = yield db.get(self.context, '__parent__')
-
-        cmd.write("%s %s\n" % (action_name, name))
-        submitter = IVirtualizationContainerSubmitter(parent)
-
-        try:
-            yield submitter.submit(self.job, name)
-        except Exception as e:
-            cmd.write("%s\n" % format_error(e))
-
-
-class StartComputeAction(ComputeAction):
+class StartComputeAction(VComputeAction):
     action('start')
 
     job = IStartVM
 
 
-class ShutdownComputeAction(ComputeAction):
+class ShutdownComputeAction(VComputeAction):
     action('shutdown')
 
     action_name = "shutting down"
     job = IShutdownVM
 
 
-class DestroyComputeAction(ComputeAction):
+class DestroyComputeAction(VComputeAction):
     action('destroy')
 
     job = IDestroyVM
 
 
-class SuspendComputeAction(ComputeAction):
+class SuspendComputeAction(VComputeAction):
     action('suspend')
 
     job = ISuspendVM
 
 
-class ResumeAction(ComputeAction):
+class ResumeAction(VComputeAction):
     action('resume')
 
     action_name = 'resuming'
     job = IResumeVM
 
 
-class RebootAction(ComputeAction):
+class RebootAction(VComputeAction):
     action('reboot')
 
     job = IRebootVM
 
 
-class SyncAction(Action):
+class SyncAction(ComputeAction):
     """Force compute sync"""
-    context(ICompute)
-
     action('sync')
 
     @db.ro_transact(proxy=False)
@@ -405,7 +433,7 @@ class SyncAction(Action):
         return tuple((self.context,))
 
     @defer.inlineCallbacks
-    def execute(self, cmd, args):
+    def _execute(self, cmd, args):
         default = yield self.default_console()
 
         yield self.sync_consoles()
@@ -759,6 +787,7 @@ def create_virtual_compute(model, event):
     if IDeployed.providedBy(model):
         return
 
+    log.msg('Deploying VM "%s"' % model, system='deploy')
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
 
 

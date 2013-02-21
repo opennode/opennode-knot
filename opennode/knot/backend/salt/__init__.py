@@ -55,20 +55,25 @@ class SimpleSaltExecutor(object):
     """ Simple executor implementation.
     NOTE: Ignores hard_timeout configuration parameter and obsoletes other parameters under salt section
     """
-    def __init__(self, hostname, action, interaction):
+    def __init__(self, hostname, action, interaction, timeout=None):
         self.hostname = hostname
         self.action = action
         self.interaction = interaction
+        self.timeout = timeout
 
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
         self.args = args
-        log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
+        log.msg('Running action against "%s": %s args: %s timeout: %s' % (self.hostname, self.action,
+                                                                          self.args, self.timeout),
                 system='salt-simple', logLevel=logging.DEBUG)
         cmd = get_config().getstring('salt', 'remote_command', 'salt')
-        output = yield subprocess.async_check_output(cmd.split(' ') +
-                             ['--no-color', '--out=json', '--timeout=3200', self.hostname, self.action] +
-                             map(lambda s: '"%s"' % s, map(str, self.args)))
+        output = yield subprocess.async_check_output(
+            filter(None, (cmd.split(' ') +
+                          ['--no-color', '--out=json',
+                           '--timeout=%s' % self.timeout if self.timeout is not None else None,
+                           self.hostname, self.action] +
+            map(lambda s: '"%s"' % s, map(str, self.args)))))
         data = json.loads(output) if output else {}
         rdata = self._handle_errors(data)
         defer.returnValue(rdata)
@@ -181,7 +186,7 @@ class SaltBase(Adapter):
         executor_class = self.__executor__
         hostname = yield op.IMinion(self.context).hostname()
         interaction = db.context(self.context).get('interaction', None)
-        executor = executor_class(hostname, self.action, interaction)
+        executor = executor_class(hostname, self.action, interaction, timeout=self.timeout)
         res = yield executor.run(*args, **kwargs)
         defer.returnValue(res)
 
@@ -213,6 +218,13 @@ ACTIONS = {
     op.IUpdateVM: 'onode.vm_update_vm'
 }
 
+
+TIMEOUTS = {
+    op.IMigrateVM: 3600,
+    op.IDeployVM: 600,
+}
+
+
 OVERRIDE_EXECUTORS = {
 }
 
@@ -226,5 +238,8 @@ def _generate_classes():
         classImplements(cls, interface)
         executor = get_config().getstring('salt', 'executor_class', 'simple')
         cls.__executor__ = OVERRIDE_EXECUTORS.get(interface, SaltBase.executor_classes[executor])
+        cls.timeout = TIMEOUTS.get(interface)
         globals()[cls_name] = cls
+
+
 _generate_classes()
