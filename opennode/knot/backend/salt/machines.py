@@ -9,7 +9,7 @@ try:
     from salt.key import Key
     from salt.utils.parsers import ConfigDirMixIn
 except ImportError:
-    # Missing salt on local machine
+    # Allow missing salt on local machine
     master_config = lambda x: None
 
     class ConfigDirMixIn(object):
@@ -20,8 +20,8 @@ except ImportError:
 
 from twisted.internet import defer
 
-from opennode.knot.model.backend import IKeyManager
 from opennode.knot.backend.compute import register_machine
+from opennode.knot.model.backend import IKeyManager
 from opennode.knot.model.machines import IncomingMachines, BaseIncomingMachines
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
@@ -94,15 +94,19 @@ class RemoteSaltKeyAdapter(object):
         return self._getKeyNames(self.REJECTED)
 
 
+def getKeyAdapter():
+    remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
+    if remote_salt_key_cmd:
+        return RemoteSaltKeyAdapter()
+    else:
+        return SaltKeyAdapter()
+
+
 class IncomingMachinesSalt(BaseIncomingMachines):
     __name__ = 'salt'
 
     def _get(self):
-        remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
-        if remote_salt_key_cmd:
-            return RemoteSaltKeyAdapter().getUnacceptedKeyNames()
-        else:
-            return SaltKeyAdapter().getUnacceptedKeyNames()
+        return getKeyAdapter().getUnacceptedKeyNames()
 
 
 class IncomingMachinesSaltInjector(ContainerInjector):
@@ -111,12 +115,9 @@ class IncomingMachinesSaltInjector(ContainerInjector):
 
 
 class RegisteredMachinesSalt(object):
+
     def _get(self):
-        remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
-        if remote_salt_key_cmd:
-            return RemoteSaltKeyAdapter().getAcceptedKeyNames()
-        else:
-            return SaltKeyAdapter().getAcceptedKeyNames()
+        return getKeyAdapter().getAcceptedKeyNames()
 
 
 class SaltKeyManager(GlobalUtility):
