@@ -1,9 +1,11 @@
+import logging
+import time
+
 from grokcore.component import Adapter, context
 from twisted.internet import defer
 from twisted.python import log
 from zope.component import provideSubscriptionAdapter, queryAdapter
 from zope.interface import implements, Interface
-import time
 
 from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics, OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
@@ -63,7 +65,7 @@ class MetricsDaemonProcess(DaemonProcess):
             return res
 
         def handle_success(r, c):
-            self.log_msg('Metrics gathered for %s' % (c))
+            self.log_msg('Metrics gathered for %s' % (c), logLevel=logging.DEBUG)
             del self.outstanding_requests[c]
 
         def handle_errors(e, c):
@@ -76,13 +78,14 @@ class MetricsDaemonProcess(DaemonProcess):
         for g in gatherers:
             hostname = yield db.get(g.context, 'hostname')
             if hostname not in self.outstanding_requests:
-                self.log_msg('Gathering metrics for %s' % hostname)
+                self.log_msg('Gathering metrics for %s' % hostname, logLevel=logging.DEBUG)
                 d = g.gather()
                 self.outstanding_requests[hostname] = d
                 d.addCallback(handle_success, hostname)
                 d.addErrback(handle_errors, hostname)
             else:
-                self.log_msg('Skipping: another outstanding request to "%s" is found.' % (hostname))
+                self.log_msg('Skipping: another outstanding request to "%s" is found.' % (hostname),
+                             logLevel=logging.DEBUG)
 
 
 provideSubscriptionAdapter(subscription_factory(MetricsDaemonProcess), adapts=(Proc,))
@@ -113,7 +116,13 @@ class VirtualComputeMetricGatherer(Adapter):
         if not vms or self.context.state != u'active':
             return
 
-        metrics = yield IVirtualizationContainerSubmitter(vms).submit(IGetGuestMetrics)
+        try:
+            metrics = yield IVirtualizationContainerSubmitter(vms).submit(IGetGuestMetrics)
+        except OperationRemoteError as e:
+            log.msg('Remote error: %s' % e, system='metrics-vm', logLevel=logging.DEBUG)
+            if e.remote_tb:
+                log.msg(e.remote_tb, system='metrics-vm')
+            return
 
         if not metrics:
             log.msg('No vm metrics received for %s' % name, system='metrics-vm')
@@ -165,4 +174,4 @@ class VirtualComputeMetricGatherer(Adapter):
         except Exception:
             log.msg("Error gathering phy metrics", system='metrics-phy')
             if get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='metrics')
+                log.err(system='metrics-phy')
