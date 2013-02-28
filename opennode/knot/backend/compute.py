@@ -540,6 +540,9 @@ class SyncAction(ComputeAction):
             noLongerProvides(self.context, IDeploying)
             alsoProvides(self.context, IDeployed)
 
+        if 'ctid' in vm:
+            compute.ctid = vm['ctid']
+
         for idx, console in enumerate(vm['consoles']):
             if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
                 self.context.consoles.add(TtyConsole('tty%s' % idx, console['pty']))
@@ -565,6 +568,7 @@ class SyncAction(ComputeAction):
 
         diskspace = dict((unicode(k), v) for k, v in vm['diskspace'].items())
         diskspace[u'total'] = sum([0.0] + vm['diskspace'].values())
+
         # round diskspace values
         for i in diskspace:
             diskspace[i] = round(diskspace[i], 2)
