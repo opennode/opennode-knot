@@ -285,14 +285,50 @@ class MigrateAction(VComputeAction):
                             help="Force offline migration, shutdown VM before migrating")
         return parser
 
+    def handle_error(self, cmd, msg):
+        log.msg(msg, system='migrate')
+        cmd.write(str(msg + '\n'))
+
     @defer.inlineCallbacks
-    def _check_vm(self, destination_vms):
+    def _get_vmlist(self, destination_vms):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
         vmlist = yield dest_submitter.submit(IListVMS)
-        defer.returnValue((yield db.get(self.context, '__name__')) in map(lambda x: x['uuid'], vmlist))
+        defer.returnValue(vmlist)
+
+
+    @defer.inlineCallbacks
+    def _check_vm_prior(self, name, destination_hostname, destination_vms):
+        vmlist = yield self._get_vmlist(destination_vms)
+
+        if (name in map(lambda x: x['uuid'], vmlist)):
+            self.handle_error(self.cmd,
+                              'Failed migration of %s to %s: destination already contains this VM'
+                              % (name, destination_hostname))
+            defer.returnValue(False)
+
+        if ((yield db.get(self.context, 'ctid')) in map(lambda x: x.get('ctid'), vmlist)):
+            self.handle_error(self.cmd,
+                              'Failed migration of %s to %s: destination container ID conflict'
+                              % (name, destination_hostname))
+            defer.renderValue(False)
+
+        defer.returnValue(True)
+
+    def _check_vm_post(self, name, destination_hostname, destination_vms):
+        vmlist = yield self._get_vmlist(destination_vms)
+
+        if (name not in map(lambda x: x['uuid'], vmlist)):
+            self.handle_error(self.cmd,
+                              'Failed migration of %s to %s: VM not found in destination after migration'
+                              % (name, destination_hostname))
+            defer.returnValue(False)
+
+        defer.returnValue(True)
+
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+        self.cmd = cmd
 
         @db.ro_transact
         def get_destination():
@@ -302,10 +338,6 @@ class MigrateAction(VComputeAction):
         @db.ro_transact
         def get_hostname(target):
             return target.hostname
-
-        def handle_error(msg):
-            log.msg(msg, system='migrate')
-            cmd.write(str(msg + '\n'))
 
         name = yield db.get(self.context, '__name__')
         source_vms = yield db.get(self.context, '__parent__')
@@ -320,43 +352,36 @@ class MigrateAction(VComputeAction):
 
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
-        if (yield self._check_vm(destination_vms)):
-            handle_error('Failed migration of %s to %s: destination already contains this VM' % (
-                name, destination_hostname))
-            defer.returnValue(None)
-
         try:
+            if not (yield self._check_vm_pre(name, destination_hostname, destination_vms)):
+                defer.returnValue(None)
+
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
             yield source_submitter.submit(IMigrateVM, name, destination_hostname, (not args.offline), False)
+            log.msg('Migration done. Checking... %s' % destination_vms, system='migrate')
+
+            if (yield self._check_vm_post(destination_vms)):
+                log.msg('Migration finished successfully!', system='migrate')
+
+                @db.transact
+                def mv():
+                    machines = db.get_root()['oms_root']['machines']
+                    computes = db.get_root()['oms_root']['computes']
+                    try:
+                        destination_compute = machines[destination.__name__]
+                        vm_compute = follow_symlinks(computes[self.context.__name__])
+                        dvms = follow_symlinks(destination_compute['vms'])
+                        dvms.add(vm_compute)
+                        log.msg('Model moved.', system='migrate')
+                    except IndexError:
+                        log.msg('Model NOT moved: destination compute or vms do not exist', system='migrate')
+                    except KeyError:
+                        log.msg('Model NOT moved: already moved by sync?', system='migrate')
+                yield mv()
         except OperationRemoteError as e:
-            handle_error('Failed migration of %s to %s: remote error %s' % (
+            self.handle_error(cmd, 'Failed migration of %s to %s: remote error %s' % (
                 name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
             defer.returnValue(None)
-
-        log.msg('Migration finished. Checking... %s' % destination_vms, system='migrate')
-
-        if not (yield self._check_vm(destination_vms)):
-            handle_error('Failed migration of %s to %s: VM not found in destination after migration '
-                         'attempt' % (name, destination_hostname))
-            defer.returnValue(None)
-        else:
-            log.msg('Migration finished successfully!', system='migrate')
-
-            @db.transact
-            def mv():
-                machines = db.get_root()['oms_root']['machines']
-                computes = db.get_root()['oms_root']['computes']
-                try:
-                    destination_compute = machines[destination.__name__]
-                    vm_compute = follow_symlinks(computes[self.context.__name__])
-                    dvms = follow_symlinks(destination_compute['vms'])
-                    dvms.add(vm_compute)
-                    log.msg('Model moved.', system='migrate')
-                except IndexError:
-                    log.msg('Model NOT moved: destination compute or vms do not exist', system='migrate')
-                except KeyError:
-                    log.msg('Model NOT moved: already moved by sync?', system='migrate')
-            yield mv()
 
 
 class InfoAction(VComputeAction):
