@@ -193,14 +193,6 @@ class DeployAction(VComputeAction):
     action('deploy')
 
     @defer.inlineCallbacks
-    def execute(self, cmd, args):
-        try:
-            self.context.lock()
-            yield self._execute(cmd, args)
-        finally:
-            self.context.unlock()
-
-    @defer.inlineCallbacks
     def _execute(self, cmd, args):
         template = yield db.get(self.context, 'template')
 
