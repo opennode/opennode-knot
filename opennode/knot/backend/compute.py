@@ -103,6 +103,8 @@ class ComputeAction(Action):
 
     def execute(self, cmd, args):
         if self.locked():
+            log.msg('%s is locked. Scheduling to run after finish of a previous action' % self.context,
+                    system='compute-action')
             self._lock_registry[self.context].addBoth(lambda r: self.execute(cmd, args))
             return self._lock_registry[self.context]
         self.lock()
@@ -198,7 +200,7 @@ class DeployAction(VComputeAction):
 
         if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
-            return
+            defer.returnValue(None)
 
         @db.ro_transact(proxy=False)
         def get_parameters():

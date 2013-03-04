@@ -191,6 +191,7 @@ class Compute(Container):
                      cpu_limit=('read', 'modify'),
                      template=('read', 'modify'),
                      autostart=('read', 'modify'),
+                     ctid=('read', 'modify'),
                      ))
 
     __contains__ = IInCompute
@@ -291,6 +292,14 @@ class Compute(Container):
         self._effective_state = value
 
     effective_state = property(get_effective_state, set_effective_state)
+
+    def get_ctid(self):
+        return getattr(self, '_ctid', None)
+
+    def set_ctid(self, value):
+        self._ctid = value
+
+    ctid = property(get_ctid, set_ctid)
 
     def __str__(self):
         return 'compute%s' % self.__name__
