@@ -9,6 +9,7 @@ from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUn
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+from opennode.knot.model.virtualizationcontainer import IGlobalIndentifierProvider
 from opennode.oms.config import get_config
 from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
 from opennode.oms.model.model.actions import Action, action
@@ -98,6 +99,7 @@ class ListVirtualizationContainerAction(Action):
 
             if vm['consoles']:
                 cmd.write(" %s    consoles:\n" % (' ' * max_key_len))
+
             for console in vm['consoles']:
                 attrs = " ".join(["%s=%s" % pair for pair in console.items()])
                 cmd.write(" %s      %s\n" % (' ' * max_key_len, attrs))
@@ -115,7 +117,6 @@ class SyncVmsAction(Action):
 
     @defer.inlineCallbacks
     def execute(self, cmd, args):
-        # sync host interfaces (this is not the right place, but ...)
         @db.ro_transact
         def get_ifaces_job():
             host_compute = self.context.__parent__
@@ -125,7 +126,6 @@ class SyncVmsAction(Action):
 
         yield self._sync_ifaces(ifaces)
 
-        # sync virtual computes
         yield self._sync_vms(cmd)
 
     @defer.inlineCallbacks
@@ -145,10 +145,11 @@ class SyncVmsAction(Action):
             log.msg('_p_jar is undefined for %s' % (self.context), system='v12n')
             return
 
-        machines = self.context._p_jar.root()['oms_root']['machines']
+        root = self.context._p_jar
+        machines = root['oms_root']['machines']
 
         for vm_uuid in remote_uuids.difference(local_uuids):
-            remote_vm = [i for i in remote_vms if i['uuid'] == vm_uuid][0]
+            remote_vm = [rvm for rvm in remote_vms if i['uuid'] == vm_uuid][0]
 
             existing_machine = follow_symlinks(machines['by-name'][remote_vm['name']])
             if existing_machine:
@@ -186,12 +187,26 @@ class SyncVmsAction(Action):
                 del self.context[vm_uuid]
                 handle(compute, ModelDeletedEvent(self.context))
 
-        # sync each vm
+        proc = root['oms_root']['proc']
+
+        if self.context.backend == 'openvz':
+            if 'openvz_ctid' not in proc:
+                proc['openvz_ctid'] = IGlobalIndentifierProvider()
+
+        # TODO: eliminate cross-import between compute and v12ncontainer
         from opennode.knot.backend.compute import SyncAction
-        for action in [SyncAction(i) for i in self.context.listcontent() if IVirtualCompute.providedBy(i)]:
-            matching = [i for i in remote_vms if i['uuid'] == action.context.__name__]
+        # sync each vm
+        for compute in self.context.listcontent():
+            if not IVirtualCompute.providedBy(compute):
+                continue
+
+            action = SyncAction(compute)
+
+            matching = [rvm for rvm in remote_vms if rvm['uuid'] == action.context.__name__]
+
             if not matching:
                 continue
+
             remote_vm = matching[0]
 
             # todo delegate all this into the action itself
@@ -199,6 +214,9 @@ class SyncVmsAction(Action):
             action._sync_consoles()
             action.sync_vm(remote_vm)
             action.create_default_console(default_console)
+            if self.context.backend == 'openvz':
+                if compute.ctid > proc['openvz_ctid']:
+                    proc['openvz_ctid'].ident = compute.ctid
 
     @db.transact
     def _sync_ifaces(self, ifaces):
@@ -207,7 +225,6 @@ class SyncVmsAction(Action):
         local_interfaces = host_compute.interfaces
         local_names = set(i.__name__ for i in local_interfaces)
         remote_names = set(i['name'] for i in ifaces)
-
         ifaces_by_name = dict((i['name'], i) for i in ifaces)
 
         # add interfaces

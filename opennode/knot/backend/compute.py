@@ -1,5 +1,5 @@
 from grokcore.component import context, subscribe, baseclass
-from logging import DEBUG
+from logging import DEBUG, WARNING
 from twisted.internet import defer
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
@@ -138,7 +138,6 @@ class VComputeAction(ComputeAction):
             cmd.write("%s\n" % format_error(e))
 
 
-
 class AllocateAction(ComputeAction):
     context(IUndeployed)
     action('allocate')
@@ -211,7 +210,7 @@ class DeployAction(VComputeAction):
                     'nameservers': db.remove_persistent_proxy(self.context.nameservers),
                     'autostart': self.context.autostart,
                     'ip_address': self.context.ipv4_address.split('/')[0],
-                    'passwd': getattr(self.context, 'root_password', None)}
+                    'passwd': getattr(self.context, 'root_password', None),}
 
         @db.transact
         def cleanup_root_password():
@@ -221,18 +220,44 @@ class DeployAction(VComputeAction):
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
 
+        @db.ro_transact(proxy=False)
+        def get_current_ctid():
+            proc = db.get_root()['proc']
+            if 'openvz_ctid' not in proc:
+                return None
+            return db.get_root()['proc']['openvz_ctid'].ident
+
         try:
             yield db.transact(alsoProvides)(self.context, IDeploying)
             vm_parameters = yield get_parameters()
+            vms_backend = yield db.get(target, 'backend')
+
+            if vms_backend == 'openvz':
+                ctid = yield get_current_ctid()
+                if ctid is not None:
+                    vm_parameters.update({'ctid': ctid + 1})
+                else:
+                    log.msg('Information about current global CTID is unavailable yet, will not hint agent '
+                            'and let it use a local value instead', system='action-deploy',
+                            logLevel=WARNING)
+                    cmd.write('Information about current global CTID is unavailable yet, will not hint agent '
+                              'and let it use a local value instead\n')
+
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
             log.msg('IDeployVM result: %s' % res, system='action-deploy')
 
             @db.transact
             def finalize_vm():
+                if vms_backend == 'openvz':
+                    db.get_root()['proc']['openvz_ctid'].ident += 1
+                    log.msg('Set OpenVZ CTID to %s for %s' % (db.get_root()['proc']['openvz_ctid'].ident,
+                                                              self.context.hostname), system='deploy')
+
                 noLongerProvides(self.context, IDeploying)
                 noLongerProvides(self.context, IUndeployed)
                 alsoProvides(self.context, IDeployed)
+
                 log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
                 cmd.write("Changed state from undeployed to deployed\n")
 

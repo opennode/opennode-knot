@@ -40,5 +40,24 @@ class VirtualizationContainerTags(ModelTags):
         return [u'virt:' + self.context.backend]
 
 
+class IGlobalIndentifierProvider(Interface):
+    identifier = schema.Int(title=u'Current identifier value', default=101)
+
+
+class GlobalIdentifierProvider(object):
+    implements(IGlobalIndentifierProvider)
+    permissions(dict(backend=('read', 'modify')))
+
+    _id = None
+
+    def get_ident(self):
+        return self._id
+
+    def set_ident(self, value):
+        self._id = value
+
+    ident = property(get_ident, set_ident)
+
+
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(VirtualizationContainer, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(VirtualizationContainer, ))
