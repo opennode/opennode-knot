@@ -1,5 +1,5 @@
 from grokcore.component import context, subscribe, baseclass
-from logging import DEBUG, WARNING
+from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
@@ -95,12 +95,16 @@ class ComputeAction(Action):
 
     def execute(self, cmd, args):
         if self.locked():
-            log.msg('%s is locked. Scheduling to run after finish of a previous action' % self.context,
+            log.msg('%s is locked. Scheduling to run after finish of a previous action' % (self.context),
                     system='compute-action')
             self._lock_registry[self.context].addBoth(lambda r: self.execute(cmd, args))
             return self._lock_registry[self.context]
         self.lock()
         d = self._execute(cmd, args)
+        def handle_error(e):
+            log.err(system='compute-action')
+            return e
+        d.addErrback(handle_error)
         self.unlock(d)
         return d
 
@@ -191,6 +195,9 @@ class DeployAction(VComputeAction):
 
         if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
+            log.msg('Cannot deploy %s (%s) because no template was specified' % (self.context.hostname,
+                                                                                 self.context),
+                    system='deploy-action', logLevel=ERROR)
             defer.returnValue(None)
 
         @db.ro_transact(proxy=False)
@@ -214,10 +221,10 @@ class DeployAction(VComputeAction):
 
         @db.ro_transact(proxy=False)
         def get_current_ctid():
-            proc = db.get_root()['proc']
+            proc = db.get_root()['oms_root']['proc']
             if 'openvz_ctid' not in proc:
                 return None
-            return db.get_root()['proc']['openvz_ctid'].ident
+            return proc['openvz_ctid'].ident
 
         try:
             yield db.transact(alsoProvides)(self.context, IDeploying)
@@ -225,26 +232,28 @@ class DeployAction(VComputeAction):
             vms_backend = yield db.get(target, 'backend')
 
             if vms_backend == 'openvz':
+                log.msg('Deploying %s (hinting CTID)' % (self.context), system='deploy-action')
                 ctid = yield get_current_ctid()
                 if ctid is not None:
                     vm_parameters.update({'ctid': ctid + 1})
                 else:
                     log.msg('Information about current global CTID is unavailable yet, will not hint agent '
-                            'and let it use a local value instead', system='action-deploy',
-                            logLevel=WARNING)
-                    cmd.write('Information about current global CTID is unavailable yet, will not hint agent '
-                              'and let it use a local value instead\n')
+                            'and let it use a local value instead', system='action-deploy', logLevel=WARNING)
+                    cmd.write('Information about current global CTID is unavailable yet, will not hint '
+                              'agent and let it use a local value instead\n')
 
+            log.msg('Deploying %s' % (self.context), system='deploy-action')
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
-            log.msg('IDeployVM result: %s' % res, system='action-deploy')
+            log.msg('IDeployVM result: %s' % res, system='action-deploy', logLevel=DEBUG)
 
             @db.transact
             def finalize_vm():
                 if vms_backend == 'openvz':
-                    db.get_root()['proc']['openvz_ctid'].ident += 1
-                    log.msg('Set OpenVZ CTID to %s for %s' % (db.get_root()['proc']['openvz_ctid'].ident,
-                                                              self.context.hostname), system='deploy')
+                    db.get_root()['oms_root']['proc']['openvz_ctid'].ident += 1
+                    log.msg('Set OpenVZ CTID to %s for %s' % (
+                        db.get_root()['oms_root']['proc']['openvz_ctid'].ident, self.context.hostname),
+                        system='deploy')
 
                 noLongerProvides(self.context, IDeploying)
                 noLongerProvides(self.context, IUndeployed)

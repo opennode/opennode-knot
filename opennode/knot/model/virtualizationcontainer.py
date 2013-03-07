@@ -9,8 +9,10 @@ from opennode.knot.model.compute import IVirtualCompute, IInCompute
 from opennode.knot.model.hangar import IInHangar
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
+from opennode.oms.model.model.base import ContainerInjector
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.model.model.search import ModelTags
+from opennode.oms.model.model.proc import Proc
 from opennode.oms.security.directives import permissions
 
 
@@ -57,6 +59,11 @@ class GlobalIdentifierProvider(object):
         self._id = value
 
     ident = property(get_ident, set_ident)
+
+
+class GlobalIdentifierProviderInjector(ContainerInjector):
+    context(Proc)
+    __class__ = GlobalIdentifierProvider
 
 
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(VirtualizationContainer, ))
