@@ -7,8 +7,8 @@ from twisted.python import log
 
 from opennode.knot.backend.compute import format_error
 from opennode.knot.backend.compute import register_machine
-from opennode.knot.backend.compute import SyncAction
 from opennode.knot.backend.sync import get_machine_by_hostname
+from opennode.knot.backend.syncaction import SyncAction
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.knot.model.machines import IIncomingMachineRequest
