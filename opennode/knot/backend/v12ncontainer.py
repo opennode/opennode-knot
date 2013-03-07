@@ -141,15 +141,11 @@ class SyncVmsAction(Action):
         remote_uuids = set(i['uuid'] for i in remote_vms)
         local_uuids = set(i.__name__ for i in local_vms)
 
-        if not self.context._p_jar:
-            log.msg('_p_jar is undefined for %s' % (self.context), system='v12n')
-            return
-
-        root = self.context._p_jar
+        root = db.get_root()
         machines = root['oms_root']['machines']
 
         for vm_uuid in remote_uuids.difference(local_uuids):
-            remote_vm = [rvm for rvm in remote_vms if i['uuid'] == vm_uuid][0]
+            remote_vm = [rvm for rvm in remote_vms if rvm['uuid'] == vm_uuid][0]
 
             existing_machine = follow_symlinks(machines['by-name'][remote_vm['name']])
             if existing_machine:
@@ -194,7 +190,7 @@ class SyncVmsAction(Action):
                 proc['openvz_ctid'] = IGlobalIndentifierProvider()
 
         # TODO: eliminate cross-import between compute and v12ncontainer
-        from opennode.knot.backend.compute import SyncAction
+        from opennode.knot.backend.syncaction import SyncAction
         # sync each vm
         for compute in self.context.listcontent():
             if not IVirtualCompute.providedBy(compute):
