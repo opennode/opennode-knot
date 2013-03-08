@@ -139,10 +139,11 @@ class ICompute(Interface):
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
-
     # VM only
     template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
+    ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
+                      required=False, default=101)
 
 
 class IInCompute(Interface):
@@ -190,6 +191,7 @@ class Compute(Container):
                      cpu_limit=('read', 'modify'),
                      template=('read', 'modify'),
                      autostart=('read', 'modify'),
+                     ctid=('read', 'modify'),
                      ))
 
     __contains__ = IInCompute
@@ -290,6 +292,14 @@ class Compute(Container):
         self._effective_state = value
 
     effective_state = property(get_effective_state, set_effective_state)
+
+    def get_ctid(self):
+        return getattr(self, '_ctid', None)
+
+    def set_ctid(self, value):
+        self._ctid = int(value)
+
+    ctid = property(get_ctid, set_ctid)
 
     def __str__(self):
         return 'compute%s' % self.__name__
@@ -416,6 +426,7 @@ class Computes(AddingContainer):
             for item in container.listcontent():
                 if ICompute.providedBy(item):
                     computes[item.__name__] = Symlink(item.__name__, item)
+
                 if (isinstance(item, Machines) or isinstance(item, Computes) or
                         ICompute.providedBy(item) or IVirtualizationContainer.providedBy(item)):
 

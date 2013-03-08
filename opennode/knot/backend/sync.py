@@ -4,7 +4,7 @@ from twisted.python import log
 from zope.component import provideSubscriptionAdapter, getAllUtilitiesRegisteredFor
 from zope.interface import implements
 
-from opennode.knot.backend.compute import SyncAction
+from opennode.knot.backend.syncaction import SyncAction
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.model.backend import IKeyManager
 from opennode.knot.model.compute import ICompute, IManageable
