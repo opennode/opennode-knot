@@ -221,10 +221,8 @@ class DeployAction(VComputeAction):
 
         @db.ro_transact(proxy=False)
         def get_current_ctid():
-            proc = db.get_root()['oms_root']['proc']
-            if 'openvz_ctid' not in proc:
-                return None
-            return proc['openvz_ctid'].ident
+            ctidlist = db.get_root()['oms_root']['computes']['openvz']
+            return max([follow_symlinks(symlink).ctid for symlink in ctidlist.listcontent()] + [100])
 
         try:
             yield db.transact(alsoProvides)(self.context, IDeploying)

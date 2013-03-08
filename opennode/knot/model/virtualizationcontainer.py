@@ -1,18 +1,21 @@
 from __future__ import absolute_import
 
 from grokcore.component import context
+from grokcore.component import Subscription, baseclass
 from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from opennode.knot.model.compute import IVirtualCompute, IInCompute
+
+from opennode.knot.model.compute import ICompute, Computes, IVirtualCompute, IInCompute
 from opennode.knot.model.hangar import IInHangar
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
-from opennode.oms.model.model.base import ContainerInjector
+from opennode.oms.model.model.base import IContainerExtender
+from opennode.oms.model.model.base import ReadonlyContainer
 from opennode.oms.model.model.byname import ByNameContainerExtension
 from opennode.oms.model.model.search import ModelTags
-from opennode.oms.model.model.proc import Proc
+from opennode.oms.model.model.symlink import Symlink
 from opennode.oms.security.directives import permissions
 
 
@@ -42,29 +45,46 @@ class VirtualizationContainerTags(ModelTags):
         return [u'virt:' + self.context.backend]
 
 
-class IGlobalIndentifierProvider(Interface):
-    identifier = schema.Int(title=u'Current identifier value', default=101)
-
-
-class GlobalIdentifierProvider(object):
-    implements(IGlobalIndentifierProvider)
+class OpenVZContainer(ReadonlyContainer):
     permissions(dict(backend=('read', 'modify')))
+    __name__ = 'openvz'
+    __contains__ = IVirtualCompute
 
-    _id = None
+    @property
+    def _items(self):
+        # break an import cycle
+        from opennode.oms.zodb import db
+        machines = db.get_root()['oms_root']['machines']
 
-    def get_ident(self):
-        return self._id
+        computes = {}
 
-    def set_ident(self, value):
-        self._id = value
+        def collect(container):
+            from opennode.knot.model.machines import Machines
+            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
-    ident = property(get_ident, set_ident)
+            seen = set()
+            for item in container.listcontent():
+                if ICompute.providedBy(item) and item.ctid is not None:
+                    computes[str(item.ctid)] = Symlink(str(item.ctid), item)
+
+                if (isinstance(item, Machines) or isinstance(item, Computes) or
+                        ICompute.providedBy(item) or IVirtualizationContainer.providedBy(item)):
+                    if item.__name__ not in seen:
+                        seen.add(item.__name__)
+                        collect(item)
+
+        collect(machines)
+        return computes
 
 
-class GlobalIdentifierProviderInjector(ContainerInjector):
-    context(Proc)
-    __class__ = GlobalIdentifierProvider
+class OpenVZContainerExtension(Subscription):
+    implements(IContainerExtender)
+    baseclass()
+
+    def extend(self):
+        return {'openvz': OpenVZContainer(self.context)}
 
 
+provideSubscriptionAdapter(OpenVZContainerExtension, adapts=(Computes, ))
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(VirtualizationContainer, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(VirtualizationContainer, ))

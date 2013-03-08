@@ -9,7 +9,6 @@ from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUn
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
-from opennode.knot.model.virtualizationcontainer import IGlobalIndentifierProvider
 from opennode.oms.config import get_config
 from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
 from opennode.oms.model.model.actions import Action, action
@@ -141,8 +140,8 @@ class SyncVmsAction(Action):
         remote_uuids = set(i['uuid'] for i in remote_vms)
         local_uuids = set(i.__name__ for i in local_vms)
 
-        root = db.get_root()
-        machines = root['oms_root']['machines']
+        root = db.get_root()['oms_root']
+        machines = root['machines']
 
         for vm_uuid in remote_uuids.difference(local_uuids):
             remote_vm = [rvm for rvm in remote_vms if rvm['uuid'] == vm_uuid][0]
@@ -183,12 +182,6 @@ class SyncVmsAction(Action):
                 del self.context[vm_uuid]
                 handle(compute, ModelDeletedEvent(self.context))
 
-        proc = root['oms_root']['proc']
-
-        if self.context.backend == 'openvz':
-            if 'openvz_ctid' not in proc:
-                proc['openvz_ctid'] = IGlobalIndentifierProvider()
-
         # TODO: eliminate cross-import between compute and v12ncontainer
         from opennode.knot.backend.syncaction import SyncAction
         # sync each vm
@@ -210,9 +203,6 @@ class SyncVmsAction(Action):
             action._sync_consoles()
             action.sync_vm(remote_vm)
             action.create_default_console(default_console)
-            if self.context.backend == 'openvz':
-                if compute.ctid > proc['openvz_ctid']:
-                    proc['openvz_ctid'].ident = compute.ctid
 
     @db.transact
     def _sync_ifaces(self, ifaces):
