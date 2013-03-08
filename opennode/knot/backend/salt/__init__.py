@@ -231,7 +231,7 @@ OVERRIDE_EXECUTORS = {
 
 # Avoid polluting the global namespace with temporary variables:
 def _generate_classes():
-    # Dynamically generate an adapter class for each supported Salt salttion:
+    # Dynamically generate an adapter class for each supported Salt salt Action:
     for interface, action in ACTIONS.items():
         cls_name = 'Salt%s' % interface.__name__[1:]
         cls = type(cls_name, (SaltBase, ), dict(action=action))
