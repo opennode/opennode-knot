@@ -345,4 +345,6 @@ class SyncTemplatesAction(ComputeAction):
             for i in set(template_names).difference(i['template_name'] for i in templates):
                 template_container.remove(follow_symlinks(template_container['by-name'][i]))
 
+        log.msg('Synced templates on %s. Updating %s templates' % (self.context, len(templates)),
+                system='sync-templates')
         yield update_templates()
