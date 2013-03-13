@@ -136,10 +136,12 @@ class ICompute(Interface):
     failure = schema.Bool(title=u'Availability failure', required=False,
                           readonly=True, default=False)
 
+    agent_version = schema.TextLine(title=u'Agent version', required=False,
+                                    readonly=True, default=u'')
+
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
-    # VM only
     template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
     ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
@@ -246,6 +248,8 @@ class Compute(Container):
     zabbix_ipv4_address = None
     zabbix_use_dns = True
     zabbix_agent_port = 10050
+
+    agent_version = u''
 
     def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()

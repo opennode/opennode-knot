@@ -28,7 +28,6 @@ class SaltMultiprocessingClient(multiprocessing.Process):
         self.hostname = hostname
         self.action = action
         self.args = args
-        #self.args = args + ('--out=raw',)
 
     def run(self):
         try:
@@ -71,7 +70,7 @@ class SimpleSaltExecutor(object):
         output = yield subprocess.async_check_output(
             filter(None, (cmd.split(' ') +
                           ['--no-color', '--out=json',
-                           '--timeout=%s' % self.timeout if self.timeout is not None else None,
+                           ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
             map(lambda s: '"%s"' % s, map(str, self.args)))))
         data = json.loads(output) if output else {}
@@ -88,7 +87,7 @@ class SimpleSaltExecutor(object):
             raise op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey, self.action),
                                           remote_tb=data[hostkey])
 
-        if type(data[hostkey]) is (str, unicode) and data[hostkey].endswith('is not available.'):
+        if type(data[hostkey]) in (str, unicode) and data[hostkey].endswith('is not available.'):
             # TODO: mark the host as unmanageable (agent modules are missing)
             raise op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
                                           (hostkey, self.action))
@@ -161,7 +160,7 @@ class AsynchronousSaltExecutor(SaltExecutor):
                                                                                          self.action),
                                                           remote_tb=data[hostkey]))
         elif type(data[hostkey]) is str and data[hostkey].endswith('is not available.'):
-            # TODO: mark the host as unmanageable (agent modules are missing)
+            # TODO: mark the host as suspicious/failed (agent modules are missing)
             self.deferred.errback(op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
                                                           (hostkey, self.action)))
         else:
@@ -215,7 +214,9 @@ ACTIONS = {
     op.ISuspendVM: 'onode.vm_suspend_vm',
     op.IUndeployVM: 'onode.vm_undeploy_vm',
     op.IMigrateVM: 'onode.vm_migrate',
-    op.IUpdateVM: 'onode.vm_update_vm'
+    op.IUpdateVM: 'onode.vm_update_vm',
+    op.IPing: 'test.ping',
+    op.IAgentVersion: 'test.version'
 }
 
 
@@ -228,6 +229,12 @@ TIMEOUTS = {
 OVERRIDE_EXECUTORS = {
 }
 
+# TODO: support for 'remote Salt' configuration
+@defer.inlineCallbacks
+def get_master_version():
+    output = yield subprocess.async_check_output(['salt-master', '--version'])
+    version = output.strip(' \n').split(' ')[1]
+    defer.returnValue(version)
 
 # Avoid polluting the global namespace with temporary variables:
 def _generate_classes():
