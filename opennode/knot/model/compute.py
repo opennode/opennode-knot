@@ -137,7 +137,7 @@ class ICompute(Interface):
                           readonly=True, default=False)
 
     agent_version = schema.TextLine(title=u'Agent version', required=False,
-                                    readonly=True, default='')
+                                    readonly=True, default=u'')
 
 
 class IVirtualCompute(Interface):
@@ -248,6 +248,8 @@ class Compute(Container):
     zabbix_ipv4_address = None
     zabbix_use_dns = True
     zabbix_agent_port = 10050
+
+    agent_version = u''
 
     def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()

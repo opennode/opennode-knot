@@ -65,6 +65,7 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def sync_agent_version(self):
+        log.msg('Syncing version...', system='sync-action')
         minion_v = (yield IAgentVersion(self.context).run()).split('.')
         # XXX: Salt-specific
         from opennode.knot.backend.salt import get_master_version
@@ -88,8 +89,7 @@ class SyncAction(ComputeAction):
             log.msg('Minor agent version mismatch: master %s != minion %s on %s'
                     % (master_v, minion_v, self.context),
                     system='sync-action', logLevel=logging.WARNING)
-
-        if master_v != minion_v:
+        elif master_v != minion_v:
             log.msg('Release agent version mismatch: master %s != minion %s on %s'
                     % (master_v, minion_v, self.context),
                     system='sync-action')

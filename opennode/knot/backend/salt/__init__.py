@@ -229,10 +229,11 @@ TIMEOUTS = {
 OVERRIDE_EXECUTORS = {
 }
 
+# TODO: support for 'remote Salt' configuration
 @defer.inlineCallbacks
 def get_master_version():
     output = yield subprocess.async_check_output(['salt-master', '--version'])
-    version = output.split(' ')[1]
+    version = output.strip(' \n').split(' ')[1]
     defer.returnValue(version)
 
 # Avoid polluting the global namespace with temporary variables:
