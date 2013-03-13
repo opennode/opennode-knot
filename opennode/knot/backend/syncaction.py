@@ -1,3 +1,4 @@
+import logging
 import netaddr
 
 from twisted.internet import defer
@@ -5,6 +6,7 @@ from twisted.python import log
 
 from opennode.knot.backend.compute import any_stack_installed
 from opennode.knot.backend.compute import ComputeAction
+from opennode.knot.backend.operation import IAgentVersion
 from opennode.knot.backend.operation import IListVMS
 from opennode.knot.backend.operation import IGetComputeInfo
 from opennode.knot.backend.operation import IGetVirtualizationContainers
@@ -43,6 +45,8 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+        yield self.sync_agent_version()
+
         default = yield self.default_console()
 
         yield self.sync_consoles()
@@ -58,6 +62,37 @@ class SyncAction(ComputeAction):
         yield self._create_default_console(default)
 
         yield self.sync_vms()
+
+    @defer.inlineCallbacks
+    def sync_agent_version(self):
+        minion_v = (yield IAgentVersion(self.context).run()).split('.')
+        # XXX: Salt-specific
+        from opennode.knot.backend.salt import get_master_version
+        master_v = (yield get_master_version()).split('.')
+
+        if master_v[0] != minion_v[0]:
+            @db.transact
+            def set_failure():
+                self.context.failure = True
+            yield set_failure()
+            log.msg('Major agent version mismatch: master %s != minion %s on %s'
+                    % (master_v, minion_v, self.context),
+                    system='sync-action', logLevel=logging.ERROR)
+            raise Exception('Major agent version mismatch')
+
+        if master_v[1] != minion_v[1]:
+            @db.transact
+            def set_suspicious():
+                self.context.suspicious = True
+            yield set_suspicious()
+            log.msg('Minor agent version mismatch: master %s != minion %s on %s'
+                    % (master_v, minion_v, self.context),
+                    system='sync-action', logLevel=logging.WARNING)
+
+        if master_v != minion_v:
+            log.msg('Release agent version mismatch: master %s != minion %s on %s'
+                    % (master_v, minion_v, self.context),
+                    system='sync-action')
 
     @db.ro_transact
     def default_console(self):

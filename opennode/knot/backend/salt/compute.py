@@ -7,7 +7,7 @@ from twisted.python import log
 
 from opennode.knot.backend.compute import format_error
 from opennode.knot.backend.compute import register_machine
-from opennode.knot.backend.sync import get_machine_by_hostname
+from opennode.knot.backend.sync import get_machine_by_uuid
 from opennode.knot.backend.syncaction import SyncAction
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.compute import ISaltInstalled
@@ -66,8 +66,8 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         yield BaseHostRequestAction.execute(self, cmd, args)
         hostname = yield db.get(self.context, 'hostname')
         # Acceptance of a new HN should trigger its syncing
-        yield register_machine(hostname, mgt_stack=ISaltInstalled)
-        compute = yield get_machine_by_hostname(hostname)
+        uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
+        compute = yield get_machine_by_uuid(uuid)
         yield SyncAction(compute).execute(DetachedProtocol(), object())
 
 

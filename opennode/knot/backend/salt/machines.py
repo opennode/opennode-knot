@@ -42,11 +42,26 @@ class DummyOptions(object):
         return None
 
 
-class SaltKeyAdapter(Key, ConfigDirMixIn):
-    """ Adaptor for Salt key management logic """
+class BaseSaltKeyAdapter(object):
     REJECTED = 'minions_rejected'
     ACCEPTED = 'minions'
     UNACCEPTED = 'minions_pre'
+
+    def _getKeyNames(self, ktype):
+        raise NotImplementedError()
+
+    def getUnacceptedKeyNames(self):
+        return self._getKeyNames(self.UNACCEPTED)
+
+    def getAcceptedKeyNames(self):
+        return self._getKeyNames(self.ACCEPTED)
+
+    def getRejectedKeyNames(self):
+        return self._getKeyNames(self.REJECTED)
+
+
+class SaltKeyAdapter(Key, ConfigDirMixIn, BaseSaltKeyAdapter):
+    """ Adaptor for Salt key management logic """
 
     def __init__(self):
         self.options = DummyOptions()
@@ -59,21 +74,9 @@ class SaltKeyAdapter(Key, ConfigDirMixIn):
         except SystemExit:
             logging.error('Salt terminated trying to retrieve unaccepted keys.')
 
-    def getUnacceptedKeyNames(self):
-        return self._getKeyNames(self.UNACCEPTED)
 
-    def getAcceptedKeyNames(self):
-        return self._getKeyNames(self.ACCEPTED)
-
-    def getRejectedKeyNames(self):
-        return self._getKeyNames(self.REJECTED)
-
-
-class RemoteSaltKeyAdapter(object):
+class RemoteSaltKeyAdapter(BaseSaltKeyAdapter):
     """ Adaptor for remote Salt key management """
-    REJECTED = 'minions_rejected'
-    ACCEPTED = 'minions'
-    UNACCEPTED = 'minions_pre'
 
     def _getKeyNames(self, ktype):
         remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
@@ -83,16 +86,6 @@ class RemoteSaltKeyAdapter(object):
         else:
             data = {}
         return data[ktype]
-
-    def getUnacceptedKeyNames(self):
-        return self._getKeyNames(self.UNACCEPTED)
-
-    def getAcceptedKeyNames(self):
-        return self._getKeyNames(self.ACCEPTED)
-
-    def getRejectedKeyNames(self):
-        return self._getKeyNames(self.REJECTED)
-
 
 def getKeyAdapter():
     remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)

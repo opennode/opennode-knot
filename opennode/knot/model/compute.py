@@ -136,10 +136,12 @@ class ICompute(Interface):
     failure = schema.Bool(title=u'Availability failure', required=False,
                           readonly=True, default=False)
 
+    agent_version = schema.TextLine(title=u'Agent version', required=False,
+                                    readonly=True, default='')
+
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
-    # VM only
     template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
     ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
