@@ -63,9 +63,10 @@ def register_machine(host, mgt_stack=None):
         machine = Compute(unicode(host), u'active', mgt_stack=mgt_stack)
         machine.__name__ = str(uuid5(NAMESPACE_DNS, host))
         machines.add(machine)
+        return machine.__name__
 
     if not (yield check()):
-        yield update()
+        defer.returnValue((yield update()))
 
 
 def find_compute_v12n_container(compute, backend):
