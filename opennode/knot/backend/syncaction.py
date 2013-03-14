@@ -54,7 +54,8 @@ class SyncAction(ComputeAction):
 
         if any_stack_installed(self.context):
             yield self.ensure_vms()
-            yield self.sync_templates()
+
+        yield SyncTemplatesAction(self.context).execute(DetachedProtocol(), object())
 
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
@@ -229,7 +230,7 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def sync_hw(self):
         if not any_stack_installed(self.context):
-            return
+            defer.returnValue(None)
 
         try:
             info = yield IGetComputeInfo(self.context).run()
@@ -239,7 +240,7 @@ class SyncAction(ComputeAction):
             log.msg(e.message, system='sync-hw')
             if e.remote_tb:
                 log.msg(e.remote_tb, system='sync-hw')
-            return
+            defer.returnValue(None)
 
         # TODO: Improve error handling
         def disk_info(aspect):
@@ -326,16 +327,26 @@ class SyncAction(ComputeAction):
         if vms:
             return SyncVmsAction(vms).execute(DetachedProtocol(), object())
 
+
+class SyncTemplatesAction(ComputeAction):
+    """Compute templates sync"""
+    action('sync-templates')
+
+    @db.ro_transact(proxy=False)
+    def subject(self, *args, **kwargs):
+        return tuple((self.context,))
+
     @defer.inlineCallbacks
-    def sync_templates(self):
-        if not follow_symlinks(self.context['vms']):
-            return
+    def _execute(self, cmd, args):
+        if not any_stack_installed(self.context) or not follow_symlinks(self.context['vms']):
+            defer.returnValue(None)
 
         submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:
-            return
+            log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
+            defer.returnValue(None)
 
         @db.transact
         def update_templates():
@@ -369,4 +380,6 @@ class SyncAction(ComputeAction):
             for i in set(template_names).difference(i['template_name'] for i in templates):
                 template_container.remove(follow_symlinks(template_container['by-name'][i]))
 
+        log.msg('Synced templates on %s. Updating %s templates' % (self.context, len(templates)),
+                system='sync-templates')
         yield update_templates()
