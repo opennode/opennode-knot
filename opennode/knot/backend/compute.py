@@ -161,7 +161,9 @@ class AllocateAction(ComputeAction):
                                      find_compute_v12n_container(m, container) and
                                      self.context.memory_usage < m.memory and
                                      self.context.diskspace[param] < m.diskspace.get(param, 0) and
-                                     self.context.num_cores <= m.num_cores), all_machines)
+                                     self.context.num_cores <= m.num_cores and
+                                     self.context.template.name in map(lambda t: t.name, m['templates'])),
+                          all_machines)
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
         machines = yield get_matching_machines(vmsbackend)

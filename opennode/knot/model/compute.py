@@ -201,6 +201,8 @@ class Compute(Container):
     __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IZabbixConfiguration, IManageable,
                    ISaltInstalled, IFuncInstalled]
 
+    hostname = u''
+
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
     nameservers = []

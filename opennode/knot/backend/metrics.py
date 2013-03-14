@@ -58,7 +58,7 @@ class MetricsDaemonProcess(DaemonProcess):
         @db.ro_transact
         def get_gatherers():
             oms_root = db.get_root()['oms_root']
-            computes = filter(lambda c: ICompute.providedBy(c) and not c.failure,
+            computes = filter(lambda c: c and ICompute.providedBy(c) and not c.failure,
                          map(follow_symlinks, oms_root['computes'].listcontent()))
 
             gatherers = filter(None, (queryAdapter(c, IMetricsGatherer) for c in computes))
