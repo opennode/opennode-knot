@@ -447,6 +447,8 @@ class Computes(AddingContainer):
         # break an import cycle
         from opennode.oms.zodb import db
         machines = db.get_root()['oms_root']['machines']
+        if not machines.hangar['vms']:
+            pass
         return (machines.hangar if IVirtualCompute.providedBy(item) else machines).add(item)
 
     def __delitem__(self, key):

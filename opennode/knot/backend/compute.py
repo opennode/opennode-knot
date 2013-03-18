@@ -5,7 +5,6 @@ from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
 from zope.component import handle
 
-from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.backend.operation import IDeployVM
 from opennode.knot.backend.operation import IDestroyVM
 from opennode.knot.backend.operation import IListVMS
@@ -18,6 +17,7 @@ from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUndeployVM
 from opennode.knot.backend.operation import IUpdateVM
 from opennode.knot.backend.operation import OperationRemoteError
+from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IManageable
@@ -203,6 +203,19 @@ class DeployAction(VComputeAction):
                     system='deploy-action', logLevel=ERROR)
             defer.returnValue(None)
 
+        @db.ro_transact
+        def check_ip_address():
+            return self.context.ipv4_address is not None
+
+        @db.transact
+        def ensure_ip_address():
+            ippools = db.get_root()['oms_root']['ippools']
+            ip = ippools.allocate()
+            if ip is not None:
+                self.context.ipv4_address = str(ip)
+            else:
+                raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')
+
         @db.ro_transact(proxy=False)
         def get_parameters():
             return {'template_name': self.context.template,
@@ -229,6 +242,10 @@ class DeployAction(VComputeAction):
 
         try:
             yield db.transact(alsoProvides)(self.context, IDeploying)
+
+            if not (yield check_ip_address()):
+                yield ensure_ip_address()
+
             vm_parameters = yield get_parameters()
             vms_backend = yield db.get(target, 'backend')
 

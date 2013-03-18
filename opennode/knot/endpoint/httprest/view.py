@@ -109,10 +109,7 @@ class ComputeView(ContainerView):
 
     def render_recursive(self, request, *args, **kwargs):
         ret = super(ComputeView, self).render_recursive(request, *args, **kwargs)
-
-        ret.update({
-            'uptime': self.context.uptime,
-        })
+        ret.update({'uptime': self.context.uptime})
         return self.filter_attributes(request, ret)
 
     def blacklisted(self, item):
