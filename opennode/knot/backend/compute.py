@@ -21,6 +21,7 @@ from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitte
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IManageable
+from opennode.knot.model.template import ITemplate
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.config import get_config
@@ -162,7 +163,10 @@ class AllocateAction(ComputeAction):
                                      self.context.memory_usage < m.memory and
                                      self.context.diskspace[param] < m.diskspace.get(param, 0) and
                                      self.context.num_cores <= m.num_cores and
-                                     self.context.template.name in map(lambda t: t.name, m['templates'])),
+                                     self.context.template in
+                                     map(lambda t: t.name,
+                                         filter(lambda t: ITemplate.providedBy(t),
+                                                m['templates'].listcontent()))),
                           all_machines)
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
@@ -198,8 +202,8 @@ class DeployAction(VComputeAction):
 
         if not template:
             cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
-            log.msg('Cannot deploy %s (%s) because no template was specified' % (self.context.hostname,
-                                                                                 self.context),
+            log.msg('Cannot deploy %s (%s) because no template was specified' %
+                    (self.context.hostname, self.context),
                     system='deploy-action', logLevel=ERROR)
             defer.returnValue(None)
 
@@ -212,6 +216,7 @@ class DeployAction(VComputeAction):
             ippools = db.get_root()['oms_root']['ippools']
             ip = ippools.allocate()
             if ip is not None:
+                log.msg('Allocating IP: %s for %s' % (ip, self.context), system='deploy-action')
                 self.context.ipv4_address = str(ip)
             else:
                 raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')
@@ -419,7 +424,6 @@ class MigrateAction(VComputeAction):
         except OperationRemoteError as e:
             self.handle_error(cmd, 'Failed migration of %s to %s: remote error %s' % (
                 name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
-            defer.returnValue(None)
 
 
 class InfoAction(VComputeAction):

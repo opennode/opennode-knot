@@ -447,6 +447,7 @@ class Computes(AddingContainer):
         # break an import cycle
         from opennode.oms.zodb import db
         machines = db.get_root()['oms_root']['machines']
+        # TODO: fix adding computes to vms instead of hangar
         if not machines.hangar['vms']:
             pass
         return (machines.hangar if IVirtualCompute.providedBy(item) else machines).add(item)
