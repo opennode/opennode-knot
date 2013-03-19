@@ -87,20 +87,20 @@ class ComputeAction(Action):
         return tuple((self.context.__parent__.__parent__,))
 
     def locked(self):
-        return self.context in self._lock_registry
+        return str(self.context) in self._lock_registry
 
     def lock(self):
-        self._lock_registry[self.context] = defer.Deferred()
+        self._lock_registry[str(self.context)] = defer.Deferred()
 
     def unlock(self, d):
-        d.chainDeferred(self._lock_registry[self.context])
+        d.chainDeferred(self._lock_registry[str(self.context)])
 
     def execute(self, cmd, args):
         if self.locked():
             log.msg('%s is locked. Scheduling to run after finish of a previous action' % (self.context),
                     system='compute-action')
-            self._lock_registry[self.context].addBoth(lambda r: self.execute(cmd, args))
-            return self._lock_registry[self.context]
+            self._lock_registry[str(self.context)].addBoth(lambda r: self.execute(cmd, args))
+            return self._lock_registry[str(self.context)]
         self.lock()
         d = self._execute(cmd, args)
         def handle_error(e):
