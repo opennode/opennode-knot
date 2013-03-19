@@ -1,9 +1,10 @@
 from grokcore.component import context
 from twisted.internet import defer
 from twisted.python import log
+from netaddr import IPAddress
 
 from opennode.knot.model.compute import ICompute
-from opennode.knot.model.network import IPv4Pools, IPv4Address
+from opennode.knot.model.network import IPv4Pools
 from opennode.oms.model.model.actions import Action
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.zodb import db
@@ -26,7 +27,7 @@ class SyncIPUsageAction(Action):
                                   db.get_root()['oms_root']['computes'].listcontent()))
                 pools = db.get_root()['oms_root']['ippools']
                 for c in computes:
-                    ip = IPv4Address(c.ipv4_address.split('/')[0])
+                    ip = IPAddress(c.ipv4_address.split('/')[0])
                     pool = pools.find_pool(ip)
                     if pool is not None and not pool.get(ip):
                         log.msg('Marking %s as used...' % ip, system='sync-ippool')
