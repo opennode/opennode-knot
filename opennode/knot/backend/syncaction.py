@@ -55,7 +55,7 @@ class SyncAction(ComputeAction):
         if any_stack_installed(self.context):
             yield self.ensure_vms()
 
-        yield SyncTemplatesAction(self.context).execute(DetachedProtocol(), object())
+        yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
 
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
@@ -277,23 +277,23 @@ class SyncAction(ComputeAction):
         self.context.uptime = uptime
 
         # XXX TODO: handle removal of routes
-        for i in routes:
-            destination = netaddr.IPNetwork('%s/%s' % (i['destination'], i['netmask']))
+        for r in routes:
+            destination = netaddr.IPNetwork('%s/%s' % (r['destination'], r['netmask']))
             route_name = str(destination.cidr).replace('/', '_')
 
             if self.context.routes[route_name]:
                 continue
 
-            gateway = netaddr.IPAddress(i['router'])
+            gateway = netaddr.IPAddress(r['router'])
 
             route = NetworkRoute()
             route.destination = str(destination.cidr)
             route.gateway = str(gateway)
-            route.flags = i['flags']
-            route.metrics = int(i['metrics'])
+            route.flags = r['flags']
+            route.metrics = int(r['metrics'])
             route.__name__ = route_name
 
-            interface = self.context.interfaces[i['interface']]
+            interface = self.context.interfaces[r['interface']]
             if interface:
                 route.add(Symlink('interface', interface))
 

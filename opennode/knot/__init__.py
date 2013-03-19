@@ -13,7 +13,7 @@ from opennode.knot.model.template import Template
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.storage import Storage
-from opennode.knot.model.network import Network, NetworkInterface
+from opennode.knot.model.network import Network, NetworkInterface, IPv4Pool
 from opennode.knot.model.console import VncConsole
 
 log = logging.getLogger(__name__)
@@ -34,6 +34,6 @@ class KnotPlugin(PluginInfo):
 
         compute_creatable_models = dict((cls.__name__.lower(), cls)
                                         for cls in [Compute, Template, Network, NetworkInterface, Storage,
-                                                    VirtualizationContainer, Hangar, VncConsole])
+                                                    VirtualizationContainer, Hangar, VncConsole, IPv4Pool])
 
         creatable_models.update(compute_creatable_models)

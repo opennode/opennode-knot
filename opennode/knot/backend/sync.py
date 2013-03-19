@@ -5,6 +5,7 @@ from zope.component import provideSubscriptionAdapter, getAllUtilitiesRegistered
 from zope.interface import implements
 
 from opennode.knot.backend.syncaction import SyncAction
+from opennode.knot.backend.network import SyncIPUsageAction
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.operation import IPing
 from opennode.knot.model.backend import IKeyManager
@@ -73,6 +74,7 @@ class SyncDaemonProcess(DaemonProcess):
         log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
         yield self.execute_ping_tests()
+        yield self.gather_ippools()
 
     @defer.inlineCallbacks
     def cleanup_machines(self, accepted):
@@ -187,5 +189,13 @@ class SyncDaemonProcess(DaemonProcess):
             else:
                 log.msg("Pinging %s skipped: previous test not finished yet" % hostname, system='sync')
 
+    @defer.inlineCallbacks
+    def gather_ippools(self):
+        @db.ro_transact
+        def get_ippools():
+            return db.get_root()['oms_root']['ippools']
+
+        log.msg('Syncing IP pools...', system='sync')
+        yield SyncIPUsageAction((yield get_ippools())).execute(DetachedProtocol(), object())
 
 provideSubscriptionAdapter(subscription_factory(SyncDaemonProcess), adapts=(Proc,))
