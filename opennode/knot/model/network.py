@@ -64,10 +64,9 @@ class NetworkInterface(ReadonlyContainer):
         if not self.ipv4_address:
             return None
 
-        if '/' in self.ipv4_address:
-            ip, prefix = self.ipv4_address.split('/')
-        else:
-            raise ValueError('ipv4_address must be a string in full IPv4 address format: 0.0.0.0/32')
+        ipnet_components = self.ipv4_address.split('/')
+        ip = ipnet_components[0]
+        prefix = ipnet_components[1] if len(ipnet_components) > 1 else '32'
 
         l = 0
         for b in ip.split('.'):
