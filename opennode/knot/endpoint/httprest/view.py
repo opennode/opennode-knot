@@ -8,7 +8,7 @@ from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.model.stream import Metrics
-from opennode.oms.model.form import ApplyRawData
+from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView
 from opennode.oms.endpoint.httprest.root import BadRequest
@@ -62,7 +62,7 @@ class VirtualizationContainerView(ContainerView):
             if k in data:
                 del data[k]
 
-        form = ApplyRawData(data, model=Compute, marker=IVirtualCompute)
+        form = RawDataValidatingFactory(data, Compute, marker=IVirtualCompute)
 
         if form.errors or not data.get('template'):
             template_error = [dict(id='template', msg="missing value")] if not data.get('template') else []
@@ -91,7 +91,7 @@ class HangarView(ContainerView):
         if not isinstance(data, dict):
             raise BadRequest("Input data must be a dictionary")
 
-        form = ApplyRawData(data, model=VirtualizationContainer)
+        form = RawDataValidatingFactory(data, VirtualizationContainer)
 
         if form.errors or not data.get('backend'):
             backend_error = [dict(id='backend', msg="missing value")] if not data.get('backend') else []
