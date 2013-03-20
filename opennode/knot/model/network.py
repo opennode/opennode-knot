@@ -64,7 +64,10 @@ class NetworkInterface(ReadonlyContainer):
         if not self.ipv4_address:
             return None
 
-        ip, prefix = self.ipv4_address.split('/')
+        ipnet_components = self.ipv4_address.split('/')
+        ip = ipnet_components[0]
+        prefix = ipnet_components[1] if len(ipnet_components) > 1 else '32'
+
         l = 0
         for b in ip.split('.'):
             l = l << 8 | int(b)
