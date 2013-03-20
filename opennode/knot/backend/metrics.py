@@ -9,7 +9,7 @@ from zope.interface import implements, Interface
 
 from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics, OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
-from opennode.knot.model.compute import IManageable
+from opennode.knot.model.compute import IManageable, ICompute
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
@@ -57,12 +57,12 @@ class MetricsDaemonProcess(DaemonProcess):
     def gather_machines(self):
         @db.ro_transact
         def get_gatherers():
-            res = []
-
             oms_root = db.get_root()['oms_root']
-            res = filter(None, (queryAdapter(follow_symlinks(i), IMetricsGatherer)
-                                for i in oms_root['computes'].listcontent()))
-            return res
+            computes = filter(lambda c: c and ICompute.providedBy(c) and not c.failure,
+                         map(follow_symlinks, oms_root['computes'].listcontent()))
+
+            gatherers = filter(None, (queryAdapter(c, IMetricsGatherer) for c in computes))
+            return gatherers
 
         def handle_success(r, c):
             self.log_msg('Metrics gathered for %s' % (c), logLevel=logging.DEBUG)
@@ -74,8 +74,7 @@ class MetricsDaemonProcess(DaemonProcess):
             self.log_err()
             del self.outstanding_requests[c]
 
-        gatherers = (yield get_gatherers())
-        for g in gatherers:
+        for g in (yield get_gatherers()):
             hostname = yield db.get(g.context, 'hostname')
             if hostname not in self.outstanding_requests:
                 self.log_msg('Gathering metrics for %s' % hostname, logLevel=logging.DEBUG)

@@ -1,9 +1,15 @@
 from __future__ import absolute_import
 
+import netaddr
+
+from grokcore.component import context
 from zope import schema
-from zope.interface import Interface, implements
+from zope.schema.interfaces import IFromUnicode, IInt
+from zope.interface import Interface, implements, implementer
 
 from opennode.oms.model.model.base import ReadonlyContainer, Container, Model
+from opennode.oms.model.model.base import ContainerInjector
+from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.symlink import Symlink
 
 
@@ -66,9 +72,7 @@ class NetworkInterface(ReadonlyContainer):
         l = 0
         for b in ip.split('.'):
             l = l << 8 | int(b)
-        mask = 0xffffffff
-        for i in xrange(0, int(prefix)):
-            mask = mask >> 1
+        mask = 0xffffffff >> int(prefix)
         l = l | mask
         o = []
         for i in xrange(0, 4):
@@ -156,3 +160,106 @@ class Networks(Container):
     __contains__ = INetwork
 
     __name__ = 'networks'
+
+
+class IPAddressStorable(netaddr.IPAddress):
+
+    def __init__(self, parent, *args, **kw):
+        super(IPAddressStorable, self).__init__(*args, **kw)
+        self.__name__ = str(self)
+        self.__parent__ = parent
+
+
+@implementer(IFromUnicode, IInt)
+class IPAddressField(schema.Orderable, schema.Field):
+    __doc__ = 'IPv4 address field'
+    _type = int
+
+    def __init__(self, *args, **kw):
+        self._init_field = True
+        super(IPAddressField, self).__init__(*args, **kw)
+        self._init_field = False
+
+    def _validate(self, value):
+        if self._init_field:
+            return
+        return netaddr.IPAddress(value)
+
+    def fromUnicode(self, value):
+        v = self._validate(value)
+        return v
+
+
+class IIPv4Pool(Interface):
+    name = schema.TextLine(title=u'Pool name')
+    minimum = IPAddressField(title=u'Minimum IP')
+    maximum = IPAddressField(title=u'Maximum IP')
+
+
+# NOTE: [minimum .. maximum] specifies a contiguous range of IP addresses.
+# It is up to the user to exclude any special IP addresses from the range
+# (gateway and broadcast addresses, for example).
+class IPv4Pool(Container):
+    implements(IIPv4Pool)
+    __contains__ = netaddr.IPAddress
+
+    def __init__(self, name='ippool', min_ip=0, max_ip=0xffffffff):
+        assert min_ip <= max_ip, 'Minimum IP value must be smaller or equal to max IP value'
+        self.name = name
+        self.__name__ = name
+        self.minimum = netaddr.IPAddress(min_ip)
+        self.maximum = netaddr.IPAddress(max_ip)
+
+    def allocate(self):
+        """ Search through the range to find first unallocated IP and mark it as used and return it"""
+        for ip in xrange(int(self.minimum), int(self.maximum)):
+            ip = netaddr.IPAddress(ip)
+            if str(ip) not in self._items:
+                self.use(ip)
+                return ip
+
+    def get(self, ip):
+        return self._items.get(int(ip))
+
+    def use(self, ip):
+        self._items[int(ip)] = IPAddressStorable(self, int(ip))
+
+    def free(self, ip):
+        del self._items[int(ip)]
+
+    def validate(self):
+        assert int(self.minimum) <= int(self.maximum),\
+                'Minimum IP value must be smaller or equal to max IP value'
+
+
+class IPv4Pools(Container):
+    __contains__ = IPv4Pool
+    __name__ = 'ippools'
+
+    def find_pool(self, ip):
+        ip = netaddr.IPAddress(ip)
+        for n, pool in self._items.iteritems():
+            if int(pool.minimum) <= int(ip) and int(pool.maximum) >= int(ip):
+                return pool
+
+    def find_intersections(self, pool):
+        for n, epool in self._items.iteritems():
+            if int(pool.minimum) <= int(epool.maximum) and int(pool.maximum) >= int(epool.minimum):
+                return True
+        return False
+
+    def add(self, pool):
+        if self.find_intersections(pool):
+            raise ValueError('IP ranges must not intersect')
+        pool.validate()
+        return super(IPv4Pools, self).add(pool)
+
+    def allocate(self):
+        for n, p in self._items.iteritems():
+            ip = p.allocate()
+            if ip is not None:
+                return ip
+
+class IPv4PoolsRootInjector(ContainerInjector):
+    context(OmsRoot)
+    __class__ = IPv4Pools

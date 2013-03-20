@@ -103,5 +103,3 @@ class PingCheckDaemonProcess(DaemonProcess):
             deferred.addErrback(handle_errors, c)
 
 provideSubscriptionAdapter(subscription_factory(PingCheckDaemonProcess), adapts=(Proc,))
-
-

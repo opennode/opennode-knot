@@ -5,10 +5,15 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from opennode.oms.model.model.base import Model, Container, IDisplayName, ContainerInjector
-from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.model.model.base import Container
+from opennode.oms.model.model.base import ContainerInjector
+from opennode.oms.model.model.base import IDisplayName
+from opennode.oms.model.model.base import Model
+from opennode.oms.model.model.base import ReadonlyContainer
 from opennode.oms.model.model.byname import ByNameContainerExtension
+from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.model.model.search import ModelTags
+from opennode.oms.model.model.symlink import Symlink
 
 
 class ITemplate(Interface):
@@ -71,9 +76,44 @@ class Templates(Container):
         return 'Template list'
 
 
+class GlobalTemplates(ReadonlyContainer):
+    __contains__ = Template
+    __name__ = 'templates'
+
+    def __str__(self):
+        return 'Global template list'
+
+    @property
+    def _items(self):
+        # break an import cycle
+        from opennode.oms.zodb import db
+        machines = db.get_root()['oms_root']['machines']
+
+        templates = {}
+
+        def collect(container):
+            from opennode.knot.model.machines import Machines
+            from opennode.knot.model.compute import ICompute, IVirtualCompute
+
+            seen = set()
+            for item in container.listcontent():
+                if ITemplate.providedBy(item) and item.__name__ not in templates:
+                    templates[item.__name__] = Symlink(item.__name__, item)
+
+                if ((isinstance(item, Machines) or isinstance(item, Templates) or ICompute.providedBy(item))
+                    and not IVirtualCompute.providedBy(item)):
+                    if item.__name__ not in seen:
+                        seen.add(item.__name__)
+                        collect(item)
+
+        collect(machines)
+        return templates
+
+
 class TemplatesRootInjector(ContainerInjector):
     context(OmsRoot)
-    __class__ = Templates
+    __class__ = GlobalTemplates
 
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Templates, ))
+provideSubscriptionAdapter(ByNameContainerExtension, adapts=(GlobalTemplates, ))

@@ -1,3 +1,4 @@
+import logging
 import netaddr
 
 from twisted.internet import defer
@@ -5,6 +6,7 @@ from twisted.python import log
 
 from opennode.knot.backend.compute import any_stack_installed
 from opennode.knot.backend.compute import ComputeAction
+from opennode.knot.backend.operation import IAgentVersion
 from opennode.knot.backend.operation import IListVMS
 from opennode.knot.backend.operation import IGetComputeInfo
 from opennode.knot.backend.operation import IGetVirtualizationContainers
@@ -43,6 +45,8 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+        yield self.sync_agent_version()
+
         default = yield self.default_console()
 
         yield self.sync_consoles()
@@ -50,7 +54,8 @@ class SyncAction(ComputeAction):
 
         if any_stack_installed(self.context):
             yield self.ensure_vms()
-            yield self.sync_templates()
+
+        yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
 
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
@@ -58,6 +63,37 @@ class SyncAction(ComputeAction):
         yield self._create_default_console(default)
 
         yield self.sync_vms()
+
+    @defer.inlineCallbacks
+    def sync_agent_version(self):
+        log.msg('Syncing version...', system='sync-action')
+        minion_v = (yield IAgentVersion(self.context).run()).split('.')
+        # XXX: Salt-specific
+        from opennode.knot.backend.salt import get_master_version
+        master_v = (yield get_master_version()).split('.')
+
+        if master_v[0] != minion_v[0]:
+            @db.transact
+            def set_failure():
+                self.context.failure = True
+            yield set_failure()
+            log.msg('Major agent version mismatch: master %s != minion %s on %s'
+                    % (master_v, minion_v, self.context),
+                    system='sync-action', logLevel=logging.ERROR)
+            raise Exception('Major agent version mismatch')
+
+        if master_v[1] != minion_v[1]:
+            @db.transact
+            def set_suspicious():
+                self.context.suspicious = True
+            yield set_suspicious()
+            log.msg('Minor agent version mismatch: master %s != minion %s on %s'
+                    % (master_v, minion_v, self.context),
+                    system='sync-action', logLevel=logging.WARNING)
+        elif master_v != minion_v:
+            log.msg('Release agent version mismatch: master %s != minion %s on %s'
+                    % (master_v, minion_v, self.context),
+                    system='sync-action')
 
     @db.ro_transact
     def default_console(self):
@@ -194,7 +230,7 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def sync_hw(self):
         if not any_stack_installed(self.context):
-            return
+            defer.returnValue(None)
 
         try:
             info = yield IGetComputeInfo(self.context).run()
@@ -204,7 +240,7 @@ class SyncAction(ComputeAction):
             log.msg(e.message, system='sync-hw')
             if e.remote_tb:
                 log.msg(e.remote_tb, system='sync-hw')
-            return
+            defer.returnValue(None)
 
         # TODO: Improve error handling
         def disk_info(aspect):
@@ -241,23 +277,23 @@ class SyncAction(ComputeAction):
         self.context.uptime = uptime
 
         # XXX TODO: handle removal of routes
-        for i in routes:
-            destination = netaddr.IPNetwork('%s/%s' % (i['destination'], i['netmask']))
+        for r in routes:
+            destination = netaddr.IPNetwork('%s/%s' % (r['destination'], r['netmask']))
             route_name = str(destination.cidr).replace('/', '_')
 
             if self.context.routes[route_name]:
                 continue
 
-            gateway = netaddr.IPAddress(i['router'])
+            gateway = netaddr.IPAddress(r['router'])
 
             route = NetworkRoute()
             route.destination = str(destination.cidr)
             route.gateway = str(gateway)
-            route.flags = i['flags']
-            route.metrics = int(i['metrics'])
+            route.flags = r['flags']
+            route.metrics = int(r['metrics'])
             route.__name__ = route_name
 
-            interface = self.context.interfaces[i['interface']]
+            interface = self.context.interfaces[r['interface']]
             if interface:
                 route.add(Symlink('interface', interface))
 
@@ -291,16 +327,26 @@ class SyncAction(ComputeAction):
         if vms:
             return SyncVmsAction(vms).execute(DetachedProtocol(), object())
 
+
+class SyncTemplatesAction(ComputeAction):
+    """Compute templates sync"""
+    action('sync-templates')
+
+    @db.ro_transact(proxy=False)
+    def subject(self, *args, **kwargs):
+        return tuple((self.context,))
+
     @defer.inlineCallbacks
-    def sync_templates(self):
-        if not follow_symlinks(self.context['vms']):
-            return
+    def _execute(self, cmd, args):
+        if not any_stack_installed(self.context) or not follow_symlinks(self.context['vms']):
+            defer.returnValue(None)
 
         submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:
-            return
+            log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
+            defer.returnValue(None)
 
         @db.transact
         def update_templates():
@@ -334,4 +380,6 @@ class SyncAction(ComputeAction):
             for i in set(template_names).difference(i['template_name'] for i in templates):
                 template_container.remove(follow_symlinks(template_container['by-name'][i]))
 
+        log.msg('Synced templates on %s. Updating %s templates' % (self.context, len(templates)),
+                system='sync-templates')
         yield update_templates()
