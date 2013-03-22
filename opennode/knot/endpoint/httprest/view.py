@@ -1,6 +1,8 @@
 import json
 
 from grokcore.component import context
+from zope.authentication.interfaces import IAuthentication
+from zope.component import getUtility
 
 from opennode.knot.model.compute import Compute, IVirtualCompute
 from opennode.knot.model.machines import Machines
@@ -12,6 +14,7 @@ from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView
 from opennode.oms.endpoint.httprest.root import BadRequest
+from opennode.oms.security.checker import get_interaction
 
 
 class MachinesView(ContainerView):
@@ -70,6 +73,15 @@ class VirtualizationContainerView(ContainerView):
                     'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + template_error}
 
         compute = form.create()
+
+        interaction = get_interaction(self.context) or request.interaction
+        if not interaction:
+            auth = getUtility(IAuthentication, context=None)
+            principal = auth.getPrincipal(None)
+        else:
+            principal = interaction.participations[0].principal
+
+        compute.__owner__ = principal
 
         compute.root_password = root_password
         self.context.add(compute)
