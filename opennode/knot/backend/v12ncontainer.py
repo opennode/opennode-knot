@@ -50,7 +50,7 @@ class VirtualizationContainerSubmitter(Adapter):
             try:
                 e.raiseException()
             except OperationRemoteError as ore:
-                log.msg(e, _why='Remote error', system='v12n-submitter')
+                log.msg(e.getErrorMessage(), _why='Remote error', system='v12n-submitter')
                 if ore.remote_tb:
                     log.msg(ore.remote_tb, system='v12n-submitter')
                 raise
