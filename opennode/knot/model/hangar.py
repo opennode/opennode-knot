@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 
+from grokcore.component import context
 from zope.interface import Interface, implements
 
-from opennode.oms.model.model.base import Container
-from opennode.oms.security.directives import permissions
+from opennode.oms.model.model.base import Container, ContainerInjector
 
 
 class IHangar(Interface):
@@ -17,10 +17,10 @@ class IInHangar(Interface):
 
 class Hangar(Container):
     implements(IHangar)
-    permissions(dict(backend=('read', 'modify')))
 
     __contains__ = IInHangar
     __name__ = 'hangar'
 
     def __str__(self):
         return self.__name__
+
