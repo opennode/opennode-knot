@@ -20,8 +20,6 @@ class Machines(Container):
 
     def __init__(self):
         super(Machines, self).__init__()
-        self.hangar = Hangar()
-        self._add(self.hangar)
 
     def __str__(self):
         return 'Machines list'
@@ -66,6 +64,11 @@ class BaseIncomingMachines(ReadonlyContainer):
         items = self._get()
         pending = dict((h, IncomingMachineRequest(h)) for h in items)
         return pending
+
+
+class HangarMachinesInjector(ContainerInjector):
+    context(Machines)
+    __class__ = Hangar
 
 
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Machines, ))

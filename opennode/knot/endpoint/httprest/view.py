@@ -1,6 +1,8 @@
 import json
 
 from grokcore.component import context
+from zope.authentication.interfaces import IAuthentication
+from zope.component import getUtility
 
 from opennode.knot.model.compute import Compute, IVirtualCompute
 from opennode.knot.model.machines import Machines
@@ -8,10 +10,11 @@ from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.model.stream import Metrics
-from opennode.oms.model.form import ApplyRawData
+from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView
 from opennode.oms.endpoint.httprest.root import BadRequest
+from opennode.oms.security.checker import get_interaction
 
 
 class MachinesView(ContainerView):
@@ -62,7 +65,7 @@ class VirtualizationContainerView(ContainerView):
             if k in data:
                 del data[k]
 
-        form = ApplyRawData(data, model=Compute, marker=IVirtualCompute)
+        form = RawDataValidatingFactory(data, Compute, marker=IVirtualCompute)
 
         if form.errors or not data.get('template'):
             template_error = [dict(id='template', msg="missing value")] if not data.get('template') else []
@@ -70,6 +73,15 @@ class VirtualizationContainerView(ContainerView):
                     'errors': [dict(id=k, msg=v) for k, v in form.error_dict().items()] + template_error}
 
         compute = form.create()
+
+        interaction = get_interaction(self.context) or request.interaction
+        if not interaction:
+            auth = getUtility(IAuthentication, context=None)
+            principal = auth.getPrincipal(None)
+        else:
+            principal = interaction.participations[0].principal
+
+        compute.__owner__ = principal
 
         compute.root_password = root_password
         self.context.add(compute)
@@ -91,7 +103,7 @@ class HangarView(ContainerView):
         if not isinstance(data, dict):
             raise BadRequest("Input data must be a dictionary")
 
-        form = ApplyRawData(data, model=VirtualizationContainer)
+        form = RawDataValidatingFactory(data, VirtualizationContainer)
 
         if form.errors or not data.get('backend'):
             backend_error = [dict(id='backend', msg="missing value")] if not data.get('backend') else []
