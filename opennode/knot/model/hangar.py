@@ -1,9 +1,8 @@
 from __future__ import absolute_import
 
-from grokcore.component import context
 from zope.interface import Interface, implements
 
-from opennode.oms.model.model.base import Container, ContainerInjector
+from opennode.oms.model.model.base import Container
 
 
 class IHangar(Interface):
@@ -23,4 +22,3 @@ class Hangar(Container):
 
     def __str__(self):
         return self.__name__
-

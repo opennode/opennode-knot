@@ -12,7 +12,6 @@ from opennode.oms.zodb import db
 
 class PingCmd(Cmd):
     implements(ICmdArgumentsSyntax)
-
     command('ping')
 
     def arguments(self):
