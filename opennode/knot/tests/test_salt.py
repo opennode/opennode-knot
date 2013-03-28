@@ -8,7 +8,7 @@ from zope.interface import alsoProvides
 
 import opennode.knot.tests
 from opennode.knot.backend.operation import IGetComputeInfo, IStartVM, IShutdownVM, IListVMS, IUpdateVM
-from opennode.oms.model.form import ApplyRawData
+from opennode.oms.model.form import RawDataApplier
 from opennode.knot.model.compute import Compute
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
@@ -69,7 +69,7 @@ def test_activate_compute():
     # force effective state because it's a lazy attribute
     compute.effective_state = u'inactive'
 
-    ApplyRawData({'state': u'active'}, compute).apply()
+    RawDataApplier({'state': u'active'}, compute).apply()
 
     root = ElementTree.parse('/tmp/salt_vm_test_state.xml')
     for node in root.findall('domain'):

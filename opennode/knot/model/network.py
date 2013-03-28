@@ -139,6 +139,7 @@ class Network(Model):
     implements(INetwork)
 
     def __init__(self, state):
+        super(Network, self).__init__()
         self.state = state
 
         self.vlan = None
@@ -203,6 +204,7 @@ class IPv4Pool(Container):
     __contains__ = netaddr.IPAddress
 
     def __init__(self, name='ippool', min_ip=0, max_ip=0xffffffff):
+        super(IPv4Pool, self).__init__()
         assert min_ip <= max_ip, 'Minimum IP value must be smaller or equal to max IP value'
         self.name = name
         self.__name__ = name
@@ -235,6 +237,9 @@ class IPv4Pools(Container):
     __contains__ = IPv4Pool
     __name__ = 'ippools'
 
+    def __init__(self):
+        super(IPv4Pools, self).__init__()
+
     def find_pool(self, ip):
         ip = netaddr.IPAddress(ip)
         for n, pool in self._items.iteritems():
@@ -258,6 +263,7 @@ class IPv4Pools(Container):
             ip = p.allocate()
             if ip is not None:
                 return ip
+
 
 class IPv4PoolsRootInjector(ContainerInjector):
     context(OmsRoot)
