@@ -27,6 +27,7 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
+from opennode.oms.log import UserLogger
 from opennode.oms.model.form import IModelModifiedEvent
 from opennode.oms.model.form import IModelDeletedEvent
 from opennode.oms.model.form import IModelCreatedEvent
@@ -104,14 +105,25 @@ class ComputeAction(Action):
             lock_action = self._lock_registry[str(self.context)][1]
             log.msg('%s: %s is locked. Scheduling to run after finish of a previous action: %s'
                     % (self, self.context, lock_action), system='compute-action')
-            self._lock_registry[str(self.context)][0].addBoth(lambda r: self.execute(cmd, args))
+            self._lock_registry[str(self.context)][0].addBoth(lambda r: self._execute(cmd, args))
             return self._lock_registry[str(self.context)][0]
+
         self.lock()
+
         d = self._execute(cmd, args)
-        def handle_error(e):
+
+        def handle_error(failure):
             log.err(system='compute-action')
-            return e
+            ulog = UserLogger(cmd.protocol.interaction.participations[0].principal)
+            ulog.log('Exception "%s" executing "%s"', failure.value, self.__class__.__name__)
+            return failure
+
+        def handle_action_done(r):
+            ulog = UserLogger(cmd.protocol.interaction.participations[0].principal)
+            ulog.log('%s finished successfully', self.__class__.__name__)
+
         d.addErrback(handle_error)
+        d.addCallback(handle_action_done)
         self.unlock(d)
         return d
 
