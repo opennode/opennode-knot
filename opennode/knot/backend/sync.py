@@ -205,4 +205,5 @@ class SyncDaemonProcess(DaemonProcess):
         log.msg('Syncing IP pools...', system='sync')
         yield SyncIPUsageAction((yield get_ippools())).execute(DetachedProtocol(), object())
 
+
 provideSubscriptionAdapter(subscription_factory(SyncDaemonProcess), adapts=(Proc,))
