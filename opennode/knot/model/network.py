@@ -264,6 +264,13 @@ class IPv4Pools(Container):
             if ip is not None:
                 return ip
 
+    def free(self, ip):
+        for n, pool in self._items.iteritems():
+            if pool.get(ip):
+                pool.free(ip)
+                return True
+        return False
+
 
 class IPv4PoolsRootInjector(ContainerInjector):
     context(OmsRoot)
