@@ -1,9 +1,10 @@
-from grokcore.component import context, subscribe, baseclass
+from grokcore.component import context, baseclass
 from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
-from zope.component import handle
+
+import netaddr
 
 from opennode.knot.backend.operation import IDeployVM
 from opennode.knot.backend.operation import IDestroyVM
@@ -15,7 +16,6 @@ from opennode.knot.backend.operation import IShutdownVM
 from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUndeployVM
-from opennode.knot.backend.operation import IUpdateVM
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
@@ -27,15 +27,11 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
-from opennode.oms.model.form import IModelModifiedEvent
-from opennode.oms.model.form import IModelDeletedEvent
-from opennode.oms.model.form import IModelCreatedEvent
-from opennode.oms.model.form import ModelModifiedEvent
+from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import follow_symlinks
-from opennode.oms.util import blocking_yield, exception_logger
 from opennode.oms.zodb import db
 
 
@@ -104,14 +100,32 @@ class ComputeAction(Action):
             lock_action = self._lock_registry[str(self.context)][1]
             log.msg('%s: %s is locked. Scheduling to run after finish of a previous action: %s'
                     % (self, self.context, lock_action), system='compute-action')
+            # XXX: must be self.execute(), not self._execute(), otherwise a deadlock may occur
             self._lock_registry[str(self.context)][0].addBoth(lambda r: self.execute(cmd, args))
             return self._lock_registry[str(self.context)][0]
+
         self.lock()
+
         d = self._execute(cmd, args)
-        def handle_error(e):
+
+        @defer.inlineCallbacks
+        def handle_error(failure):
             log.err(system='compute-action')
-            return e
+            owner = yield db.get(self.context, '__owner__')
+            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                              subject=self.context, owner=owner)
+            ulog.log('Exception "%s" executing "%s"', failure.value, self.__class__.__name__)
+            defer.returnValue(failure)
+
+        @defer.inlineCallbacks
+        def handle_action_done(r):
+            owner = yield db.get(self.context, '__owner__')
+            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                              subject=self.context, owner=owner)
+            ulog.log('%s finished successfully', self.__class__.__name__)
+
         d.addErrback(handle_error)
+        d.addCallback(handle_action_done)
         self.unlock(d)
         return d
 
@@ -238,6 +252,9 @@ class DeployAction(VComputeAction):
             ip = ippools.allocate()
             if ip is not None:
                 log.msg('Allocated IP: %s for %s' % (ip, self.context), system='deploy')
+                ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                                  subject=self.context, owner=self.context.__owner__)
+                ulog.log('Allocated IP: %s', ip)
                 return ip
             else:
                 raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')
@@ -353,9 +370,16 @@ class UndeployAction(VComputeAction):
 
         @db.transact
         def finalize_vm():
+            ippools = db.get_root()['oms_root']['ippools']
+            ip = netaddr.IPAddress(self.context.ipv4_address.split('/')[0])
+            if ippools.free(ip):
+                ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                                  subject=self.context, owner=self.context.__owner__)
+                ulog.log('Deallocated IP: %s', ip)
+
             noLongerProvides(self.context, IDeployed)
             alsoProvides(self.context, IUndeployed)
-            cmd.write("changed state from deployed to undeployed\n")
+            cmd.write('Changed state from deployed to undeployed\n')
 
         yield finalize_vm()
 
@@ -532,94 +556,3 @@ class RebootAction(VComputeAction):
     action('reboot')
 
     job = IRebootVM
-
-
-@subscribe(ICompute, IModelModifiedEvent)
-@defer.inlineCallbacks
-def handle_compute_state_change_request(compute, event):
-
-    if not event.modified.get('state', None):
-        defer.returnValue(None)
-
-    def get_action(original, modified):
-        action_mapping = {'inactive': {'active': IStartVM},
-                          'suspended': {'active': IResumeVM},
-                          'active': {'inactive': IShutdownVM,
-                                     'suspended': ISuspendVM}}
-
-        action = action_mapping.get(original, {}).get(modified, None)
-        return action
-
-    original = event.original['state']
-    modified = event.modified['state']
-    action = get_action(original, modified)
-
-    if not action:
-        defer.returnValue(None)
-
-    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
-    try:
-        yield submitter.submit(action, compute.__name__)
-    except Exception:
-        compute.effective_state = event.original['state']
-        raise
-    else:
-        compute.effective_state = event.modified['state']
-
-    handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
-                                       {'effective_state': compute.effective_state}))
-
-
-@subscribe(IVirtualCompute, IModelDeletedEvent)
-def delete_virtual_compute(model, event):
-    if not ICompute.providedBy(model.__parent__.__parent__):
-        return
-
-    if IDeployed.providedBy(model):
-        log.msg('deleting compute %s which is in IDeployed state, shutting down and '
-                'undeploying first' % model.hostname, system='compute_backend')
-        blocking_yield(DestroyComputeAction(model).execute(DetachedProtocol(), object()), timeout=20000)
-        blocking_yield(UndeployAction(model).execute(DetachedProtocol(), object()), timeout=20000)
-    else:
-        log.msg('deleting compute %s which is already in IUndeployed state' %
-                model.hostname, system='compute_backend')
-
-
-@subscribe(IVirtualCompute, IModelCreatedEvent)
-def create_virtual_compute(model, event):
-    # TODO: maybe raise an exception here instead?
-    if not IVirtualizationContainer.providedBy(model.__parent__):
-        return
-
-    if not ICompute.providedBy(model.__parent__.__parent__):
-        return
-
-    if IDeployed.providedBy(model):
-        return
-
-    log.msg('Deploying VM "%s"' % model, system='deploy')
-    exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
-
-
-@subscribe(IVirtualCompute, IModelModifiedEvent)
-@defer.inlineCallbacks
-def handle_virtual_compute_config_change_request(compute, event):
-    update_param_whitelist = ['cpu_limit',
-                              'memory',
-                              'num_cores',
-                              'swap_size']
-
-    params_to_update = filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems())
-
-    if len(params_to_update) == 0:
-        return
-
-    update_values = [v for k, v in sorted(params_to_update, key=lambda (k, v): k)]
-
-    submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
-    try:
-        yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), *update_values)
-    except Exception:
-        for mk, mv in event.modified.iteritems():
-            setattr(compute, mk, event.original[mk])
-        raise
