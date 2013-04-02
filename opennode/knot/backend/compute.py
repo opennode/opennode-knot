@@ -16,6 +16,7 @@ from opennode.knot.backend.operation import IShutdownVM
 from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUndeployVM
+from opennode.knot.backend.operation import IInstallPkg
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
@@ -556,3 +557,18 @@ class RebootAction(VComputeAction):
     action('reboot')
 
     job = IRebootVM
+
+
+class InstallSaltAction(ComputeAction):
+    context(ICompute)
+    action('install-salt')
+
+    @db.ro_transact(proxy=False)
+    def subject(self, *args, **kwargs):
+        return tuple((self.context.__parent__,))
+
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        log.msg('Installing salt-minion...', system='install-salt')
+        yield IInstallPkg(self.context).run('salt-minion')
+        log.msg('Installation of salt-minion successful!', system='install-salt')

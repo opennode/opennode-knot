@@ -72,7 +72,7 @@ class SimpleSaltExecutor(object):
                           ['--no-color', '--out=json',
                            ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
-            map(lambda s: '"%s"' % s, map(str, self.args)))))
+                          map(lambda s: '"%s"' % s, map(str, self.args)))))
         data = json.loads(output) if output else {}
         rdata = self._handle_errors(data)
         defer.returnValue(rdata)
@@ -216,7 +216,8 @@ ACTIONS = {
     op.IMigrateVM: 'onode.vm_migrate',
     op.IUpdateVM: 'onode.vm_update_vm',
     op.IPing: 'test.ping',
-    op.IAgentVersion: 'test.version'
+    op.IAgentVersion: 'test.version',
+    op.IPkgInstall: 'pkg.install'
 }
 
 
@@ -229,12 +230,14 @@ TIMEOUTS = {
 OVERRIDE_EXECUTORS = {
 }
 
+
 # TODO: support for 'remote Salt' configuration
 @defer.inlineCallbacks
 def get_master_version():
     output = yield subprocess.async_check_output(['salt-master', '--version'])
     version = output.strip(' \n').split(' ')[1]
     defer.returnValue(version)
+
 
 # Avoid polluting the global namespace with temporary variables:
 def _generate_classes():
