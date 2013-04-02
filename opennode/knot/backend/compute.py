@@ -100,21 +100,28 @@ class ComputeAction(Action):
             lock_action = self._lock_registry[str(self.context)][1]
             log.msg('%s: %s is locked. Scheduling to run after finish of a previous action: %s'
                     % (self, self.context, lock_action), system='compute-action')
-            self._lock_registry[str(self.context)][0].addBoth(lambda r: self._execute(cmd, args))
+            # XXX: must be self.execute(), not self._execute(), otherwise a deadlock may occur
+            self._lock_registry[str(self.context)][0].addBoth(lambda r: self.execute(cmd, args))
             return self._lock_registry[str(self.context)][0]
 
         self.lock()
 
         d = self._execute(cmd, args)
 
+        @defer.inlineCallbacks
         def handle_error(failure):
             log.err(system='compute-action')
-            ulog = UserLogger(cmd.protocol.interaction.participations[0].principal)
+            owner = yield db.get(self.context, '__owner__')
+            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                              subject=self.context, owner=owner)
             ulog.log('Exception "%s" executing "%s"', failure.value, self.__class__.__name__)
-            return failure
+            defer.returnValue(failure)
 
+        @defer.inlineCallbacks
         def handle_action_done(r):
-            ulog = UserLogger(cmd.protocol.interaction.participations[0].principal)
+            owner = yield db.get(self.context, '__owner__')
+            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                              subject=self.context, owner=owner)
             ulog.log('%s finished successfully', self.__class__.__name__)
 
         d.addErrback(handle_error)
@@ -245,8 +252,9 @@ class DeployAction(VComputeAction):
             ip = ippools.allocate()
             if ip is not None:
                 log.msg('Allocated IP: %s for %s' % (ip, self.context), system='deploy')
-                ulog = UserLogger(cmd.protocol.interaction.participations[0].principal)
-                ulog.log('Allocated IP: %s for %s', ip, self.context)
+                ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                                  subject=self.context, owner=self.context.__owner__)
+                ulog.log('Allocated IP: %s', ip)
                 return ip
             else:
                 raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')
@@ -365,8 +373,9 @@ class UndeployAction(VComputeAction):
             ippools = db.get_root()['oms_root']['ippools']
             ip = netaddr.IPAddress(self.context.ipv4_address.split('/')[0])
             if ippools.free(ip):
-                ulog = UserLogger(cmd.protocol.interaction.participations[0].principal)
-                ulog.log('Deallocated IP: %s for %s', ip, self.context)
+                ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                                  subject=self.context, owner=self.context.__owner__)
+                ulog.log('Deallocated IP: %s', ip)
 
             noLongerProvides(self.context, IDeployed)
             alsoProvides(self.context, IUndeployed)

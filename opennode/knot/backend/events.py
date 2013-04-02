@@ -2,9 +2,10 @@ from grokcore.component import subscribe
 from twisted.internet import defer
 from twisted.python import log
 from zope.component import handle
+
 import netaddr
 
-from opennode.know.backend.compute import DeployAction, UndeployAction, DestroyComputeAction
+from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction
 from opennode.knot.backend.operation import IResumeVM
 from opennode.knot.backend.operation import IShutdownVM
 from opennode.knot.backend.operation import IStartVM
@@ -80,15 +81,20 @@ def delete_virtual_compute(model, event):
         log.msg('Deleting compute %s which is already in IUndeployed state' %
                 model.hostname, system='compute-backend')
 
-    ippools = db.get_root()['oms_root']['ippools']
-    ip = netaddr.IPAddress(model.ipv4_address.split('/')[0])
-    if ippools.free(ip):
-        auth = getUtility(IAuthentication, context=None)
-        ulog = UserLogger(auth.getPrincipal('root'))
-        ulog.log('Deallocated IP: %s for %s (%s)', ip, model, model.__owner__.id)
+    ulog = UserLogger(subject=model, owner=(yield db.get(model, '__owner__')))
+    ulog.log('Deleted compute')
 
+    @db.transact
+    def deallocate_ip():
+        ippools = db.get_root()['oms_root']['ippools']
+        ip = netaddr.IPAddress(model.ipv4_address.split('/')[0])
+        if ippools.free(ip):
+            ulog.log('Deallocated IP: %s', ip)
+
+    yield deallocate_ip()
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
+@defer.inlineCallbacks
 def create_virtual_compute(model, event):
     # TODO: maybe raise an exception here instead?
     if not IVirtualizationContainer.providedBy(model.__parent__):
@@ -102,6 +108,8 @@ def create_virtual_compute(model, event):
 
     log.msg('Deploying VM "%s"' % model, system='deploy')
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
+
+    UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Deployed compute')
 
 
 @subscribe(IVirtualCompute, IModelModifiedEvent)
@@ -126,3 +134,6 @@ def handle_virtual_compute_config_change_request(compute, event):
         for mk, mv in event.modified.iteritems():
             setattr(compute, mk, event.original[mk])
         raise
+    else:
+        ulog = UserLogger(subject=compute, owner=(yield db.get(compute, '__owner__')))
+        ulog.log('Compute configuration changed')
