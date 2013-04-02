@@ -217,7 +217,7 @@ ACTIONS = {
     op.IUpdateVM: 'onode.vm_update_vm',
     op.IPing: 'test.ping',
     op.IAgentVersion: 'test.version',
-    op.IPkgInstall: 'pkg.install'
+    op.IInstallPkg: 'pkg.install'
 }
 
 
