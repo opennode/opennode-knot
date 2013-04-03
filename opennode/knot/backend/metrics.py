@@ -1,4 +1,5 @@
 import logging
+import datetime
 import time
 
 from grokcore.component import Adapter, context
@@ -9,7 +10,7 @@ from zope.interface import implements, Interface
 
 from opennode.knot.backend.operation import IGetGuestMetrics, IGetHostMetrics, OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
-from opennode.knot.model.compute import IManageable, ICompute
+from opennode.knot.model.compute import IManageable, ICompute, IVirtualCompute
 from opennode.oms.config import get_config
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
@@ -60,30 +61,38 @@ class MetricsDaemonProcess(DaemonProcess):
             oms_root = db.get_root()['oms_root']
             computes = filter(lambda c: c and ICompute.providedBy(c) and not c.failure,
                          map(follow_symlinks, oms_root['computes'].listcontent()))
-
             gatherers = filter(None, (queryAdapter(c, IMetricsGatherer) for c in computes))
             return gatherers
 
         def handle_success(r, c):
-            self.log_msg('Metrics gathered for %s' % (c), logLevel=logging.DEBUG)
-            del self.outstanding_requests[c]
+            self.log_msg('%s: metrics gathered' % (c), logLevel=logging.DEBUG)
+            del self.outstanding_requests[str(c)]
 
         def handle_errors(e, c):
             e.trap(Exception)
-            self.log_msg("Got exception when gathering metrics compute '%s': %s" % (c, e))
+            self.log_msg("%s: got exception when gathering metrics: %s" % (c, e),
+                         logLevel=logging.ERROR)
             self.log_err()
-            del self.outstanding_requests[c]
+            del self.outstanding_requests[str(c)]
 
         for g in (yield get_gatherers()):
             hostname = yield db.get(g.context, 'hostname')
-            if hostname not in self.outstanding_requests:
-                self.log_msg('Gathering metrics for %s' % hostname, logLevel=logging.DEBUG)
+            if (str(g.context) not in self.outstanding_requests
+                or self.outstanding_requests[str(g.context)][2] > 5):
+
+                self.log_msg('%s: gathering metrics %s' % (hostname,
+                                                           '(after timeout!)' if str(g.context) in
+                                                           self.outstanding_requests else ''),
+                                                           logLevel=logging.DEBUG)
                 d = g.gather()
-                self.outstanding_requests[hostname] = d
-                d.addCallback(handle_success, hostname)
-                d.addErrback(handle_errors, hostname)
+                curtime = datetime.datetime.now().isoformat()
+                self.outstanding_requests[str(g.context)] = [d, curtime, 0]
+                d.addCallback(handle_success, g.context)
+                d.addErrback(handle_errors, g.context)
             else:
-                self.log_msg('Skipping: another outstanding request to "%s" is found.' % (hostname),
+                self.outstanding_requests[str(g.context)][2] += 1
+                self.log_msg('Skipping: another outstanding request to "%s" (%s) is found from %s.' %
+                             (g.context, hostname, self.outstanding_requests[str(g.context)][1]),
                              logLevel=logging.DEBUG)
 
 
@@ -105,29 +114,42 @@ class VirtualComputeMetricGatherer(Adapter):
     def gather_vms(self):
 
         @db.ro_transact
-        def get_vms():
-            return follow_symlinks(self.context['vms'])
-        vms = yield get_vms()
+        def get_vms_if_not_empty():
+            vms = follow_symlinks(self.context['vms'])
+            for vm in vms:
+                if IVirtualCompute.providedBy(vm):
+                    return vms
+            else:
+                log.msg('%s: no VMs' % (self.context.hostname), system='metrics', logLevel=logging.DEBUG)
+                return None
 
-        name = yield db.get(self.context, 'hostname')
+        vms = yield get_vms_if_not_empty()
 
         # get the metrics for all running VMS
         if not vms or self.context.state != u'active':
             return
 
+        name = yield db.get(self.context, 'hostname')
+
         try:
-            metrics = yield IVirtualizationContainerSubmitter(vms).submit(IGetGuestMetrics)
+            log.msg('%s: gather VM metrics' % (name), system='metrics', logLevel=logging.DEBUG)
+            submitter = IVirtualizationContainerSubmitter(vms)
+            metrics = yield submitter.submit(IGetGuestMetrics)
         except OperationRemoteError as e:
-            log.msg('Remote error: %s' % e, system='metrics-vm', logLevel=logging.DEBUG)
+            log.msg('%s: remote error: %s' % (name, e), system='metrics', logLevel=logging.DEBUG)
             if e.remote_tb:
-                log.msg(e.remote_tb, system='metrics-vm')
+                log.msg(e.remote_tb, system='metrics', logLevel=logging.DEBUG)
             return
+        except Exception:
+            log.msg("%s: error gathering VM metrics" % name, system='metrics', logLevel=logging.ERROR)
+            if get_config().getboolean('debug', 'print_exceptions'):
+                log.err(system='metrics')
 
         if not metrics:
-            log.msg('No vm metrics received for %s' % name, system='metrics-vm')
+            log.msg('%s: no VM metrics received!' % name, system='metrics', logLevel=logging.WARNING)
             return
 
-        log.msg('VM metrics received for %s: %s' % (name, len(metrics)), system='metrics-vm')
+        log.msg('%s: VM metrics received: %s' % (name, len(metrics)), system='metrics')
         timestamp = int(time.time() * 1000)
 
         # db transact is needed only to traverse the zodb.
@@ -148,11 +170,12 @@ class VirtualComputeMetricGatherer(Adapter):
 
     @defer.inlineCallbacks
     def gather_phy(self):
+        name = yield db.get(self.context, 'hostname')
         try:
             data = yield IGetHostMetrics(self.context).run()
-            name = yield db.get(self.context, 'hostname')
 
-            log.msg('Got data for metrics of %s: %s' % (name, len(data)), system='metrics-phy')
+            log.msg('%s: host metrics received: %s' % (name, len(data)), system='metrics',
+                    logLevel=logging.DEBUG)
             timestamp = int(time.time() * 1000)
 
             # db transact is needed only to traverse the zodb.
@@ -169,8 +192,8 @@ class VirtualComputeMetricGatherer(Adapter):
             for stream, data_point in (yield get_streams()):
                 stream.add(data_point)
         except OperationRemoteError as e:
-            log.msg(e, system='metrics-phy')
+            log.msg('%s: remote error: %s' % (name, e), system='metrics', logLevel=logging.WARNING)
         except Exception:
-            log.msg("Error gathering phy metrics", system='metrics-phy')
+            log.msg("%s: error gathering host metrics" % name, system='metrics', logLevel=logging.ERROR)
             if get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='metrics-phy')
+                log.err(system='metrics')
