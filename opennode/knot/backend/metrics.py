@@ -66,7 +66,8 @@ class MetricsDaemonProcess(DaemonProcess):
 
         def handle_success(r, c):
             self.log_msg('%s: metrics gathered' % (c), logLevel=logging.DEBUG)
-            del self.outstanding_requests[str(c)]
+            if str(c) in self.outstanding_requests:
+                del self.outstanding_requests[str(c)]
 
         def handle_errors(e, c):
             e.trap(Exception)
