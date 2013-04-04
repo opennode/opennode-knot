@@ -73,6 +73,8 @@ class SimpleSaltExecutor(object):
                            ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
             map(lambda s: '"%s"' % s, map(str, self.args)))))
+        log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
+                system='salt-simple', logLevel=logging.DEBUG)
         data = json.loads(output) if output else {}
         rdata = self._handle_errors(data)
         defer.returnValue(rdata)
@@ -223,6 +225,8 @@ ACTIONS = {
 TIMEOUTS = {
     op.IMigrateVM: 3600,
     op.IDeployVM: 600,
+    op.IGetGuestMetrics: 5,
+    op.IGetHostMetrics: 5
 }
 
 

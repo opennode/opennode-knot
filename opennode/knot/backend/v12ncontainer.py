@@ -44,8 +44,7 @@ class VirtualizationContainerSubmitter(Adapter):
         job, backend_uri = yield get_job()
         d = job.run(backend_uri, *args)
 
-        @d
-        def on_error(e):
+        def on_remote_error(e):
             e.trap(OperationRemoteError)
             try:
                 e.raiseException()
@@ -55,6 +54,13 @@ class VirtualizationContainerSubmitter(Adapter):
                     log.msg(ore.remote_tb, system='v12n-submitter')
                 raise
 
+        def on_unexpected_error(e):
+            e.trap(Exception)
+            log.msg('Unexpected error! %s' % e.value, system='v12n-submitter')
+            log.err(system='v12n-submitter')
+
+        d.addErrback(on_remote_error)
+        d.addErrback(on_unexpected_error)
         res = yield d
         defer.returnValue(res)
 
