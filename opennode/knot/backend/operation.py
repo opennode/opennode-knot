@@ -121,8 +121,14 @@ class IMigrateVM(IJob):
 class IUpdateVM(IJob):
     """Update VM configuration"""
 
+
 class IPing(IJob):
     """ Test agent/host connectivity """
 
+
 class IAgentVersion(IJob):
     """ Agent-specific version checking """
+
+
+class IInstallPkg(IJob):
+    """ Install a package using system package manager (e.g. yum) """
