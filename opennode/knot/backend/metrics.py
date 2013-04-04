@@ -73,7 +73,8 @@ class MetricsDaemonProcess(DaemonProcess):
             self.log_msg("%s: got exception when gathering metrics: %s" % (c, e),
                          logLevel=logging.ERROR)
             self.log_err()
-            del self.outstanding_requests[str(c)]
+            if str(c) in self.outstanding_requests:
+                del self.outstanding_requests[str(c)]
 
         for g in (yield get_gatherers()):
             hostname = yield db.get(g.context, 'hostname')
