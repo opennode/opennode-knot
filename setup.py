@@ -16,7 +16,7 @@ setup(
         "setuptools",  # Redundant but removes a warning
         "opennode.oms.core",
         "ping==0.2",
-        "salt==0.12.1"
+        "salt==0.14.0"
         ],
 
 )
