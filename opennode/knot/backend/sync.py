@@ -45,6 +45,16 @@ def get_manageable_machine_hostnames():
     defer.returnValue(map(lambda h: h[0].hostname, (yield get_manageable_machines())))
 
 
+def set_compute_failure_status(uuid, status):
+    compute = db.get_root()['oms_root']['machines'][uuid]
+    compute.failure = bool(status)
+
+
+def set_compute_suspicious_status(uuid, status):
+    compute = db.get_root()['oms_root']['machines'][uuid]
+    compute.suspicious = bool(status)
+
+
 class SyncDaemonProcess(DaemonProcess):
     implements(IProcess)
 
@@ -82,7 +92,6 @@ class SyncDaemonProcess(DaemonProcess):
 
         if hosts_to_delete:
             log.msg('Deleting machines: %s' % (hosts_to_delete), system='sync')
-            # cleanup machines not known by agents
             yield delete_machines(hosts_to_delete)
 
     @defer.inlineCallbacks
@@ -102,16 +111,6 @@ class SyncDaemonProcess(DaemonProcess):
 
         yield self.cleanup_machines(accepted)
 
-    @db.transact
-    def set_compute_failure_status(self, uuid, status):
-        compute = db.get_root()['oms_root']['machines'][uuid]
-        compute.failure = bool(status)
-
-    @db.transact
-    def set_compute_suspicious_status(self, uuid, status):
-        compute = db.get_root()['oms_root']['machines'][uuid]
-        compute.suspicious = bool(status)
-
     def delete_outstanding_request(self, compute):
         if str(compute) in self.outstanding_requests:
             del self.outstanding_requests[str(compute)]
@@ -119,78 +118,51 @@ class SyncDaemonProcess(DaemonProcess):
             log.msg('Unlock: %s not in outstanding requests: %s'
                     % (str(compute), self.outstanding_requests.keys()), system='sync-unlock')
 
+    @db.transact
+    def handle_error(self, e, action, c, compute):
+        e.trap(Exception)
+        log.msg("Got exception on %s of '%s': %s" % (action, c, e), system='sync')
+        if get_config().getboolean('debug', 'print_exceptions'):
+            log.err(system='sync')
+        self.delete_outstanding_request(compute)
+        set_compute_failure_status(compute.__name__, True)
+
+    @db.trancact
+    def handle_success(self, r, action, hostname, compute):
+        log.msg("%s completed: '%s'" % (action, hostname), system='sync')
+        self.delete_outstanding_request(compute)
+        set_compute_failure_status(compute.__name__, False)
+
+    @defer.inlineCallbacks
+    def handle_remote_error(self, ore, c, compute):
+        ore.trap(OperationRemoteError)
+        if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
+            log.err(system='sync')
+        else:
+            log.msg(str(ore.value), system='sync', logLevel=ERROR)
+        self.delete_outstanding_request(compute)
+        set_compute_failure_status(compute.__name__, True)
+
     def execute_sync_action(self, hostname, compute):
         log.msg("Syncing started: '%s'" % hostname, system='sync')
         syncaction = SyncAction(compute)
-
-        @defer.inlineCallbacks
-        def handle_remote_error(ore, c, compute):
-            ore.trap(OperationRemoteError)
-            if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='sync')
-            else:
-                log.msg(str(ore.value), system='sync', logLevel=ERROR)
-            self.delete_outstanding_request(compute)
-            yield self.set_compute_suspicious_status(compute.__name__, True)
-
-        @defer.inlineCallbacks
-        def handle_error(e, c, compute):
-            e.trap(Exception)
-            log.msg("Got exception when syncing compute '%s': %s" % (c, e), system='sync')
-            if get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='sync')
-            self.delete_outstanding_request(compute)
-            yield self.set_compute_suspicious_status((yield db.get(compute, '__name__')), True)
-
-        @defer.inlineCallbacks
-        def handle_success(r, c, compute):
-            log.msg("Syncing completed: '%s'" % c, system='sync')
-            self.delete_outstanding_request(compute)
-            yield self.set_compute_suspicious_status((yield db.get(compute, '__name__')), False)
-
         deferred = syncaction.execute(DetachedProtocol(), object())
-        deferred.addCallback(handle_success, hostname, compute)
-        deferred.addErrback(handle_remote_error, hostname, compute)
-        deferred.addErrback(handle_error, hostname, compute)
+        deferred.addCallback(self.handle_success, 'sync action', hostname, compute)
+        deferred.addErrback(self.handle_remote_error, hostname, compute)
+        deferred.addErrback(self.handle_error, 'Sync action', hostname, compute)
         self.outstanding_requests[str(compute)] = deferred
 
     @defer.inlineCallbacks
     def execute_ping_tests(self):
-
-        @defer.inlineCallbacks
-        def handle_remote_error(ore, c, compute):
-            ore.trap(OperationRemoteError)
-            if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='sync')
-            else:
-                log.msg(str(ore.value), system='sync', logLevel=ERROR)
-            self.delete_outstanding_request(compute)
-            yield self.set_compute_failure_status((yield db.get(compute, '__name__')), True)
-
-        @defer.inlineCallbacks
-        def handle_error(e, c, compute):
-            e.trap(Exception)
-            log.msg("Got exception on ping test of '%s': %s" % (c, e), system='sync')
-            if get_config().getboolean('debug', 'print_exceptions'):
-                log.err(system='sync')
-            self.delete_outstanding_request(compute)
-            yield self.set_compute_failure_status((yield db.get(compute, '__name__')), True)
-
-        @defer.inlineCallbacks
-        def handle_success(r, hostname, compute):
-            log.msg("Ping test completed: '%s'" % hostname, system='sync')
-            self.delete_outstanding_request(compute)
-            self.execute_sync_action(hostname, compute)
-            yield self.set_compute_failure_status((yield db.get(compute, '__name__')), False)
-
         for compute, hostname in (yield get_manageable_machines()):
             if str(compute) not in self.outstanding_requests:
                 log.msg('Pinging %s (%s)...' % (hostname, compute), system='sync')
                 pingtest = IPing(compute)
                 deferred = pingtest.run()
-                deferred.addCallback(handle_success, hostname, compute)
-                deferred.addErrback(handle_remote_error, hostname, compute)
-                deferred.addErrback(handle_error, hostname, compute)
+                deferred.addCallback(self.handle_success, 'ping test', hostname, compute)
+                deferred.addErrback(self.handle_remote_error, hostname, compute)
+                deferred.addErrback(self.handle_error, 'Ping test', hostname, compute)
+                deferred.addCallback(lambda r: self.execute_sync_action(hostname, compute))
                 self.outstanding_requests[str(compute)] = deferred
             else:
                 log.msg("Pinging %s skipped: previous test not finished yet" % hostname, system='sync')
