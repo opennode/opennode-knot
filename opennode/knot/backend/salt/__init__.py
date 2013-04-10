@@ -67,13 +67,19 @@ class SimpleSaltExecutor(object):
                                                                           self.args, self.timeout),
                 system='salt-simple', logLevel=logging.DEBUG)
         cmd = get_config().getstring('salt', 'remote_command', 'salt')
+
+        killhook = kwargs.get('__killhook')
+        if killhook:
+            killhook.addCallback(lambda r: log.msg('"%s" to "%s" aborted' % (self.action, self.hostname)))
+
         output = yield subprocess.async_check_output(
             filter(None, (cmd.split(' ') +
                           ['--no-color', '--out=json',
                            ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
                           map(lambda s: '"%s"' % s, map(str, self.args)))),
-            killhook=kwargs.get('__killhook'))
+            killhook=killhook)
+
         log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
                 system='salt-simple', logLevel=logging.DEBUG)
         data = json.loads(output) if output else {}
