@@ -85,7 +85,7 @@ class MetricsDaemonProcess(DaemonProcess):
 
                 if (targetkey in self.outstanding_requests and
                     self.outstanding_requests[targetkey][2] > 5):
-                    self.log_msg('Killing all previous requests' % g)
+                    self.log_msg('Killing all previous requests')
                     self.outstanding_requests[targetkey][3].kill()
 
                 self.log_msg('%s: gathering metrics %s' % (hostname,
