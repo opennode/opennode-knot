@@ -26,7 +26,7 @@ class SubprocessProtocol(ProcessProtocol):
             self.d.errback(reason)
 
 
-def async_check_output(args, ireactorprocess=None):
+def async_check_output(args, ireactorprocess=None, killhook=None):
     """
     :type args: list of str
     :type ireactorprocess: :class: twisted.internet.interfaces.IReactorProcess
@@ -38,4 +38,6 @@ def async_check_output(args, ireactorprocess=None):
 
     pprotocol = SubprocessProtocol()
     ireactorprocess.spawnProcess(pprotocol, args[0], args, env=None)
+    if killhook and type(killhook) is Deferred:
+        killhook.addCallback(lambda r: pprotocol.transport.signalProcess('KILL'))
     return pprotocol.d

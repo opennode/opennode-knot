@@ -79,22 +79,28 @@ class MetricsDaemonProcess(DaemonProcess):
 
         for g in (yield get_gatherers()):
             hostname = yield db.get(g.context, 'hostname')
-            if (str(g.context) not in self.outstanding_requests
-                or self.outstanding_requests[str(g.context)][2] > 5):
+            targetkey = str(g.context)
+            if (targetkey not in self.outstanding_requests
+                or self.outstanding_requests[targetkey][2] > 5):
+
+                if (targetkey in self.outstanding_requests and
+                    self.outstanding_requests[targetkey][2] > 5):
+                    self.log_msg('Killing all previous requests' % g)
+                    self.outstanding_requests[targetkey][3].kill()
 
                 self.log_msg('%s: gathering metrics %s' % (hostname,
-                                                           '(after timeout!)' if str(g.context) in
+                                                           '(after timeout!)' if targetkey in
                                                            self.outstanding_requests else ''),
                                                            logLevel=logging.DEBUG)
                 d = g.gather()
                 curtime = datetime.datetime.now().isoformat()
-                self.outstanding_requests[str(g.context)] = [d, curtime, 0]
+                self.outstanding_requests[targetkey] = [d, curtime, 0, g]
                 d.addCallback(handle_success, g.context)
                 d.addErrback(handle_errors, g.context)
             else:
-                self.outstanding_requests[str(g.context)][2] += 1
+                self.outstanding_requests[targetkey][2] += 1
                 self.log_msg('Skipping: another outstanding request to "%s" (%s) is found from %s.' %
-                             (g.context, hostname, self.outstanding_requests[str(g.context)][1]),
+                             (g.context, hostname, self.outstanding_requests[targetkey][1]),
                              logLevel=logging.DEBUG)
 
 
@@ -109,8 +115,12 @@ class VirtualComputeMetricGatherer(Adapter):
 
     @defer.inlineCallbacks
     def gather(self):
+        self._killhook = defer.Deferred()
         yield self.gather_vms()
         yield self.gather_phy()
+
+    def kill(self):
+        self._killhook.callback(None)
 
     @defer.inlineCallbacks
     def gather_vms(self):
@@ -136,7 +146,7 @@ class VirtualComputeMetricGatherer(Adapter):
         try:
             log.msg('%s: gather VM metrics' % (name), system='metrics', logLevel=logging.DEBUG)
             submitter = IVirtualizationContainerSubmitter(vms)
-            metrics = yield submitter.submit(IGetGuestMetrics)
+            metrics = yield submitter.submit(IGetGuestMetrics, __killhook=self._killhook)
         except OperationRemoteError as e:
             log.msg('%s: remote error: %s' % (name, e), system='metrics', logLevel=logging.DEBUG)
             if e.remote_tb:
@@ -174,7 +184,7 @@ class VirtualComputeMetricGatherer(Adapter):
     def gather_phy(self):
         name = yield db.get(self.context, 'hostname')
         try:
-            data = yield IGetHostMetrics(self.context).run()
+            data = yield IGetHostMetrics(self.context).run(__killhook=self._killhook)
 
             log.msg('%s: host metrics received: %s' % (name, len(data)), system='metrics',
                     logLevel=logging.DEBUG)

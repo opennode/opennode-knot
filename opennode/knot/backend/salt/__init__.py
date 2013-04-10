@@ -72,7 +72,8 @@ class SimpleSaltExecutor(object):
                           ['--no-color', '--out=json',
                            ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
-                          map(lambda s: '"%s"' % s, map(str, self.args)))))
+                          map(lambda s: '"%s"' % s, map(str, self.args)))),
+            killhook=kwargs.get('__killhook'))
         log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
                 system='salt-simple', logLevel=logging.DEBUG)
         data = json.loads(output) if output else {}
