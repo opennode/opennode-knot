@@ -204,7 +204,8 @@ class HypervisorSshAttachAction(AttachAction):
 
         phy = self.context.__parent__.__parent__.__parent__.__parent__
 
-        ssh_connect_interactive_shell('root', phy.hostname, 22, self.transport, self._set_channel, size, self.command)
+        ssh_connect_interactive_shell('root', phy.hostname, 22, self.transport, self._set_channel,
+                                      size, self.command)
 
 
 class TtyAttachAction(HypervisorSshAttachAction):
