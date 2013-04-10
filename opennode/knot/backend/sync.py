@@ -49,10 +49,39 @@ def set_compute_failure_status(uuid, status):
     compute = db.get_root()['oms_root']['machines'][uuid]
     compute.failure = bool(status)
 
+    def iterate_recursively(container):
+        seen = set()
+        for item in container.listcontent():
+            if ICompute.providedBy(item):
+                item.failure = bool(status)
+
+            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+            if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
+                if item.__name__ not in seen:
+                    seen.add(item.__name__)
+                    iterate_recursively(item)
+
+    iterate_recursively(compute)
+
 
 def set_compute_suspicious_status(uuid, status):
     compute = db.get_root()['oms_root']['machines'][uuid]
     compute.suspicious = bool(status)
+
+    def iterate_recursively(container):
+        seen = set()
+        for item in container.listcontent():
+            if ICompute.providedBy(item):
+                item.suspicious = bool(status)
+
+                from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+                if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
+                    if item.__name__ not in seen:
+                        seen.add(item.__name__)
+                        iterate_recursively(item)
+
+    iterate_recursively(compute)
+
 
 
 class SyncDaemonProcess(DaemonProcess):
@@ -151,6 +180,7 @@ class SyncDaemonProcess(DaemonProcess):
         deferred.addErrback(self.handle_remote_error, hostname, compute)
         deferred.addErrback(self.handle_error, 'Sync action', hostname, compute)
         self.outstanding_requests[str(compute)] = deferred
+        return deferred
 
     @defer.inlineCallbacks
     def execute_ping_tests(self):

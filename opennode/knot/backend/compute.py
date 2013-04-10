@@ -239,7 +239,7 @@ class DeployAction(VComputeAction):
             log.msg('Cannot deploy %s (%s) because no template was specified' %
                     (self.context.hostname, self.context),
                     system='deploy-action', logLevel=ERROR)
-            defer.returnValue(None)
+            return
 
         @db.ro_transact
         def check_ip_address():
@@ -464,7 +464,7 @@ class MigrateAction(VComputeAction):
 
         try:
             if not (yield self._check_vm_pre(name, destination_hostname, destination_vms)):
-                defer.returnValue(None)
+                return
 
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
             yield source_submitter.submit(IMigrateVM, name, destination_hostname, (not args.offline), False)
@@ -474,12 +474,14 @@ class MigrateAction(VComputeAction):
                 log.msg('Migration finished successfully!', system='migrate')
 
                 @db.transact
-                def mv():
+                def mv_and_inherit():
                     machines = db.get_root()['oms_root']['machines']
                     computes = db.get_root()['oms_root']['computes']
                     try:
                         destination_compute = machines[destination.__name__]
                         vm_compute = follow_symlinks(computes[self.context.__name__])
+                        vm_compute.failure = destination_compute.failure
+                        vm_compute.suspicious = destination_compute.suspicious
                         dvms = follow_symlinks(destination_compute['vms'])
                         dvms.add(vm_compute)
                         log.msg('Model moved.', system='migrate')
@@ -487,7 +489,7 @@ class MigrateAction(VComputeAction):
                         log.msg('Model NOT moved: destination compute or vms do not exist', system='migrate')
                     except KeyError:
                         log.msg('Model NOT moved: already moved by sync?', system='migrate')
-                yield mv()
+                yield mv_and_inherit()
         except OperationRemoteError as e:
             self.handle_error(cmd, 'Failed migration of %s to %s: remote error %s' % (
                 name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
