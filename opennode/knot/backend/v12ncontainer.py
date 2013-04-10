@@ -32,7 +32,7 @@ class VirtualizationContainerSubmitter(Adapter):
     context(IVirtualizationContainer)
 
     @defer.inlineCallbacks
-    def submit(self, job_interface, *args):
+    def submit(self, job_interface, *args, **kwargs):
 
         # we cannot return a deferred from a db.transact
         @db.ro_transact
@@ -42,7 +42,7 @@ class VirtualizationContainerSubmitter(Adapter):
             return (job, backend_uri)
 
         job, backend_uri = yield get_job()
-        d = job.run(backend_uri, *args)
+        d = job.run(backend_uri, *args, __killhook=kwargs.get('__killhook'))
 
         def on_remote_error(e):
             e.trap(OperationRemoteError)

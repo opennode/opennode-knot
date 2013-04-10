@@ -52,7 +52,6 @@ class SyncDaemonProcess(DaemonProcess):
 
     def __init__(self):
         super(SyncDaemonProcess, self).__init__()
-
         config = get_config()
         self.interval = config.getint('sync', 'interval')
         self.outstanding_requests = {}
