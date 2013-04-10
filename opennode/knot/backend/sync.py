@@ -156,7 +156,7 @@ class SyncDaemonProcess(DaemonProcess):
         self.delete_outstanding_request(compute)
         set_compute_failure_status(compute.__name__, True)
 
-    @db.trancact
+    @db.transact
     def handle_success(self, r, action, hostname, compute):
         log.msg("%s completed: '%s'" % (action, hostname), system='sync')
         self.delete_outstanding_request(compute)
