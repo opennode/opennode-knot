@@ -41,7 +41,7 @@ class VirtualizationContainerView(ContainerView):
             raise BadRequest("Input data must be a dictionary")
 
         if 'state' not in data:
-            data['state'] = 'active' if data['start_on_boot'] else 'inactive'
+            data['state'] = 'active' if data.get('start_on_boot') else 'inactive'
 
         if data.get('diskspace'):
             data['diskspace'] = {'root': data['diskspace']}
@@ -56,7 +56,7 @@ class VirtualizationContainerView(ContainerView):
             data['nameservers'] = nameservers
 
         if 'autostart' not in data:
-            data['autostart'] = data['start_on_boot']
+            data['autostart'] = data.get('start_on_boot', False)
 
         assert data['root_password'] == data['root_password_repeat']
         root_password = data['root_password']
