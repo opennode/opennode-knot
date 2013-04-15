@@ -127,13 +127,13 @@ class VirtualComputeMetricGatherer(Adapter):
 
         @db.ro_transact
         def get_vms_if_not_empty():
-            vms = follow_symlinks(self.context['vms'])
+            vms = follow_symlinks(self.context['vms']) or []
+
             for vm in vms:
                 if IVirtualCompute.providedBy(vm):
                     return vms
-            else:
-                log.msg('%s: no VMs' % (self.context.hostname), system='metrics', logLevel=logging.DEBUG)
-                return None
+
+            log.msg('%s: no VMs' % (self.context.hostname), system='metrics', logLevel=logging.DEBUG)
 
         vms = yield get_vms_if_not_empty()
 
