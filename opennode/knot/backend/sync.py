@@ -162,7 +162,7 @@ class SyncDaemonProcess(DaemonProcess):
         self.delete_outstanding_request(compute)
         set_compute_failure_status(compute.__name__, False)
 
-    @defer.inlineCallbacks
+    @db.transact
     def handle_remote_error(self, ore, c, compute):
         ore.trap(OperationRemoteError)
         if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
