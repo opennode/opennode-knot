@@ -32,6 +32,7 @@ from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import follow_symlinks
+from opennode.oms.util import lazy_all
 from opennode.oms.zodb import db
 
 
@@ -176,28 +177,31 @@ class AllocateAction(ComputeAction):
             if param not in self.context.diskspace:
                 raise KeyError(param)
 
-            log.msg('Searching in: %s' % (
-                map(lambda m: (m, (self.context.memory_usage < getattr(m, 'memory', None),
-                                   self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
-                                   self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
-                logLevel=DEBUG, system='action-allocate')
+            conditions = (lambda m: ICompute.providedBy(m),
+                          lambda m: find_compute_v12n_container(m, container),
+                          lambda m: self.context.memory_usage < m.memory,
+                          lambda m: self.context.diskspace[param] < m.diskspace.get(param, 0),
+                          lambda m: self.context.num_cores <= m.num_cores,
+                          lambda m: self.context.template in
+                          map(lambda t: t.name,
+                              filter(lambda t: ITemplate.providedBy(t),
+                                     m['templates'].listcontent())))
 
-            return filter(lambda m: (ICompute.providedBy(m) and
-                                     find_compute_v12n_container(m, container) and
-                                     self.context.memory_usage < m.memory and
-                                     self.context.diskspace[param] < m.diskspace.get(param, 0) and
-                                     self.context.num_cores <= m.num_cores and
-                                     self.context.template in
-                                     map(lambda t: t.name,
-                                         filter(lambda t: ITemplate.providedBy(t),
-                                                m['templates'].listcontent()))),
-                          all_machines)
+            log.msg('Searching in: %s' % (
+                map(lambda m: (m, map(lambda condition: condition(m), conditions)), all_machines)),
+                logLevel=DEBUG, system='action-allocate')
+            return filter(lambda m: lazy_all(conditions, m), all_machines)
 
         log.msg('Allocating %s: searching for allocation targets...' % self.context,
                 system='action-allocate')
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
-        machines = yield get_matching_machines(vmsbackend)
+        try:
+            machines = yield get_matching_machines(vmsbackend)
+        except KeyError, e:
+            log.msg('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context),
+                   system='action-allocate')
+            cmd.write('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context))
 
         if len(machines) <= 0:
             log.msg('Found no fitting machines to allocate to. Action aborted.', system='action-allocate')
