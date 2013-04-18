@@ -12,8 +12,6 @@ Functionality includes:
  * management of networks, templates and storage.
  * console (ssh, openvz) and VNC proxying.
 
-[![Build Status](https://gate1.hep.kbfi.ee:10000/job/opennode-knot/badge/icon)](https://gate1.hep.kbfi.ee:10000/job/opennode-knot/)
-
 Requirements
 ============
 
