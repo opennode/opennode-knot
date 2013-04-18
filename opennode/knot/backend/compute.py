@@ -110,11 +110,15 @@ class ComputeAction(Action):
 
         @defer.inlineCallbacks
         def handle_error(failure):
+            log.msg('Exception %s: "%s" executing "%s"' % (type(failure.value).__name__,
+                                                           failure.value, self.__class__.__name__),
+                    system='compute-action', logLevel=ERROR)
             log.err(system='compute-action')
             owner = yield db.get(self.context, '__owner__')
             ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                               subject=self.context, owner=owner)
-            ulog.log('Exception "%s" executing "%s"', failure.value, self.__class__.__name__)
+            ulog.log('Exception %s: "%s" executing "%s"', type(failure.value).__name__,
+                                                           failure.value, self.__class__.__name__)
             defer.returnValue(failure)
 
         @defer.inlineCallbacks
@@ -123,6 +127,7 @@ class ComputeAction(Action):
             ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                               subject=self.context, owner=owner)
             ulog.log('%s finished successfully', self.__class__.__name__)
+            log.msg('%s finished successfully' % self.__class__.__name__, system='compute-action')
 
         d.addErrback(handle_error)
         d.addCallback(handle_action_done)
@@ -187,6 +192,9 @@ class AllocateAction(ComputeAction):
                                          filter(lambda t: ITemplate.providedBy(t),
                                                 m['templates'].listcontent()))),
                           all_machines)
+
+        log.msg('Allocating %s: searching for allocation targets...' % self.context,
+                system='action-allocate')
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
         machines = yield get_matching_machines(vmsbackend)
