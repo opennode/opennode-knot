@@ -32,7 +32,6 @@ from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import follow_symlinks
-from opennode.oms.util import lazy_all
 from opennode.oms.zodb import db
 
 
@@ -177,20 +176,20 @@ class AllocateAction(ComputeAction):
             if param not in self.context.diskspace:
                 raise KeyError(param)
 
-            conditions = (lambda m: ICompute.providedBy(m),
-                          lambda m: find_compute_v12n_container(m, container),
-                          lambda m: self.context.memory_usage < m.memory,
-                          lambda m: self.context.diskspace[param] < m.diskspace.get(param, 0),
-                          lambda m: self.context.num_cores <= m.num_cores,
-                          lambda m: self.context.template in
-                          map(lambda t: t.name,
-                              filter(lambda t: ITemplate.providedBy(t),
-                                     m['templates'].listcontent())))
+            def condition_generator(m):
+                yield ICompute.providedBy(m)
+                yield find_compute_v12n_container(m, container)
+                yield self.context.memory_usage < m.memory
+                yield self.context.diskspace[param] < m.diskspace.get(param, 0)
+                yield self.context.num_cores <= m.num_cores
+                yield self.context.template in map(lambda t: t.name,
+                                                   filter(lambda t: ITemplate.providedBy(t),
+                                                          m['templates'].listcontent()))
 
             log.msg('Searching in: %s' % (
-                map(lambda m: (m, map(lambda condition: condition(m), conditions)), all_machines)),
+                map(lambda m: (m, list(condition_generator(m))), all_machines)),
                 logLevel=DEBUG, system='action-allocate')
-            return filter(lambda m: lazy_all(conditions, m), all_machines)
+            return filter(lambda m: all(condition_generator(m)), all_machines)
 
         log.msg('Allocating %s: searching for allocation targets...' % self.context,
                 system='action-allocate')
