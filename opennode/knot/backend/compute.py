@@ -160,6 +160,11 @@ class VComputeAction(ComputeAction):
             cmd.write("%s\n" % format_error(e))
 
 
+class DiskspaceInvalidConfigError(KeyError):
+    def __init__(self, msg):
+        KeyError.__init__(self, msg)
+
+
 class AllocateAction(ComputeAction):
     context(IUndeployed)
     action('allocate')
@@ -174,7 +179,7 @@ class AllocateAction(ComputeAction):
                                                    default=u'/storage'))
 
             if param not in self.context.diskspace:
-                raise KeyError(param)
+                raise DiskspaceInvalidConfigError(param)
 
             def condition_generator(m):
                 yield ICompute.providedBy(m)
@@ -189,6 +194,7 @@ class AllocateAction(ComputeAction):
             log.msg('Searching in: %s' % (
                 map(lambda m: (m, list(condition_generator(m))), all_machines)),
                 logLevel=DEBUG, system='action-allocate')
+
             return filter(lambda m: all(condition_generator(m)), all_machines)
 
         log.msg('Allocating %s: searching for allocation targets...' % self.context,
@@ -197,7 +203,7 @@ class AllocateAction(ComputeAction):
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
         try:
             machines = yield get_matching_machines(vmsbackend)
-        except KeyError, e:
+        except DiskspaceInvalidConfigError as e:
             log.msg('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context),
                    system='action-allocate')
             cmd.write('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context))
