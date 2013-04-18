@@ -178,14 +178,13 @@ class AllocateAction(ComputeAction):
             param = unicode(get_config().getstring('allocate', 'diskspace_filter_param',
                                                    default=u'/storage'))
 
-            if param not in self.context.diskspace:
-                raise DiskspaceInvalidConfigError(param)
-
             def condition_generator(m):
                 yield ICompute.providedBy(m)
                 yield find_compute_v12n_container(m, container)
                 yield self.context.memory_usage < m.memory
-                yield self.context.diskspace[param] < m.diskspace.get(param, 0)
+                yield sum(map(lambda (pk, pv): pv,
+                              filter(lambda (pk, pv): pk != 'total',
+                                     self.context.diskspace.iteritems()) < m.diskspace.get(param, 0)))
                 yield self.context.num_cores <= m.num_cores
                 yield self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
@@ -201,12 +200,7 @@ class AllocateAction(ComputeAction):
                 system='action-allocate')
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
-        try:
-            machines = yield get_matching_machines(vmsbackend)
-        except DiskspaceInvalidConfigError as e:
-            log.msg('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context),
-                   system='action-allocate')
-            cmd.write('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context))
+        machines = yield get_matching_machines(vmsbackend)
 
         if len(machines) <= 0:
             log.msg('Found no fitting machines to allocate to. Action aborted.', system='action-allocate')
