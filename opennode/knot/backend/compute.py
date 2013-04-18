@@ -220,7 +220,8 @@ def mv_compute_model(context, target):
         dvms.add(vm)
         log.msg('Model moved.', system='deploy')
     except IndexError:
-        log.msg('Model NOT moved: destination compute or vms do not exist', system='deploy')
+        log.msg('Model NOT moved: destination compute or vms do not exist', system='deploy',
+                logLevel=WARNING)
     except KeyError:
         log.msg('Model NOT moved: already moved by sync?', system='deploy')
 
