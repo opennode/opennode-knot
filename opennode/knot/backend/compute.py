@@ -110,11 +110,15 @@ class ComputeAction(Action):
 
         @defer.inlineCallbacks
         def handle_error(failure):
+            log.msg('Exception %s: "%s" executing "%s"' % (type(failure.value).__name__,
+                                                           failure.value, self.__class__.__name__),
+                    system='compute-action', logLevel=ERROR)
             log.err(system='compute-action')
             owner = yield db.get(self.context, '__owner__')
             ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                               subject=self.context, owner=owner)
-            ulog.log('Exception "%s" executing "%s"', failure.value, self.__class__.__name__)
+            ulog.log('Exception %s: "%s" executing "%s"', type(failure.value).__name__,
+                                                           failure.value, self.__class__.__name__)
             defer.returnValue(failure)
 
         @defer.inlineCallbacks
@@ -123,6 +127,7 @@ class ComputeAction(Action):
             ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                               subject=self.context, owner=owner)
             ulog.log('%s finished successfully', self.__class__.__name__)
+            log.msg('%s finished successfully' % self.__class__.__name__, system='compute-action')
 
         d.addErrback(handle_error)
         d.addCallback(handle_action_done)
@@ -155,6 +160,11 @@ class VComputeAction(ComputeAction):
             cmd.write("%s\n" % format_error(e))
 
 
+class DiskspaceInvalidConfigError(KeyError):
+    def __init__(self, msg):
+        KeyError.__init__(self, msg)
+
+
 class AllocateAction(ComputeAction):
     context(IUndeployed)
     action('allocate')
@@ -169,27 +179,34 @@ class AllocateAction(ComputeAction):
                                                    default=u'/storage'))
 
             if param not in self.context.diskspace:
-                raise KeyError(param)
+                raise DiskspaceInvalidConfigError(param)
+
+            def condition_generator(m):
+                yield ICompute.providedBy(m)
+                yield find_compute_v12n_container(m, container)
+                yield self.context.memory_usage < m.memory
+                yield self.context.diskspace[param] < m.diskspace.get(param, 0)
+                yield self.context.num_cores <= m.num_cores
+                yield self.context.template in map(lambda t: t.name,
+                                                   filter(lambda t: ITemplate.providedBy(t),
+                                                          m['templates'].listcontent()))
 
             log.msg('Searching in: %s' % (
-                map(lambda m: (m, (self.context.memory_usage < getattr(m, 'memory', None),
-                                   self.context.diskspace[param] < getattr(m, 'diskspace', {}).get(param, 0),
-                                   self.context.num_cores <= getattr(m, 'num_cores', None))), all_machines)),
+                map(lambda m: (m, list(condition_generator(m))), all_machines)),
                 logLevel=DEBUG, system='action-allocate')
 
-            return filter(lambda m: (ICompute.providedBy(m) and
-                                     find_compute_v12n_container(m, container) and
-                                     self.context.memory_usage < m.memory and
-                                     self.context.diskspace[param] < m.diskspace.get(param, 0) and
-                                     self.context.num_cores <= m.num_cores and
-                                     self.context.template in
-                                     map(lambda t: t.name,
-                                         filter(lambda t: ITemplate.providedBy(t),
-                                                m['templates'].listcontent()))),
-                          all_machines)
+            return filter(lambda m: all(condition_generator(m)), all_machines)
+
+        log.msg('Allocating %s: searching for allocation targets...' % self.context,
+                system='action-allocate')
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
-        machines = yield get_matching_machines(vmsbackend)
+        try:
+            machines = yield get_matching_machines(vmsbackend)
+        except DiskspaceInvalidConfigError as e:
+            log.msg('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context),
+                   system='action-allocate')
+            cmd.write('Configuration warning: %s not in diskspace specification of %s\n' % (e, self.context))
 
         if len(machines) <= 0:
             log.msg('Found no fitting machines to allocate to. Action aborted.', system='action-allocate')
