@@ -190,8 +190,14 @@ class AllocateAction(ComputeAction):
                                                    filter(lambda t: ITemplate.providedBy(t),
                                                           m['templates'].listcontent()))
 
-            log.msg('Searching in: %s' % (
-                map(lambda m: (m, list(condition_generator(m))), all_machines)),
+            def unwind_until_false(generator):
+                for idx, r in enumerate(generator):
+                    if not r:
+                        return 'Fail at %d' % idx
+                return 'Match'
+
+            log.msg('Searching in (index of failed condition or MATCH): %s' % (
+                map(lambda m: (m, unwind_until_false(condition_generator(m))), all_machines)),
                 logLevel=DEBUG, system='action-allocate')
 
             return filter(lambda m: all(condition_generator(m)), all_machines)
