@@ -184,7 +184,7 @@ class AllocateAction(ComputeAction):
                 yield self.context.memory_usage < m.memory
                 yield sum(map(lambda (pk, pv): pv,
                               filter(lambda (pk, pv): pk != 'total',
-                                     self.context.diskspace.iteritems()) < m.diskspace.get(param, 0)))
+                                     self.context.diskspace.iteritems()))) < m.diskspace.get(param, 0)
                 yield self.context.num_cores <= m.num_cores
                 yield self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
