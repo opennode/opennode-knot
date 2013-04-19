@@ -4,7 +4,7 @@ from grokcore.component import context
 from opennode.knot.model.template import GlobalTemplates
 
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
-from opennode.oms.endpoint.ssh.security import SetAclMixin
+from opennode.oms.endpoint.ssh.cmd.security import SetAclMixin
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.security.acl import NoSuchPermission
