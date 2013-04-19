@@ -2,6 +2,7 @@ import transaction
 from grokcore.component import context
 
 from opennode.knot.model.template import GlobalTemplates
+from opennode.knot.model.template import ITemplate
 
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.cmd.security import SetAclMixin
@@ -21,7 +22,7 @@ class SetGlobalTemplatePermissionsAction(Action, SetAclMixin):
 
     def arguments(self):
         parser = VirtualConsoleArgumentParser()
-        parser.add_argument('template', nargs=1,
+        parser.add_argument('paths', nargs='+',
                             help='Prototype template to be used to find all similar ones')
 
         group = parser.add_mutually_exclusive_group(required=True)
@@ -39,17 +40,19 @@ class SetGlobalTemplatePermissionsAction(Action, SetAclMixin):
 
     @db.transact
     def execute(self, cmd, args):
+        self.write = cmd.write
         try:
-            proto = cmd.traverse(args.template)
-            gtemplates = db.get_root()['oms_root']['templates']
-            action_list = []
-            for t in map(follow_symlinks, gtemplates.listcontent()):
-                if t.name == proto.name:
-                    action_list.append(t)
+            for path in args.paths:
+                proto = cmd.traverse(path)
+                gtemplates = db.get_root()['oms_root']['templates']
+                action_list = []
+                for t in filter(ITemplate.providedBy, map(follow_symlinks, gtemplates.listcontent())):
+                    if t.name == proto.name:
+                        action_list.append(t)
 
-            for t in action_list:
-                with self.protocol.interaction:
-                    self.do_set_acl(t, args.i, args.m, args.d, args.x)
+                for t in action_list:
+                    with cmd.protocol.interaction:
+                        self.set_acl(t, args.i, args.m, args.d, args.x)
         except NoSuchPermission as e:
             self.write("No such permission '%s'\n" % (e.message))
             transaction.abort()

@@ -5,6 +5,7 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
+from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import ContainerInjector
 from opennode.oms.model.model.base import IDisplayName
@@ -115,5 +116,6 @@ class TemplatesRootInjector(ContainerInjector):
     __class__ = GlobalTemplates
 
 
+provideSubscriptionAdapter(ActionsContainerExtension, adapts=(GlobalTemplates, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Templates, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(GlobalTemplates, ))
