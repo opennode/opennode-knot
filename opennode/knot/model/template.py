@@ -5,6 +5,7 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
+from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import ContainerInjector
 from opennode.oms.model.model.base import IDisplayName
@@ -21,23 +22,23 @@ class ITemplate(Interface):
     base_type = schema.Choice(title=u"Template type", values=(u'xen', u'kvm', u'openvz'))
 
     cores = schema.Tuple(
-        title=u"Number of virtual cores", description=u"Minimal, suggested and maximal number of cores",
+        title=u"Number of virtual cores", description=u"Minimum, suggested and maximum number of cores",
         value_type=schema.Int(),
         required=False)
     memory = schema.Tuple(
-        title=u"Memory size", description=u"Minimal, suggested and maximal memory size (in GB)",
+        title=u"Memory size", description=u"Minimum, suggested and maximum memory size (in GB)",
         value_type=schema.Float(),
         required=False)
     swap = schema.Tuple(
-        title=u"Memory size", description=u"Minimal, suggested and maximal memory size (in GB)",
+        title=u"Memory size", description=u"Minimum, suggested and maximum memory size (in GB)",
         value_type=schema.Float(),
         required=False)
     disk = schema.Tuple(
-        title=u"Disk size", description=u"Minimal, suggested and maximal disk size",
+        title=u"Disk size", description=u"Minimum, suggested and maximum disk size",
         value_type=schema.Float(),
         required=False)
     cpu_limit = schema.Tuple(
-        title=u"CPU usage limits", description=u"Minimal, suggested and maximal cpu_limit",
+        title=u"CPU usage limits", description=u"Minimum, suggested and maximum cpu_limit",
         value_type=schema.Int(),
         required=False)
 
@@ -115,5 +116,6 @@ class TemplatesRootInjector(ContainerInjector):
     __class__ = GlobalTemplates
 
 
+provideSubscriptionAdapter(ActionsContainerExtension, adapts=(GlobalTemplates, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Templates, ))
 provideSubscriptionAdapter(ByNameContainerExtension, adapts=(GlobalTemplates, ))
