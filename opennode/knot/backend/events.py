@@ -98,7 +98,6 @@ def delete_virtual_compute(model, event):
 @subscribe(IVirtualCompute, IModelCreatedEvent)
 @defer.inlineCallbacks
 def create_virtual_compute(model, event):
-    # TODO: maybe raise an exception here instead?
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
 
@@ -109,7 +108,7 @@ def create_virtual_compute(model, event):
         return
 
     log.msg('Deploying VM "%s"' % model, system='deploy')
-    exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
+    exception_logger(DeployAction(model)._execute)(DetachedProtocol(), object())
 
     UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Deployed compute')
 
@@ -127,7 +126,7 @@ def allocate_virtual_compute_from_hangar(model, event):
         return
 
     log.msg('Auto-allocating VM "%s"' % model, system='allocate')
-    exception_logger(AllocateAction(model).execute)(DetachedProtocol(), object())
+    exception_logger(AllocateAction(model)._execute)(DetachedProtocol(), object())
 
     UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Allocated compute %s' % model)
 
