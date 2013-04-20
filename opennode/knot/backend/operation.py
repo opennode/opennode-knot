@@ -132,3 +132,15 @@ class IAgentVersion(IJob):
 
 class IInstallPkg(IJob):
     """ Install a package using system package manager (e.g. yum) """
+
+
+class IGetTemplateRepositories(IJob):
+    """ Get a list of template repositories """
+
+
+class IGetRemoteTemplates(IJob):
+    """ Get a list of remote templates """
+
+
+class IDownloadRemoteTemplate(IJob):
+    """ Download a remote template to local cache """

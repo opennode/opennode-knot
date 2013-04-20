@@ -227,7 +227,10 @@ ACTIONS = {
     op.IUpdateVM: 'onode.vm_update_vm',
     op.IPing: 'test.ping',
     op.IAgentVersion: 'test.version',
-    op.IInstallPkg: 'pkg.install'
+    op.IInstallPkg: 'pkg.install',
+    op.IGetTemplateRepositories: 'onode.templates_get_template_repos',
+    op.IGetRemoteTemplates: 'onode.templates_get_templates',
+    op.IDownloadRemoteTemplate: 'onode.templates_download_template'
 }
 
 
