@@ -36,7 +36,8 @@ local resources, you can keep this script from going over the network.
 '''
 
 parser = OptionParser(usage=usage)
-parser.add_option("-v", "--version", help="use a specific zc.buildout version")
+parser.add_option("-v", "--version", default='1.7.0',
+                  help="use a specific zc.buildout version")
 
 parser.add_option("-t", "--accept-buildout-test-releases",
                   dest='accept_buildout_test_releases',
