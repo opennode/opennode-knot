@@ -94,6 +94,7 @@ def delete_virtual_compute(model, event):
 
     yield deallocate_ip()
 
+
 @subscribe(IVirtualCompute, IModelCreatedEvent)
 @defer.inlineCallbacks
 def create_virtual_compute(model, event):
