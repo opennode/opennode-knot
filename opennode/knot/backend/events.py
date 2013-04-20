@@ -5,7 +5,7 @@ from zope.component import handle
 
 import netaddr
 
-from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction
+from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction, AllocateAction
 from opennode.knot.backend.operation import IResumeVM
 from opennode.knot.backend.operation import IShutdownVM
 from opennode.knot.backend.operation import IStartVM
@@ -14,6 +14,7 @@ from opennode.knot.backend.operation import IUpdateVM
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, IVirtualCompute
 from opennode.knot.model.compute import IDeployed
+from opennode.knot.model.hangar import IHangar
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -110,6 +111,24 @@ def create_virtual_compute(model, event):
     exception_logger(DeployAction(model).execute)(DetachedProtocol(), object())
 
     UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Deployed compute')
+
+
+@subscribe(IVirtualCompute, IModelCreatedEvent)
+@defer.inlineCallbacks
+def allocate_virtual_compute_from_hangar(model, event):
+    if not IVirtualizationContainer.providedBy(model.__parent__):
+        return
+
+    if not IHangar.providedBy(model.__parent__.__parent__):
+        return
+
+    if IDeployed.providedBy(model):
+        return
+
+    log.msg('Auto-allocating VM "%s"' % model, system='allocate')
+    exception_logger(AllocateAction(model).execute)(DetachedProtocol(), object())
+
+    UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Allocated compute %s' % model)
 
 
 @subscribe(IVirtualCompute, IModelModifiedEvent)
