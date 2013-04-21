@@ -110,7 +110,7 @@ def create_virtual_compute(model, event):
     log.msg('Deploying VM "%s"' % model, system='deploy')
     exception_logger(DeployAction(model)._execute)(DetachedProtocol(), object())
 
-    UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Deployed compute')
+    UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Deployed compute %s' % model)
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
