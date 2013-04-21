@@ -118,7 +118,7 @@ class ComputeAction(Action):
             ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                               subject=self.context, owner=owner)
             ulog.log('Exception %s: "%s" executing "%s"', type(failure.value).__name__,
-                                                           failure.value, self.__class__.__name__)
+                     failure.value, self.__class__.__name__)
             defer.returnValue(failure)
 
         @defer.inlineCallbacks
