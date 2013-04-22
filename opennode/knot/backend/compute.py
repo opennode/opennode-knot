@@ -339,7 +339,12 @@ class DeployAction(VComputeAction):
 
             if (yield self._check_vm_post(cmd, name, hostname, target)):
                 log.msg('Deployment finished successfully!', system='deploy')
-                if target != (yield db.get(self.context, '__parent__')):
+
+                @db.ro_transact
+                def check_parent_is_target():
+                    return self.context.__parent__ == target.__parent__
+
+                if (yield check_parent_is_target()):
                     yield mv_compute_model(self.context, target)
 
             @db.transact
