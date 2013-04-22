@@ -6,7 +6,6 @@ from twisted.python import log
 from zope.component import handle
 
 import netaddr
-import transaction
 
 from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction, AllocateAction
 from opennode.knot.backend.operation import IResumeVM
@@ -108,9 +107,10 @@ def deploy_virtual_compute(path, event):
     run_deploy()
 
 
-def allocate_virtual_compute(model, event):
+def allocate_virtual_compute(path, event):
     @db.transact
     def run_deploy():
+        model = traverse1(path)
         log.msg('Auto-allocating VM "%s"' % model, system='allocate')
         d = AllocateAction(model).execute(DetachedProtocol(), object())
         d.addErrback(lambda f: f.raiseException())
