@@ -5,6 +5,7 @@ from twisted.python import log
 from zope.component import handle
 
 import netaddr
+import transaction
 
 from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction, AllocateAction
 from opennode.knot.backend.operation import IResumeVM
@@ -96,7 +97,6 @@ def delete_virtual_compute(model, event):
     yield deallocate_ip()
 
 
-
 def deploy_virtual_compute(model, event):
     log.msg('Deploying VM "%s"' % model, system='deploy')
     d = DeployAction(model).execute(DetachedProtocol(), object())
@@ -124,8 +124,10 @@ def handle_vm_create_event(model, event):
         return
 
     try:
-        yield deferToThread(deploy_virtual_compute, model, event)
-        yield deferToThread(lambda: UserLogger(subject=model, owner=(model.__owner__)).log('Deployed compute %s' % model))
+        ct = transaction.get()
+        ct.addAfterCommitHook(deploy_virtual_compute, model, event)
+        ul = UserLogger(subject=model, owner=(model.__owner__))
+        ct.addAfterCommitHook(lambda r: ul.log('Deployed compute %s' % model))
     except Exception:
         log.err(system='deploy-event')
 
@@ -143,8 +145,10 @@ def allocate_virtual_compute_from_hangar(model, event):
         return
 
     try:
-        yield deferToThread(allocate_virtual_compute, model, event)
-        UserLogger(subject=model, owner=model.__owner__).log('Allocated compute %s' % model)
+        ct = transaction.get()
+        ct.addAfterCommitHook(allocate_virtual_compute, model, event)
+        ul = UserLogger(subject=model, owner=(model.__owner__))
+        ct.addAfterCommitHook(lambda r: ul.log('Allocated compute %s' % model))
     except Exception:
         log.err(system='allocate-event')
 
