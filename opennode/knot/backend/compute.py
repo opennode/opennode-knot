@@ -339,11 +339,11 @@ class DeployAction(VComputeAction):
 
             if (yield self._check_vm_post(cmd, name, hostname, target)):
                 log.msg('Deployment finished successfully!', system='deploy')
-                yield mv_compute_model(self.context, target)
+                if target != (yield db.get(self.context, '__parent__')):
+                    yield mv_compute_model(self.context, target)
 
             @db.transact
             def finalize_vm():
-                noLongerProvides(self.context, IDeploying)
                 noLongerProvides(self.context, IUndeployed)
                 alsoProvides(self.context, IDeployed)
 

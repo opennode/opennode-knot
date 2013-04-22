@@ -1,6 +1,7 @@
 from grokcore.component import subscribe
 from twisted.internet import defer
-from twisted.internet.threads import deferToThread
+from twisted.internet import task
+from twisted.internet import reactor
 from twisted.python import log
 from zope.component import handle
 
@@ -25,7 +26,7 @@ from opennode.oms.model.form import IModelModifiedEvent
 from opennode.oms.model.form import IModelDeletedEvent
 from opennode.oms.model.form import IModelCreatedEvent
 from opennode.oms.model.form import ModelModifiedEvent
-from opennode.oms.util import blocking_yield
+from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
 
 
@@ -97,18 +98,23 @@ def delete_virtual_compute(model, event):
     yield deallocate_ip()
 
 
-def deploy_virtual_compute(model, event):
-    log.msg('Deploying VM "%s"' % model, system='deploy')
-    d = DeployAction(model).execute(DetachedProtocol(), object())
-    d.addErrback(lambda f: f.raiseException())
-    blocking_yield(d)
+def deploy_virtual_compute(path, event):
+    @db.transact
+    def run_deploy():
+        model = traverse1(path)
+        log.msg('Deploying VM "%s"' % model, system='deploy')
+        d = DeployAction(model).execute(DetachedProtocol(), object())
+        d.addErrback(lambda f: f.raiseException())
+    run_deploy()
 
 
 def allocate_virtual_compute(model, event):
-    log.msg('Auto-allocating VM "%s"' % model, system='allocate')
-    d = AllocateAction(model).execute(DetachedProtocol(), object())
-    d.addErrback(lambda f: f.raiseException())
-    blocking_yield(d)
+    @db.transact
+    def run_deploy():
+        log.msg('Auto-allocating VM "%s"' % model, system='allocate')
+        d = AllocateAction(model).execute(DetachedProtocol(), object())
+        d.addErrback(lambda f: f.raiseException())
+    run_deploy()
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
@@ -123,10 +129,10 @@ def handle_vm_create_event(model, event):
         return
 
     try:
-        ct = transaction.get()
-        ct.addAfterCommitHook(deploy_virtual_compute, args=(model, event))
+        path = canonical_path(model)
         ul = UserLogger(subject=model, owner=(model.__owner__))
-        ct.addAfterCommitHook(lambda: ul.log('Deployed compute %s' % model))
+        d = task.deferLater(reactor, 2.0, deploy_virtual_compute, path, event)
+        d.addCallback(lambda r: ul.log('Deployed compute %s' % path))
     except Exception:
         log.err(system='deploy-event')
 
@@ -143,10 +149,10 @@ def allocate_virtual_compute_from_hangar(model, event):
         return
 
     try:
-        ct = transaction.get()
-        ct.addAfterCommitHook(allocate_virtual_compute, args=(model, event))
+        path = canonical_path(model)
         ul = UserLogger(subject=model, owner=(model.__owner__))
-        ct.addAfterCommitHook(lambda: ul.log('Allocated compute %s' % model))
+        d = task.deferLater(reactor, 2.0, allocate_virtual_compute, path, event)
+        d.addCallback(lambda r: ul.log('Allocated compute %s' % path))
     except Exception:
         log.err(system='allocate-event')
 
