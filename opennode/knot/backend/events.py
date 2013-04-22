@@ -1,5 +1,6 @@
 from grokcore.component import subscribe
 from twisted.internet import defer
+from twisted.internet.threads import deferToThread
 from twisted.python import log
 from zope.component import handle
 
@@ -23,7 +24,7 @@ from opennode.oms.model.form import IModelModifiedEvent
 from opennode.oms.model.form import IModelDeletedEvent
 from opennode.oms.model.form import IModelCreatedEvent
 from opennode.oms.model.form import ModelModifiedEvent
-from opennode.oms.util import exception_logger
+from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
@@ -95,9 +96,24 @@ def delete_virtual_compute(model, event):
     yield deallocate_ip()
 
 
+
+def deploy_virtual_compute(model, event):
+    log.msg('Deploying VM "%s"' % model, system='deploy')
+    d = DeployAction(model).execute(DetachedProtocol(), object())
+    d.addErrback(lambda f: f.raiseException())
+    blocking_yield(d)
+
+
+def allocate_virtual_compute(model, event):
+    log.msg('Auto-allocating VM "%s"' % model, system='allocate')
+    d = AllocateAction(model).execute(DetachedProtocol(), object())
+    d.addErrback(lambda f: f.raiseException())
+    blocking_yield(d)
+
+
 @subscribe(IVirtualCompute, IModelCreatedEvent)
 @defer.inlineCallbacks
-def create_virtual_compute(model, event):
+def handle_vm_create_event(model, event):
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
 
@@ -107,10 +123,11 @@ def create_virtual_compute(model, event):
     if IDeployed.providedBy(model):
         return
 
-    log.msg('Deploying VM "%s"' % model, system='deploy')
-    yield exception_logger(DeployAction(model)._execute)(DetachedProtocol(), object())
-
-    UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Deployed compute %s' % model)
+    try:
+        yield deferToThread(deploy_virtual_compute, model, event)
+        yield deferToThread(lambda: UserLogger(subject=model, owner=(model.__owner__)).log('Deployed compute %s' % model))
+    except Exception:
+        log.err(system='deploy-event')
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
@@ -125,10 +142,11 @@ def allocate_virtual_compute_from_hangar(model, event):
     if IDeployed.providedBy(model):
         return
 
-    log.msg('Auto-allocating VM "%s"' % model, system='allocate')
-    yield exception_logger(AllocateAction(model)._execute)(DetachedProtocol(), object())
-
-    UserLogger(subject=model, owner=(yield db.get(model, '__owner__'))).log('Allocated compute %s' % model)
+    try:
+        yield deferToThread(allocate_virtual_compute, model, event)
+        UserLogger(subject=model, owner=model.__owner__).log('Allocated compute %s' % model)
+    except Exception:
+        log.err(system='allocate-event')
 
 
 @subscribe(IVirtualCompute, IModelModifiedEvent)

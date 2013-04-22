@@ -113,7 +113,7 @@ class ComputeAction(Action):
             log.msg('Exception %s: "%s" executing "%s"' % (type(failure.value).__name__,
                                                            failure.value, self.__class__.__name__),
                     system='compute-action', logLevel=ERROR)
-            log.err(system='compute-action')
+            log.err(failure, system='compute-action')
             owner = yield db.get(self.context, '__owner__')
             ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                               subject=self.context, owner=owner)
@@ -248,6 +248,10 @@ class DeployAction(VComputeAction):
 
     action('deploy')
 
+    def handle_error(self, cmd, msg):
+        log.msg(msg, system='deploy')
+        cmd.write(str(msg + '\n'))
+
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         template = yield db.get(self.context, 'template')
@@ -333,7 +337,7 @@ class DeployAction(VComputeAction):
 
             log.msg('Checking post-deploy...', system='deploy')
 
-            if (yield self._check_vm_post(name, hostname, target)):
+            if (yield self._check_vm_post(cmd, name, hostname, target)):
                 log.msg('Deployment finished successfully!', system='deploy')
                 yield mv_compute_model(self.context, target)
 
@@ -360,11 +364,11 @@ class DeployAction(VComputeAction):
         defer.returnValue(vmlist)
 
     @defer.inlineCallbacks
-    def _check_vm_post(self, name, destination_hostname, destination_vms):
+    def _check_vm_post(self, cmd, name, destination_hostname, destination_vms):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name not in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(self.cmd,
+            self.handle_error(cmd,
                               'Failed deployment of %s to %s: VM not found in destination after deployment'
                               % (name, destination_hostname))
             defer.returnValue(False)
@@ -425,17 +429,17 @@ class MigrateAction(VComputeAction):
         defer.returnValue(vmlist)
 
     @defer.inlineCallbacks
-    def _check_vm_pre(self, name, destination_hostname, destination_vms):
+    def _check_vm_pre(self, cmd, name, destination_hostname, destination_vms):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(self.cmd,
+            self.handle_error(cmd,
                               'Failed migration of %s to %s: destination already contains this VM'
                               % (name, destination_hostname))
             defer.returnValue(False)
 
         if ((yield db.get(self.context, 'ctid')) in map(lambda x: x.get('ctid'), vmlist)):
-            self.handle_error(self.cmd,
+            self.handle_error(cmd,
                               'Failed migration of %s to %s: destination container ID conflict'
                               % (name, destination_hostname))
             defer.renderValue(False)
@@ -443,11 +447,11 @@ class MigrateAction(VComputeAction):
         defer.returnValue(True)
 
     @defer.inlineCallbacks
-    def _check_vm_post(self, name, destination_hostname, destination_vms):
+    def _check_vm_post(self, cmd, name, destination_hostname, destination_vms):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name not in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(self.cmd,
+            self.handle_error(cmd,
                               'Failed migration of %s to %s: VM not found in destination after migration'
                               % (name, destination_hostname))
             defer.returnValue(False)
@@ -456,7 +460,6 @@ class MigrateAction(VComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
-        self.cmd = cmd
 
         @db.ro_transact
         def get_destination():
@@ -488,7 +491,7 @@ class MigrateAction(VComputeAction):
             yield source_submitter.submit(IMigrateVM, name, destination_hostname, (not args.offline), False)
             log.msg('Migration done. Checking... %s' % destination_vms, system='migrate')
 
-            if (yield self._check_vm_post(name, destination_hostname, destination_vms)):
+            if (yield self._check_vm_post(cmd, name, destination_hostname, destination_vms)):
                 log.msg('Migration finished successfully!', system='migrate')
 
                 @db.transact
