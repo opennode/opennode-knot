@@ -112,7 +112,6 @@ def allocate_virtual_compute(model, event):
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
-@defer.inlineCallbacks
 def handle_vm_create_event(model, event):
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
@@ -133,7 +132,6 @@ def handle_vm_create_event(model, event):
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
-@defer.inlineCallbacks
 def allocate_virtual_compute_from_hangar(model, event):
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
