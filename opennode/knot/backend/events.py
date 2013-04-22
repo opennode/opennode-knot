@@ -125,9 +125,9 @@ def handle_vm_create_event(model, event):
 
     try:
         ct = transaction.get()
-        ct.addAfterCommitHook(deploy_virtual_compute, model, event)
+        ct.addAfterCommitHook(deploy_virtual_compute, args=(model, event))
         ul = UserLogger(subject=model, owner=(model.__owner__))
-        ct.addAfterCommitHook(lambda r: ul.log('Deployed compute %s' % model))
+        ct.addAfterCommitHook(lambda: ul.log('Deployed compute %s' % model))
     except Exception:
         log.err(system='deploy-event')
 
@@ -146,9 +146,9 @@ def allocate_virtual_compute_from_hangar(model, event):
 
     try:
         ct = transaction.get()
-        ct.addAfterCommitHook(allocate_virtual_compute, model, event)
+        ct.addAfterCommitHook(allocate_virtual_compute, args=(model, event))
         ul = UserLogger(subject=model, owner=(model.__owner__))
-        ct.addAfterCommitHook(lambda r: ul.log('Allocated compute %s' % model))
+        ct.addAfterCommitHook(lambda: ul.log('Allocated compute %s' % model))
     except Exception:
         log.err(system='allocate-event')
 
