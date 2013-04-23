@@ -90,7 +90,8 @@ class SimpleSaltExecutor(object):
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
         if hostkey not in data:
-            raise op.OperationRemoteError(msg='Remote returned empty response')
+            raise op.OperationRemoteError(msg='Remote "%s" returned empty response to "%s"' %
+                                          (hostkey, self.action))
 
         if type(data[hostkey]) in (str, unicode) and data[hostkey].startswith('Traceback'):
             raise op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey, self.action),

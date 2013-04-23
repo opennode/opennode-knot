@@ -1,3 +1,4 @@
+from datetime import datetime
 from logging import ERROR
 from twisted.internet import defer
 from twisted.python import log
@@ -173,27 +174,42 @@ class SyncDaemonProcess(DaemonProcess):
         set_compute_failure_status(compute.__name__, True)
 
     def execute_sync_action(self, hostname, compute):
-        log.msg("Syncing started: '%s'" % hostname, system='sync')
+        log.msg("Syncing started: '%s' (%s)" % (hostname, str(compute)), system='sync')
         syncaction = SyncAction(compute)
         deferred = syncaction.execute(DetachedProtocol(), object())
         deferred.addCallback(self.handle_success, 'sync action', hostname, compute)
         deferred.addErrback(self.handle_remote_error, hostname, compute)
         deferred.addErrback(self.handle_error, 'Sync action', hostname, compute)
-        self.outstanding_requests[str(compute)] = deferred
+        curtime = datetime.now().isoformat()
+        self.outstanding_requests[str(compute)] = [deferred, curtime, 0, defer.Deferred()]
         return deferred
 
     @defer.inlineCallbacks
     def execute_ping_tests(self):
         for compute, hostname in (yield get_manageable_machines()):
-            if str(compute) not in self.outstanding_requests:
+            targetkey = str(compute)
+            curtime = datetime.now().isoformat()
+
+            if (targetkey in self.outstanding_requests and
+                self.outstanding_requests[targetkey][2] > 5):
+                log.msg('Killing all previous requests to %s (%s)' % (hostname, targetkey),
+                        system='sync')
+                self.outstanding_requests[targetkey][3].callback(None)
+                del self.outstanding_requests[targetkey]
+
+            if (targetkey not in self.outstanding_requests
+                or self.outstanding_requests[targetkey][2] > 5):
                 log.msg('Pinging %s (%s)...' % (hostname, compute), system='sync')
                 pingtest = IPing(compute)
-                deferred = pingtest.run()
+                killhook = defer.Deferred()
+                deferred = pingtest.run(__killhook=killhook)
+                self.outstanding_requests[targetkey] = [deferred, curtime, 0, killhook]
                 deferred.addCallback(self.handle_success, 'ping test', hostname, compute)
                 deferred.addErrback(self.handle_remote_error, hostname, compute)
                 deferred.addErrback(self.handle_error, 'Ping test', hostname, compute)
-                deferred.addCallback(lambda r: self.execute_sync_action(hostname, compute))
-                self.outstanding_requests[str(compute)] = deferred
+                def sync_action(r, hostname, compute):
+                    self.execute_sync_action(hostname, compute)
+                deferred.addCallback(sync_action, hostname, compute)
             else:
                 log.msg("Pinging %s skipped: previous test not finished yet" % hostname, system='sync')
 
