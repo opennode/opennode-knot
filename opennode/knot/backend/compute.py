@@ -233,9 +233,12 @@ def mv_compute_model(context_path, target_path):
     try:
         vm = traverse1(context_path)
         destination = traverse1(target_path)
-        dvms = follow_symlinks(destination['vms'])
-        dvms.add(vm)
-        log.msg('Model moved.', system='deploy')
+
+        if vm.__parent__.__parent__ != destination.__parent__:
+            destination.add(vm)
+            log.msg('Model moved.', system='deploy')
+        else:
+            log.msg('Model NOT moved: VM already in destination', system='deploy')
     except IndexError:
         log.msg('Model NOT moved: destination compute or vms do not exist', system='deploy',
                 logLevel=WARNING)
@@ -341,18 +344,10 @@ class DeployAction(VComputeAction):
                 log.msg('Deployment finished successfully!', system='deploy')
 
                 @db.ro_transact
-                def need_move_to_target():
-                    return self.context.__parent__.__parent__ != target.__parent__
-
-                @db.ro_transact
                 def get_canonical_paths(context, target):
-                    return (canonical_path(self.context), canonical_path(target))
+                    return (canonical_path(context), canonical_path(target))
 
-                if (yield need_move_to_target()):
-                    yield mv_compute_model(*(yield get_canonical_paths(self.context, target)))
-                else:
-                    log.msg('Model NOT moved: target is already VMs parent: %s' % (self.context),
-                            system='deploy')
+                yield mv_compute_model(*(yield get_canonical_paths(self.context, target)))
 
             @db.transact
             def finalize_vm():
