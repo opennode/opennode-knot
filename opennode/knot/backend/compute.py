@@ -374,7 +374,7 @@ class DeployAction(VComputeAction):
     def _check_vm_post(self, cmd, name, destination_hostname, destination_vms):
         vmlist = yield self._get_vmlist(destination_vms)
 
-        if (name not in map(lambda x: x['uuid'], vmlist)):
+        if not vmlist or (name not in map(lambda x: x['uuid'], vmlist)):
             self.handle_error(cmd,
                               'Failed deployment of %s to %s: VM not found in destination after deployment'
                               % (name, destination_hostname))
