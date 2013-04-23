@@ -346,6 +346,9 @@ class DeployAction(VComputeAction):
 
                 if (yield need_move_to_target()):
                     yield mv_compute_model(self.context, target)
+                else:
+                    log.msg('Model NOT moved: target is already VMs parent: %s' % (self.context),
+                            system='deploy')
 
             @db.transact
             def finalize_vm():
