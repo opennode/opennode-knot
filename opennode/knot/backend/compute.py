@@ -32,6 +32,7 @@ from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import follow_symlinks
+from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
 
 
@@ -228,11 +229,10 @@ class AllocateAction(ComputeAction):
 
 
 @db.transact
-def mv_compute_model(context, target):
-    machines = db.get_root()['oms_root']['machines']
+def mv_compute_model(context_path, target_path):
     try:
-        destination = machines[target.__parent__.__name__]
-        vm = follow_symlinks(context.__parent__[context.__name__])
+        vm = traverse1(context_path)
+        destination = traverse1(target_path)
         dvms = follow_symlinks(destination['vms'])
         dvms.add(vm)
         log.msg('Model moved.', system='deploy')
@@ -344,8 +344,12 @@ class DeployAction(VComputeAction):
                 def need_move_to_target():
                     return self.context.__parent__.__parent__ != target.__parent__
 
+                @db.ro_transact
+                def get_canonical_paths(context, target):
+                    return (canonical_path(self.context), canonical_path(target))
+
                 if (yield need_move_to_target()):
-                    yield mv_compute_model(self.context, target)
+                    yield mv_compute_model(*(yield get_canonical_paths(self.context, target)))
                 else:
                     log.msg('Model NOT moved: target is already VMs parent: %s' % (self.context),
                             system='deploy')
