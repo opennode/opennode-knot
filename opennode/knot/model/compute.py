@@ -45,15 +45,11 @@ class ISaltInstalled(IManageable):
 
 class ICompute(Interface):
     # Network parameters
-    hostname = schema.TextLine(
-        title=u"Host name", min_length=1)
-    ipv4_address = schema.TextLine(
-        title=u"IPv4 address", min_length=7, required=False)
-    ipv6_address = schema.TextLine(
-        title=u"IPv6 address", min_length=6, required=False)
-    nameservers = schema.List(
-        title=u"Nameservers", description=u"IPs of DNS servers",
-        value_type=schema.TextLine(), required=False)
+    hostname = schema.TextLine(title=u"Host name", min_length=1)
+    ipv4_address = schema.TextLine(title=u"IPv4 address", min_length=7, required=False)
+    ipv6_address = schema.TextLine(title=u"IPv6 address", min_length=6, required=False)
+    nameservers = schema.List(title=u"Nameservers", description=u"IPs of DNS servers",
+                              value_type=schema.TextLine(), required=False)
     dns_domains = schema.List(
         title=u"DNS Domains", description=u"Domain names used for DNS host name lookup",
         value_type=schema.TextLine(), required=False)

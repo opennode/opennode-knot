@@ -1,7 +1,7 @@
 from grokcore.component import context, baseclass
 from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
-from twisted.python import log
+from twisted.python import log, failure
 from uuid import uuid5, NAMESPACE_DNS
 
 import netaddr
@@ -45,7 +45,7 @@ def format_error(e):
 
 
 @defer.inlineCallbacks
-def register_machine(host, mgt_stack=None):
+def register_machine(host, mgt_stack=IManageable):
 
     @db.ro_transact
     def check():
@@ -96,6 +96,18 @@ class ComputeAction(Action):
         d.chainDeferred(self._lock_registry[str(self.context)][0])
         d.addBoth(lambda r: self._remove_lock(str(self.context)))
 
+    def pre_execute_hook(self):
+        """ Calls a global utility that may throw an exception to prevent the current action from starting.
+        """
+        pass
+
+    @defer.inlineCallbacks
+    def add_log_event(self, cmd, msg, *args, **kwargs):
+        owner = yield db.get(self.context, '__owner__')
+        ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                          subject=self.context, owner=owner)
+        ulog.log(msg, *args, **kwargs)
+
     def execute(self, cmd, args):
         if self.locked():
             lock_action = self._lock_registry[str(self.context)][1]
@@ -107,28 +119,31 @@ class ComputeAction(Action):
 
         self.lock()
 
+        try:
+            self.pre_execute_hook()
+        except Exception:
+            d = self._lock_registry[str(self.context)][0]
+            d.errback(failure.Failure())
+            yield self.add_log_event('Cancelled executing "%s" due to pre_execute_hook',
+                                     type(self).__name__)
+            self._remove_lock(str(self.context))
+            return d
+
         d = self._execute(cmd, args)
 
         @defer.inlineCallbacks
-        def handle_error(failure):
-            log.msg('Exception %s: "%s" executing "%s"' % (type(failure.value).__name__,
-                                                           failure.value, self.__class__.__name__),
-                    system='compute-action', logLevel=ERROR)
-            log.err(failure, system='compute-action')
-            owner = yield db.get(self.context, '__owner__')
-            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
-                              subject=self.context, owner=owner)
-            ulog.log('Exception %s: "%s" executing "%s"', type(failure.value).__name__,
-                     failure.value, self.__class__.__name__)
-            defer.returnValue(failure)
+        def handle_error(f):
+            msg = 'Exception %s: "%s" executing "%s"' % (type(f.value).__name__, f.value,
+                                                         type(self).__name__)
+            log.msg(msg, system='compute-action', logLevel=ERROR)
+            log.err(f, system='compute-action')
+            yield self.add_log_event(msg)
+            defer.returnValue(f)
 
         @defer.inlineCallbacks
         def handle_action_done(r):
-            owner = yield db.get(self.context, '__owner__')
-            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
-                              subject=self.context, owner=owner)
-            ulog.log('%s finished successfully', self.__class__.__name__)
-            log.msg('%s finished successfully' % self.__class__.__name__, system='compute-action')
+            yield self.add_log_event('%s finished successfully', type(self).__name__)
+            log.msg('%s finished successfully' % type(self).__name__, system='compute-action')
 
         d.addErrback(handle_error)
         d.addCallback(handle_action_done)
@@ -375,9 +390,8 @@ class DeployAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if not vmlist or (name not in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(cmd,
-                              'Failed deployment of %s to %s: VM not found in destination after deployment'
-                              % (name, destination_hostname))
+            self.handle_error(cmd, 'Failed deployment of %s to %s: '
+                              'VM not found in destination after deployment' % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
