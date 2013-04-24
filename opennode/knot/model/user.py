@@ -18,6 +18,7 @@ class IUserProfile(Interface):
     name = schema.TextLine(title=u"User name", min_length=1)
     group = schema.TextLine(title=u"Group name", min_length=1)
     credit = schema.Int(title=u'User resource usage credit')
+    credit_timestamp = schema.TextLine(title=u'Timestamp', description=u'Timestamp of credit recording')
 
 
 class UserProfile(Model):
@@ -28,12 +29,14 @@ class UserProfile(Model):
 
     __name__ = ''
     group = ''
-    credit = 0
+    _credit = 0
+    _credit_timestamp = ''
 
-    def __init__(self, name, group, credit=0):
+    def __init__(self, name, group, credit=0, credit_timestamp=''):
         self.__name__ = name
         self.group = group
         self.credit = credit
+        self.credit_timestamp = credit_timestamp
 
     def get_name(self):
         return self.__name__
@@ -42,6 +45,18 @@ class UserProfile(Model):
         self.__name__ = value
 
     name = property(get_name, set_name)
+
+    @property
+    def credit_timestamp(self):
+        return self._credit_timestamp
+
+    def set_credit(self, value):
+        self._credit = value
+
+    def get_credit(self):
+        return self._credit
+
+    credit = property(get_credit, set_credit)
 
     def has_credit(self):
         ## TODO: make configurable
