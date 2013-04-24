@@ -143,8 +143,9 @@ class ComputeAction(Action):
         @defer.inlineCallbacks
         def cancel_action(e, cmd):
             e.trap(Exception)
-            yield self.add_log_event(cmd, 'Canceled executing "%s" due to pre_execute_hook failure',
-                                     type(self).__name__)
+            msg = 'Canceled executing "%s" due to pre_execute_hook failure' % type(self).__name__
+            cmd.write('%s\n' % msg)
+            yield self.add_log_event(cmd, msg)
 
         try:
             yield self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
