@@ -1,10 +1,13 @@
 import json
 
 from grokcore.component import context
+from twisted.internet import defer
+from twisted.web.server import NOT_DONE_YET
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
+from zope.component import getAllUtilitiesRegisteredFor
 
-from opennode.knot.model.compute import Compute, IVirtualCompute
+from opennode.knot.model.compute import Compute, IVirtualCompute, IPreExecuteHook
 from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
@@ -14,7 +17,10 @@ from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView
 from opennode.oms.endpoint.httprest.root import BadRequest
+from opennode.oms.endpoint.httprest.root import Forbidden
+from opennode.oms.log import UserLogger
 from opennode.oms.security.checker import get_interaction
+from opennode.oms.zodb import db
 
 
 class MachinesView(ContainerView):
@@ -30,6 +36,12 @@ class VirtualizationContainerView(ContainerView):
     def blacklisted(self, item):
         return (super(VirtualizationContainerView, self).blacklisted(item)
                 or isinstance(item, ActionsContainer))
+
+    @defer.inlineCallbacks
+    def pre_modify_hook(self, principal):
+        checks = getAllUtilitiesRegisteredFor(IPreExecuteHook)
+        for check in checks:
+            yield defer.maybeDeferred(check.check, principal)
 
     def render_POST(self, request):
         try:
@@ -74,21 +86,49 @@ class VirtualizationContainerView(ContainerView):
 
         compute = form.create()
 
-        interaction = get_interaction(self.context) or request.interaction
+        interaction = request.interaction
+
         if not interaction:
             auth = getUtility(IAuthentication, context=None)
             principal = auth.getPrincipal(None)
         else:
             principal = interaction.participations[0].principal
 
-        compute.__owner__ = principal
+        @db.transact
+        def handle_success(r, compute, principal):
+            compute.__owner__ = principal
 
-        compute.root_password = root_password
-        self.context.add(compute)
+            compute.root_password = root_password
+            self.context.add(compute)
 
-        data['id'] = compute.__name__
+            data['id'] = compute.__name__
 
-        return {'success': True, 'result': IHttpRestView(compute).render_GET(request)}
+            self.add_log_event(principal,
+                               'Creation of %s (%s) (via web) successful' % (compute.hostname, compute))
+
+            request.write(json.dumps({'success': True,
+                                      'result': IHttpRestView(compute).render_GET(request)}))
+            request.finish()
+
+        def handle_pre_execute_hook_error(f, compute, principal):
+            f.trap(Exception)
+            self.add_log_event(principal,
+                               'Creation of %s (%s) (via web) failed: %s: %s' % (compute.hostname, compute,
+                                                                                 type(f.value).__name__,
+                                                                                 f.value))
+            request.write(json.dumps({'success': False,
+                                      'errors': [{'id': 'vm', 'msg': str(f.value)}]}))
+            request.finish()
+
+        d = self.pre_modify_hook(principal)
+        d.addCallback(handle_success, compute, principal)
+        d.addErrback(handle_pre_execute_hook_error, compute, principal)
+        return NOT_DONE_YET
+
+    def add_log_event(self, principal, msg, *args, **kwargs):
+        owner = self.context.__owner__
+        ulog = UserLogger(principal=principal, subject=self.context, owner=owner)
+        ulog.log(msg, *args, **kwargs)
 
 
 class HangarView(ContainerView):

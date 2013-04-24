@@ -3,6 +3,7 @@ from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log, failure
 from uuid import uuid5, NAMESPACE_DNS
+from zope.component import getAllUtilitiesRegisteredFor
 
 import netaddr
 
@@ -20,7 +21,7 @@ from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
-from opennode.knot.model.compute import IManageable
+from opennode.knot.model.compute import IManageable, IPreExecuteHook
 from opennode.knot.model.template import ITemplate
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
@@ -87,7 +88,9 @@ class ComputeAction(Action):
         return str(self.context) in self._lock_registry
 
     def lock(self):
-        self._lock_registry[str(self.context)] = (defer.Deferred(), self)
+        d = defer.Deferred()
+        self._lock_registry[str(self.context)] = (d, self)
+        return d
 
     def _remove_lock(self, uuid):
         del self._lock_registry[uuid]
@@ -95,11 +98,14 @@ class ComputeAction(Action):
     def unlock(self, d):
         d.chainDeferred(self._lock_registry[str(self.context)][0])
         d.addBoth(lambda r: self._remove_lock(str(self.context)))
+        return d
 
-    def pre_execute_hook(self):
+    def pre_execute_hook(self, principal):
         """ Calls a global utility that may throw an exception to prevent the current action from starting.
         """
-        pass
+        checks = getAllUtilitiesRegisteredFor(IPreExecuteHook)
+        for check in checks:
+            yield check.check(principal)
 
     @defer.inlineCallbacks
     def add_log_event(self, cmd, msg, *args, **kwargs):
@@ -107,6 +113,20 @@ class ComputeAction(Action):
         ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                           subject=self.context, owner=owner)
         ulog.log(msg, *args, **kwargs)
+
+    @defer.inlineCallbacks
+    def handle_error(self, f, cmd):
+        msg = 'Exception %s: "%s" executing "%s"' % (type(f.value).__name__, f.value,
+                                                     type(self).__name__)
+        log.msg(msg, system='compute-action', logLevel=ERROR)
+        log.err(f, system='compute-action')
+        yield self.add_log_event(msg, cmd)
+        defer.returnValue(f)
+
+    @defer.inlineCallbacks
+    def handle_action_done(self, r, cmd):
+        yield self.add_log_event(cmd, '%s finished successfully', type(self).__name__)
+        log.msg('%s finished successfully' % type(self).__name__, system='compute-action')
 
     def execute(self, cmd, args):
         if self.locked():
@@ -117,38 +137,26 @@ class ComputeAction(Action):
             self._lock_registry[str(self.context)][0].addBoth(lambda r: self.execute(cmd, args))
             return self._lock_registry[str(self.context)][0]
 
-        self.lock()
+        ld = self.lock()
+
+        @defer.inlineCallbacks
+        def cancel_action(e, cmd):
+            e.trap(Exception)
+            yield self.add_log_event(cmd, 'Canceled executing "%s" due to pre_execute_hook failure',
+                                     type(self).__name__)
 
         try:
-            self.pre_execute_hook()
+            self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
         except Exception:
-            d = self._lock_registry[str(self.context)][0]
-            d.errback(failure.Failure())
-            yield self.add_log_event('Cancelled executing "%s" due to pre_execute_hook',
-                                     type(self).__name__)
+            ld.errback(failure.Failure())
+            ld.addErrback(cancel_action, cmd)
             self._remove_lock(str(self.context))
-            return d
+            return ld
 
         d = self._execute(cmd, args)
-
-        @defer.inlineCallbacks
-        def handle_error(f):
-            msg = 'Exception %s: "%s" executing "%s"' % (type(f.value).__name__, f.value,
-                                                         type(self).__name__)
-            log.msg(msg, system='compute-action', logLevel=ERROR)
-            log.err(f, system='compute-action')
-            yield self.add_log_event(msg)
-            defer.returnValue(f)
-
-        @defer.inlineCallbacks
-        def handle_action_done(r):
-            yield self.add_log_event('%s finished successfully', type(self).__name__)
-            log.msg('%s finished successfully' % type(self).__name__, system='compute-action')
-
-        d.addErrback(handle_error)
-        d.addCallback(handle_action_done)
-        self.unlock(d)
-        return d
+        d.addErrback(self.handle_error, cmd)
+        d.addCallback(self.handle_action_done, cmd)
+        return self.unlock(d)
 
     def _execute(self, cmd, args):
         """ Must be overloaded by child classes """
