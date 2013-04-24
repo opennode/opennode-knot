@@ -2,13 +2,12 @@ from __future__ import absolute_import
 
 from grokcore.component import context, implements, name, GlobalUtility
 from zope import schema
-from zope.component import provideSubscriptionAdapter, provideAdapter
-from zope.interface import Interface, implements
+from zope.component import provideSubscriptionAdapter
+from zope.interface import Interface
 
-from opennode.knot.model.compute import IPreExecuteHook
+from opennode.knot.model.compute import IPreValidateHook
 
 from opennode.oms.config import get_config
-from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Model, Container
 from opennode.oms.model.model.base import IMarkable, IDisplayName, ContainerInjector
@@ -57,14 +56,16 @@ class UserProfile(Model):
 
 
 class UserCreditChecker(GlobalUtility):
-    implements(IPreExecuteHook)
+    implements(IPreValidateHook)
     name('user-credit-check')
 
     @db.ro_transact
     def check(self, principal):
-        profile = traverse1('/home/%s' % principal.id)
-        assert profile is not None and profile.has_credit(), \
-                'User %s does not have enough credit' % principal.id
+        billable_group = get_config().getstring('auth', 'billable_group', 'users')
+        if billable_group in map(str, principal.groups):
+            profile = traverse1('/home/%s' % principal.id)
+            assert profile is not None and profile.has_credit(), \
+                    'User %s does not have enough credit' % principal.id
 
 
 class IHome(Interface):

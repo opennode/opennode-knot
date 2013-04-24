@@ -21,7 +21,7 @@ from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
-from opennode.knot.model.compute import IManageable, IPreExecuteHook
+from opennode.knot.model.compute import IManageable, IPreValidateHook
 from opennode.knot.model.template import ITemplate
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
@@ -100,10 +100,11 @@ class ComputeAction(Action):
         d.addBoth(lambda r: self._remove_lock(str(self.context)))
         return d
 
+    @defer.inlineCallbacks
     def pre_execute_hook(self, principal):
         """ Calls a global utility that may throw an exception to prevent the current action from starting.
         """
-        checks = getAllUtilitiesRegisteredFor(IPreExecuteHook)
+        checks = getAllUtilitiesRegisteredFor(IPreValidateHook)
         for check in checks:
             yield check.check(principal)
 
@@ -146,7 +147,7 @@ class ComputeAction(Action):
                                      type(self).__name__)
 
         try:
-            self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
+            yield self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
         except Exception:
             ld.errback(failure.Failure())
             ld.addErrback(cancel_action, cmd)

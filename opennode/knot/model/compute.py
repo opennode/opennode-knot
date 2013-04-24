@@ -43,7 +43,7 @@ class ISaltInstalled(IManageable):
     """Marker for SaltStack-controlled computes."""
 
 
-class IPreExecuteHook(Interface):
+class IPreValidateHook(Interface):
     """ GlobalUtility interface for performing pre-execute checks on Compute changes and cancelling them,
     when checks fail """
 

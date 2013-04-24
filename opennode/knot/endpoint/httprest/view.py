@@ -7,7 +7,7 @@ from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 from zope.component import getAllUtilitiesRegisteredFor
 
-from opennode.knot.model.compute import Compute, IVirtualCompute, IPreExecuteHook
+from opennode.knot.model.compute import Compute, IVirtualCompute, IPreValidateHook
 from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
@@ -17,9 +17,7 @@ from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.endpoint.httprest.base import IHttpRestView
 from opennode.oms.endpoint.httprest.root import BadRequest
-from opennode.oms.endpoint.httprest.root import Forbidden
 from opennode.oms.log import UserLogger
-from opennode.oms.security.checker import get_interaction
 from opennode.oms.zodb import db
 
 
@@ -38,8 +36,8 @@ class VirtualizationContainerView(ContainerView):
                 or isinstance(item, ActionsContainer))
 
     @defer.inlineCallbacks
-    def pre_modify_hook(self, principal):
-        checks = getAllUtilitiesRegisteredFor(IPreExecuteHook)
+    def validate_hook(self, principal):
+        checks = getAllUtilitiesRegisteredFor(IPreValidateHook)
         for check in checks:
             yield defer.maybeDeferred(check.check, principal)
 
