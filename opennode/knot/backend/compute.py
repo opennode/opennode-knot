@@ -3,7 +3,7 @@ from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log, failure
 from uuid import uuid5, NAMESPACE_DNS
-from zope.component import getAllUtilitiesRegisteredFor
+from zope.component import getUtilitiesFor
 
 import netaddr
 
@@ -21,7 +21,7 @@ from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
-from opennode.knot.model.compute import IManageable, IPreValidateHook
+from opennode.knot.model.compute import IManageable
 from opennode.knot.model.template import ITemplate
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
@@ -32,6 +32,7 @@ from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.base import IPreValidateHook
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
@@ -104,9 +105,9 @@ class ComputeAction(Action):
     def pre_execute_hook(self, principal):
         """ Calls a global utility that may throw an exception to prevent the current action from starting.
         """
-        checks = getAllUtilitiesRegisteredFor(IPreValidateHook)
+        checks = getUtilitiesFor(IPreValidateHook, context=self.context)
         for check in checks:
-            yield check.check(principal)
+            yield defer.maybeDeferred(check.check, principal)
 
     @defer.inlineCallbacks
     def add_log_event(self, cmd, msg, *args, **kwargs):

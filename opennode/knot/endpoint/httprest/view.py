@@ -5,13 +5,14 @@ from twisted.internet import defer
 from twisted.web.server import NOT_DONE_YET
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
-from zope.component import getAllUtilitiesRegisteredFor
+from zope.component import getUtilitiesFor
 
-from opennode.knot.model.compute import Compute, IVirtualCompute, IPreValidateHook
+from opennode.knot.model.compute import Compute, IVirtualCompute
 from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainer
+from opennode.oms.model.model.base import IPreValidateHook
 from opennode.oms.model.model.stream import Metrics
 from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
@@ -37,7 +38,7 @@ class VirtualizationContainerView(ContainerView):
 
     @defer.inlineCallbacks
     def validate_hook(self, principal):
-        checks = getAllUtilitiesRegisteredFor(IPreValidateHook)
+        checks = getUtilitiesFor(IPreValidateHook, context=self.context)
         for check in checks:
             yield defer.maybeDeferred(check.check, principal)
 

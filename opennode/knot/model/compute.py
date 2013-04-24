@@ -43,14 +43,6 @@ class ISaltInstalled(IManageable):
     """Marker for SaltStack-controlled computes."""
 
 
-class IPreValidateHook(Interface):
-    """ GlobalUtility interface for performing pre-execute checks on Compute changes and cancelling them,
-    when checks fail """
-
-    def check(self):
-        """ Perform the pre-execute check """
-
-
 class ICompute(Interface):
     # Network parameters
     hostname = schema.TextLine(title=u"Host name", min_length=1)
