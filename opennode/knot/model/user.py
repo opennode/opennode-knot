@@ -1,10 +1,10 @@
 from __future__ import absolute_import
 
+from datetime import datetime
 from grokcore.component import context, implements
 from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface
-
 
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Model, Container
@@ -14,29 +14,34 @@ from opennode.oms.security.directives import permissions
 
 
 class IUserProfile(Interface):
-
-    name = schema.TextLine(title=u"User name", min_length=1)
-    group = schema.TextLine(title=u"Group name", min_length=1)
-    credit = schema.Int(title=u'User resource usage credit')
-    credit_timestamp = schema.TextLine(title=u'Timestamp', description=u'Timestamp of credit recording')
+    uid = schema.Int(title=u'ID', description=u'Application-specific numerical ID', required=False)
+    name = schema.TextLine(title=u"Name", min_length=1)
+    groups = schema.List(title=u"Groups", min_length=1)
+    credit = schema.Int(title=u'Resource usage credit', required=False)
+    credit_timestamp = schema.TextLine(title=u'Last credit update',
+                                       description=u'Timestamp of last credit recording',
+                                       required=False)
 
 
 class UserProfile(Model):
     implements(IUserProfile, IDisplayName, IMarkable)
     permissions({'name': ('read', 'modify'),
                  'group': ('read', 'modify'),
-                 'credit': ('read', 'modify')})
+                 'credit': ('read', 'modify'),
+                 'userid': ('read', 'modify')})
 
-    __name__ = ''
-    group = ''
+    __name__ = None
+    groups = []
     _credit = 0
-    _credit_timestamp = ''
+    _credit_timestamp = None
+    uid = None
 
-    def __init__(self, name, group, credit=0, credit_timestamp=''):
+    def __init__(self, name, groups, credit=0, credit_timestamp='', uid=0):
         self.__name__ = name
-        self.group = group
+        self.groups = groups
         self.credit = credit
-        self.credit_timestamp = credit_timestamp
+        self._credit_timestamp = credit_timestamp if credit_timestamp else self._credit_timestamp
+        self.uid = uid
 
     def get_name(self):
         return self.__name__
@@ -52,6 +57,7 @@ class UserProfile(Model):
 
     def set_credit(self, value):
         self._credit = value
+        self._credit_timestamp = datetime.now().isoformat()
 
     def get_credit(self):
         return self._credit
@@ -65,6 +71,9 @@ class UserProfile(Model):
     def display_name(self):
         return self.name
 
+    def __repr__(self):
+        return "UserProfile('%s', %s, %s, '%s', %s)" % (self.__name__, self.groups, self.credit,
+                                                        self.credit_timestamp, self.uid)
 
 class IHome(Interface):
     """ User profile container """
@@ -75,6 +84,12 @@ class Home(Container):
     implements(IHome)
     __contains__ = UserProfile
     __name__ = 'home'
+
+    def _new_id(self):
+        raise TypeError('This container does not support generated IDs')
+
+    def content(self):
+        return super(Home, self).content()
 
 
 class HomeRootInjector(ContainerInjector):
