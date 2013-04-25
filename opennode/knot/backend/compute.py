@@ -149,14 +149,14 @@ class ComputeAction(Action):
             yield self.add_log_event(cmd, msg)
 
         try:
-            yield self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
+            d = self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
         except Exception:
             ld.errback(failure.Failure())
             ld.addErrback(cancel_action, cmd)
             self._remove_lock(str(self.context))
             return ld
 
-        d = self._execute(cmd, args)
+        d.addCallback(lambda r: self._execute(cmd, args))
         d.addErrback(self.handle_error, cmd)
         d.addCallback(self.handle_action_done, cmd)
         return self.unlock(d)
