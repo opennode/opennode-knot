@@ -1,8 +1,10 @@
 from grokcore.component import context, baseclass
 from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
-from twisted.python import log
+from twisted.python import log, failure
 from uuid import uuid5, NAMESPACE_DNS
+from zope.interface.interfaces import ComponentLookupError
+from zope.component import getUtilitiesFor
 
 import netaddr
 
@@ -31,6 +33,7 @@ from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
@@ -45,7 +48,7 @@ def format_error(e):
 
 
 @defer.inlineCallbacks
-def register_machine(host, mgt_stack=None):
+def register_machine(host, mgt_stack=IManageable):
 
     @db.ro_transact
     def check():
@@ -73,7 +76,7 @@ def find_compute_v12n_container(compute, backend):
             return v12nc
 
 
-class ComputeAction(Action):
+class ComputeAction(Action, PreValidateHookMixin):
     context(ICompute)
     baseclass()
 
@@ -87,7 +90,9 @@ class ComputeAction(Action):
         return str(self.context) in self._lock_registry
 
     def lock(self):
-        self._lock_registry[str(self.context)] = (defer.Deferred(), self)
+        d = defer.Deferred()
+        self._lock_registry[str(self.context)] = (d, self)
+        return d
 
     def _remove_lock(self, uuid):
         del self._lock_registry[uuid]
@@ -95,6 +100,28 @@ class ComputeAction(Action):
     def unlock(self, d):
         d.chainDeferred(self._lock_registry[str(self.context)][0])
         d.addBoth(lambda r: self._remove_lock(str(self.context)))
+        return d
+
+    @defer.inlineCallbacks
+    def add_log_event(self, cmd, msg, *args, **kwargs):
+        owner = yield db.get(self.context, '__owner__')
+        ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
+                          subject=self.context, owner=owner)
+        ulog.log(msg, *args, **kwargs)
+
+    @defer.inlineCallbacks
+    def handle_error(self, f, cmd):
+        msg = 'Exception %s: "%s" executing "%s"' % (type(f.value).__name__, f.value,
+                                                     type(self).__name__)
+        log.msg(msg, system='compute-action', logLevel=ERROR)
+        log.err(f, system='compute-action')
+        yield self.add_log_event(cmd, msg)
+        defer.returnValue(f)
+
+    @defer.inlineCallbacks
+    def handle_action_done(self, r, cmd):
+        yield self.add_log_event(cmd, '%s finished successfully', type(self).__name__)
+        log.msg('%s finished successfully' % type(self).__name__, system='compute-action')
 
     def execute(self, cmd, args):
         if self.locked():
@@ -105,35 +132,27 @@ class ComputeAction(Action):
             self._lock_registry[str(self.context)][0].addBoth(lambda r: self.execute(cmd, args))
             return self._lock_registry[str(self.context)][0]
 
-        self.lock()
-
-        d = self._execute(cmd, args)
+        ld = self.lock()
 
         @defer.inlineCallbacks
-        def handle_error(failure):
-            log.msg('Exception %s: "%s" executing "%s"' % (type(failure.value).__name__,
-                                                           failure.value, self.__class__.__name__),
-                    system='compute-action', logLevel=ERROR)
-            log.err(failure, system='compute-action')
-            owner = yield db.get(self.context, '__owner__')
-            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
-                              subject=self.context, owner=owner)
-            ulog.log('Exception %s: "%s" executing "%s"', type(failure.value).__name__,
-                     failure.value, self.__class__.__name__)
-            defer.returnValue(failure)
+        def cancel_action(e, cmd):
+            e.trap(Exception)
+            msg = 'Canceled executing "%s" due to validate_hook failure' % type(self).__name__
+            cmd.write('%s\n' % msg)
+            yield self.add_log_event(cmd, msg)
 
-        @defer.inlineCallbacks
-        def handle_action_done(r):
-            owner = yield db.get(self.context, '__owner__')
-            ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
-                              subject=self.context, owner=owner)
-            ulog.log('%s finished successfully', self.__class__.__name__)
-            log.msg('%s finished successfully' % self.__class__.__name__, system='compute-action')
+        try:
+            d = self.validate_hook(cmd.protocol.interaction.participations[0].principal)
+        except Exception:
+            ld.errback(failure.Failure())
+            ld.addErrback(cancel_action, cmd)
+            self._remove_lock(str(self.context))
+            return ld
 
-        d.addErrback(handle_error)
-        d.addCallback(handle_action_done)
-        self.unlock(d)
-        return d
+        d.addCallback(lambda r: self._execute(cmd, args))
+        d.addErrback(self.handle_error, cmd)
+        d.addCallback(self.handle_action_done, cmd)
+        return self.unlock(d)
 
     def _execute(self, cmd, args):
         """ Must be overloaded by child classes """
@@ -375,9 +394,8 @@ class DeployAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if not vmlist or (name not in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(cmd,
-                              'Failed deployment of %s to %s: VM not found in destination after deployment'
-                              % (name, destination_hostname))
+            self.handle_error(cmd, 'Failed deployment of %s to %s: '
+                              'VM not found in destination after deployment' % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
