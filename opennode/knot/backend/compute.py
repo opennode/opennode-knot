@@ -3,6 +3,7 @@ from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log, failure
 from uuid import uuid5, NAMESPACE_DNS
+from zope.interface.interfaces import ComponentLookupError
 from zope.component import getUtilitiesFor
 
 import netaddr
@@ -32,7 +33,7 @@ from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
-from opennode.oms.model.model.base import IPreValidateHook
+from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
@@ -75,7 +76,7 @@ def find_compute_v12n_container(compute, backend):
             return v12nc
 
 
-class ComputeAction(Action):
+class ComputeAction(Action, PreValidateHookMixin):
     context(ICompute)
     baseclass()
 
@@ -102,14 +103,6 @@ class ComputeAction(Action):
         return d
 
     @defer.inlineCallbacks
-    def pre_execute_hook(self, principal):
-        """ Calls a global utility that may throw an exception to prevent the current action from starting.
-        """
-        checks = getUtilitiesFor(IPreValidateHook, context=self.context)
-        for check in checks:
-            yield defer.maybeDeferred(check.check, principal)
-
-    @defer.inlineCallbacks
     def add_log_event(self, cmd, msg, *args, **kwargs):
         owner = yield db.get(self.context, '__owner__')
         ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
@@ -122,7 +115,7 @@ class ComputeAction(Action):
                                                      type(self).__name__)
         log.msg(msg, system='compute-action', logLevel=ERROR)
         log.err(f, system='compute-action')
-        yield self.add_log_event(msg, cmd)
+        yield self.add_log_event(cmd, msg)
         defer.returnValue(f)
 
     @defer.inlineCallbacks
@@ -144,12 +137,12 @@ class ComputeAction(Action):
         @defer.inlineCallbacks
         def cancel_action(e, cmd):
             e.trap(Exception)
-            msg = 'Canceled executing "%s" due to pre_execute_hook failure' % type(self).__name__
+            msg = 'Canceled executing "%s" due to validate_hook failure' % type(self).__name__
             cmd.write('%s\n' % msg)
             yield self.add_log_event(cmd, msg)
 
         try:
-            d = self.pre_execute_hook(cmd.protocol.interaction.participations[0].principal)
+            d = self.validate_hook(cmd.protocol.interaction.participations[0].principal)
         except Exception:
             ld.errback(failure.Failure())
             ld.addErrback(cancel_action, cmd)

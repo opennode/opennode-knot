@@ -12,7 +12,7 @@ from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainer
-from opennode.oms.model.model.base import IPreValidateHook
+from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.stream import Metrics
 from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.endpoint.httprest.view import ContainerView
@@ -29,18 +29,12 @@ class MachinesView(ContainerView):
         return super(MachinesView, self).blacklisted(item) or isinstance(item, Hangar)
 
 
-class VirtualizationContainerView(ContainerView):
+class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
     context(VirtualizationContainer)
 
     def blacklisted(self, item):
         return (super(VirtualizationContainerView, self).blacklisted(item)
                 or isinstance(item, ActionsContainer))
-
-    @defer.inlineCallbacks
-    def validate_hook(self, principal):
-        checks = getUtilitiesFor(IPreValidateHook, context=self.context)
-        for check in checks:
-            yield defer.maybeDeferred(check.check, principal)
 
     def render_POST(self, request):
         try:
@@ -119,7 +113,7 @@ class VirtualizationContainerView(ContainerView):
                                       'errors': [{'id': 'vm', 'msg': str(f.value)}]}))
             request.finish()
 
-        d = self.pre_modify_hook(principal)
+        d = self.validate_hook(principal)
         d.addCallback(handle_success, compute, principal)
         d.addErrback(handle_pre_execute_hook_error, compute, principal)
         return NOT_DONE_YET
