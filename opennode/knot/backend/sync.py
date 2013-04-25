@@ -2,7 +2,9 @@ from datetime import datetime
 from logging import ERROR
 from twisted.internet import defer
 from twisted.python import log
+from zope.authentication.interfaces import IAuthentication
 from zope.component import provideSubscriptionAdapter, getAllUtilitiesRegisteredFor
+from zope.component import getUtility
 from zope.interface import implements
 
 from opennode.knot.backend.syncaction import SyncAction
@@ -11,10 +13,12 @@ from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.operation import IPing
 from opennode.knot.model.backend import IKeyManager
 from opennode.knot.model.compute import ICompute, IManageable
+from opennode.knot.model.user import UserProfile
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
 from opennode.oms.model.model.symlink import follow_symlinks
+from opennode.oms.security.principals import User
 from opennode.oms.util import subscription_factory, async_sleep
 from opennode.oms.zodb import db
 
@@ -84,7 +88,6 @@ def set_compute_suspicious_status(uuid, status):
     iterate_recursively(compute)
 
 
-
 class SyncDaemonProcess(DaemonProcess):
     implements(IProcess)
 
@@ -111,6 +114,7 @@ class SyncDaemonProcess(DaemonProcess):
     @defer.inlineCallbacks
     def sync(self):
         log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
+        yield self.gather_users()
         yield self.gather_machines()
         yield self.execute_ping_tests()
         yield self.gather_ippools()
@@ -123,6 +127,20 @@ class SyncDaemonProcess(DaemonProcess):
         if hosts_to_delete:
             log.msg('Deleting machines: %s' % (hosts_to_delete), system='sync')
             yield delete_machines(hosts_to_delete)
+
+    @defer.inlineCallbacks
+    def gather_users(self):
+        # Automatically fills in Home with existing users
+        @db.transact
+        def get_users():
+            home = db.get_root()['oms_root']['home']
+            auth = getUtility(IAuthentication)
+            for pname, pobj in auth.principals.iteritems():
+                if type(pobj) is User and pobj.id not in home.listnames():
+                    up = UserProfile(pobj.id, [group.id for group in pobj.groups], uid=pobj.uid)
+                    log.msg('Adding %s to /home' % (up))
+                    home.add(up)
+        yield get_users()
 
     @defer.inlineCallbacks
     def gather_machines(self):
@@ -190,15 +208,13 @@ class SyncDaemonProcess(DaemonProcess):
             targetkey = str(compute)
             curtime = datetime.now().isoformat()
 
-            if (targetkey in self.outstanding_requests and
-                self.outstanding_requests[targetkey][2] > 5):
+            if (targetkey in self.outstanding_requests and self.outstanding_requests[targetkey][2] > 5):
                 log.msg('Killing all previous requests to %s (%s)' % (hostname, targetkey),
                         system='sync')
                 self.outstanding_requests[targetkey][3].callback(None)
                 del self.outstanding_requests[targetkey]
 
-            if (targetkey not in self.outstanding_requests
-                or self.outstanding_requests[targetkey][2] > 5):
+            if (targetkey not in self.outstanding_requests or self.outstanding_requests[targetkey][2] > 5):
                 log.msg('Pinging %s (%s)...' % (hostname, compute), system='sync')
                 pingtest = IPing(compute)
                 killhook = defer.Deferred()
@@ -207,8 +223,10 @@ class SyncDaemonProcess(DaemonProcess):
                 deferred.addCallback(self.handle_success, 'ping test', hostname, compute)
                 deferred.addErrback(self.handle_remote_error, hostname, compute)
                 deferred.addErrback(self.handle_error, 'Ping test', hostname, compute)
+
                 def sync_action(r, hostname, compute):
                     self.execute_sync_action(hostname, compute)
+
                 deferred.addCallback(sync_action, hostname, compute)
             else:
                 log.msg("Pinging %s skipped: previous test not finished yet" % hostname, system='sync')
