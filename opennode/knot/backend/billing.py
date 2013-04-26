@@ -55,8 +55,8 @@ class UserCreditChecker(GlobalUtility):
                 credit = yield defer.maybeDeferred(checker.get_credit, profile.uid)
                 profile = yield update_credit(credit)
 
-        assert profile is not None and profile.has_credit(), ('User %s does not have enough credit' %
-                                                              principal.id)
+            assert profile is not None and profile.has_credit(), ('User %s does not have enough credit' %
+                                                                  principal.id)
 
     def applicable(self, context):
         return IVirtualCompute.providedBy(context)
