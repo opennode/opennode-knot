@@ -113,8 +113,8 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def sync(self):
-        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_users()
+        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
         yield self.execute_ping_tests()
         yield self.gather_ippools()
@@ -136,10 +136,16 @@ class SyncDaemonProcess(DaemonProcess):
             home = db.get_root()['oms_root']['home']
             auth = getUtility(IAuthentication)
             for pname, pobj in auth.principals.iteritems():
-                if type(pobj) is User and pobj.id not in home.listnames():
-                    up = UserProfile(pobj.id, [group for group in pobj.groups], uid=pobj.uid)
-                    log.msg('Adding %s to /home' % (up))
-                    home.add(up)
+                if type(pobj) is User:
+                    if pobj.id not in home.listnames():
+                        up = UserProfile(pobj.id, pobj.groups, uid=pobj.uid)
+                        log.msg('Adding %s to /home' % (up))
+                        home.add(up)
+                    else:
+                        if pobj.uid != home[pobj.id].uid:
+                            home[pobj.id].uid = pobj.uid
+                        if pobj.groups != home[pobj.id].groups:
+                            home[pobj.id].groups = pobj.groups
         yield get_users()
 
     @defer.inlineCallbacks
