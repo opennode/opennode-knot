@@ -137,7 +137,7 @@ class SyncDaemonProcess(DaemonProcess):
             auth = getUtility(IAuthentication)
             for pname, pobj in auth.principals.iteritems():
                 if type(pobj) is User and pobj.id not in home.listnames():
-                    up = UserProfile(pobj.id, [group.id for group in pobj.groups], uid=pobj.uid)
+                    up = UserProfile(pobj.id, [group for group in pobj.groups], uid=pobj.uid)
                     log.msg('Adding %s to /home' % (up))
                     home.add(up)
         yield get_users()
