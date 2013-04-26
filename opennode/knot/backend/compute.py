@@ -109,8 +109,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_error(self, f, cmd):
-        msg = 'Exception %s: "%s" executing "%s"' % (type(f.value).__name__, f.value,
-                                                     type(self).__name__)
+        msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, type(self).__name__)
         log.msg(msg, system='compute-action', logLevel=ERROR)
         log.err(f, system='compute-action')
         yield self.add_log_event(cmd, msg)
@@ -118,8 +117,9 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_action_done(self, r, cmd):
-        yield self.add_log_event(cmd, '%s finished successfully', type(self).__name__)
-        log.msg('%s finished successfully' % type(self).__name__, system='compute-action')
+        msg = '%s finished successfully' % type(self).__name__
+        yield self.add_log_event(cmd, msg)
+        log.msg(msg, system='compute-action')
 
     def execute(self, cmd, args):
         if self.locked():
