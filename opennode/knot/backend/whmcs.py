@@ -11,6 +11,7 @@ from urllib import urlencode, unquote
 from urlparse import urlparse
 
 import json
+import hashlib
 import logging
 import sys
 
@@ -70,8 +71,10 @@ class WhmcsCreditChecker(GlobalUtility):
             whmcs_password = get_config().getstring('whmcs', 'password', '')
             log.error('"%s":"%s"' % (whmcs_user, whmcs_password))
 
+            pwmd5 = hashlib.md5()
+            pwmd5.update(whmcs_password)
             reqbody = WHMCSRequestBody({'user': whmcs_user,
-                                        'password': whmcs_password,
+                                        'password': pwmd5.hexdigest(),
                                         'clientid': uid,
                                         'action': 'getclientsdetails',
                                         'responsetype': 'json'})
