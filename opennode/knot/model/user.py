@@ -88,9 +88,6 @@ class Home(Container):
     def _new_id(self):
         raise TypeError('This container does not support generated IDs')
 
-    def content(self):
-        return super(Home, self).content()
-
 
 class HomeRootInjector(ContainerInjector):
     context(OmsRoot)

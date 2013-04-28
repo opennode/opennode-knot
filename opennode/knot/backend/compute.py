@@ -3,8 +3,6 @@ from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log, failure
 from uuid import uuid5, NAMESPACE_DNS
-from zope.interface.interfaces import ComponentLookupError
-from zope.component import getUtilitiesFor
 
 import netaddr
 
@@ -111,8 +109,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_error(self, f, cmd):
-        msg = 'Exception %s: "%s" executing "%s"' % (type(f.value).__name__, f.value,
-                                                     type(self).__name__)
+        msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, type(self).__name__)
         log.msg(msg, system='compute-action', logLevel=ERROR)
         log.err(f, system='compute-action')
         yield self.add_log_event(cmd, msg)
@@ -120,8 +117,9 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_action_done(self, r, cmd):
-        yield self.add_log_event(cmd, '%s finished successfully', type(self).__name__)
-        log.msg('%s finished successfully' % type(self).__name__, system='compute-action')
+        msg = '%s finished successfully' % type(self).__name__
+        yield self.add_log_event(cmd, msg)
+        log.msg(msg, system='compute-action')
 
     def execute(self, cmd, args):
         if self.locked():
@@ -270,7 +268,7 @@ class DeployAction(VComputeAction):
 
     action('deploy')
 
-    def handle_error(self, cmd, msg):
+    def log_error(self, cmd, msg):
         log.msg(msg, system='deploy')
         cmd.write(str(msg + '\n'))
 
@@ -394,8 +392,8 @@ class DeployAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if not vmlist or (name not in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(cmd, 'Failed deployment of %s to %s: '
-                              'VM not found in destination after deployment' % (name, destination_hostname))
+            self.log_error(cmd, 'Failed deployment of %s to %s: '
+                           'VM not found in destination after deployment' % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -443,7 +441,7 @@ class MigrateAction(VComputeAction):
                             help="Force offline migration, shutdown VM before migrating")
         return parser
 
-    def handle_error(self, cmd, msg):
+    def log_error(self, cmd, msg):
         log.msg(msg, system='migrate')
         cmd.write(str(msg + '\n'))
 
@@ -458,15 +456,15 @@ class MigrateAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(cmd,
-                              'Failed migration of %s to %s: destination already contains this VM'
-                              % (name, destination_hostname))
+            self.log_error(cmd,
+                           'Failed migration of %s to %s: destination already contains this VM'
+                           % (name, destination_hostname))
             defer.returnValue(False)
 
         if ((yield db.get(self.context, 'ctid')) in map(lambda x: x.get('ctid'), vmlist)):
-            self.handle_error(cmd,
-                              'Failed migration of %s to %s: destination container ID conflict'
-                              % (name, destination_hostname))
+            self.log_error(cmd,
+                           'Failed migration of %s to %s: destination container ID conflict'
+                           % (name, destination_hostname))
             defer.renderValue(False)
 
         defer.returnValue(True)
@@ -476,9 +474,9 @@ class MigrateAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name not in map(lambda x: x['uuid'], vmlist)):
-            self.handle_error(cmd,
-                              'Failed migration of %s to %s: VM not found in destination after migration'
-                              % (name, destination_hostname))
+            self.log_error(cmd,
+                           'Failed migration of %s to %s: VM not found in destination after migration'
+                           % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -537,7 +535,7 @@ class MigrateAction(VComputeAction):
                         log.msg('Model NOT moved: already moved by sync?', system='migrate')
                 yield mv_and_inherit()
         except OperationRemoteError as e:
-            self.handle_error(cmd, 'Failed migration of %s to %s: remote error %s' % (
+            self.log_error(cmd, 'Failed migration of %s to %s: remote error %s' % (
                 name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
 
 
