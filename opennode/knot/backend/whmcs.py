@@ -1,0 +1,104 @@
+from grokcore.component import implements, GlobalUtility
+from StringIO import StringIO
+from twisted.internet import defer
+from twisted.internet import reactor
+from twisted.internet.protocol import Protocol
+from twisted.web.client import Agent, ResponseDone
+from twisted.web.http_headers import Headers
+from twisted.web.http import PotentialDataLoss
+from twisted.web.iweb import IBodyProducer
+from urllib import urlencode, unquote
+from urlparse import urlparse
+
+import json
+import hashlib
+import logging
+import sys
+
+from opennode.knot.backend.billing import ICreditCheckCall
+
+from opennode.oms.config import get_config
+
+log = logging.getLogger(__name__)
+
+
+class ResponseProtocol(Protocol):
+    def __init__(self, finished, size):
+        self.finished = finished
+        self.remaining = size
+        self.data = StringIO()
+
+    def dataReceived(self, bytes):
+        display = bytes[:self.remaining]
+        self.data.write(display)
+        self.remaining -= len(display)
+
+    def connectionLost(self, reason):
+        if type(reason.value) in (ResponseDone, PotentialDataLoss):
+            self.finished.callback(self.data.getvalue())
+        else:
+            self.finished.errback(reason)
+
+
+class WHMCSRequestBody(object):
+    implements(IBodyProducer)
+
+    def __init__(self, data):
+        self.data = urlencode(data)
+        self.length = len(self.data)
+
+    def startProducing(self, consumer):
+        consumer.write(self.data)
+        return defer.succeed(None)
+
+    def pauseProducing(self):
+        pass
+
+    def stopProducing(self):
+        pass
+
+
+class WhmcsCreditChecker(GlobalUtility):
+    implements(ICreditCheckCall)
+
+    @defer.inlineCallbacks
+    def get_credit(self, uid):
+        log.info('Requesting credit update for %s', uid)
+        try:
+            agent = Agent(reactor)
+            whmcs_api_uri = get_config().getstring('whmcs', 'api_uri')
+            whmcs_user = get_config().getstring('whmcs', 'user', '')
+            whmcs_password = get_config().getstring('whmcs', 'password', '')
+            log.error('"%s":"%s"' % (whmcs_user, whmcs_password))
+
+            pwmd5 = hashlib.md5()
+            pwmd5.update(whmcs_password)
+            reqbody = WHMCSRequestBody({'user': whmcs_user,
+                                        'password': pwmd5.hexdigest(),
+                                        'clientid': uid,
+                                        'action': 'getclientsdetails',
+                                        'responsetype': 'json'})
+
+            headers = Headers({'User-Agent': ['OMS-KNOT 2.0']})
+
+            response = yield agent.request('POST', whmcs_api_uri, headers, reqbody)
+
+            finished = defer.Deferred()
+            rbody = ResponseProtocol(finished, 1024 * 10)
+            response.deliverBody(rbody)
+            data = yield finished
+
+            if response.code < 400:
+                try:
+                    data = json.loads(data)
+                    defer.returnValue(data.get('credit'))
+                except ValueError:
+                    q = unquote(urlparse(data).query)
+                    log.error(q)
+
+        except Exception as e:
+            import ipdb; ipdb.set_trace()
+            log.error(e, exc_info=sys.exc_info())
+            raise
+
+        raise Exception('Error checking credit: %s: %s' % (response.code, data))
