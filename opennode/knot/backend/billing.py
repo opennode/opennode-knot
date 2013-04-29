@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from grokcore.component import context, implements, name, GlobalUtility
 from twisted.internet import defer
+from twisted.enterprise import adbapi
 from zope.interface import Interface
 from zope.component import getUtility
 
@@ -22,10 +23,31 @@ log = logging.getLogger(__name__)
 class UserStatsLogger(GlobalUtility):
     implements(IUserStatisticsLogger)
 
+    def __init__(self):
+        self.slog = logging.getLogger("%s.userstats" % __name__)
+
     def log(self, user, stats_data):
-        slog = logging.getLogger("%s.userstats" % __name__)
         data = {'username': user, 'stats': stats_data}
-        slog.info('', extra=data)
+        self.slog.info('', extra=data)
+
+
+class MysqlUserStatsLogger(GlobalUtility):
+    implements(IUserStatisticsLogger)
+
+    def __init__(self):
+        self._db = adbapi.ConnectionPool('mysqldb',
+                                         get_config().getstring('stats', 'mysql_db'),
+                                         get_config().getstring('stats', 'mysql_user'),
+                                         get_config().getstring('stats', 'mysql_password'))
+
+    @defer.inlineCallbacks
+    def log(self, user, stats_data):
+        yield self._db.runOperation('INSERT INTO CONF_CHANGES (username, timestamp, cores, disk, memory, '
+                                    'number_of_vms, last_known_credit) '
+                                    'VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                                    (user, stats_data['timestamp'], stats_data['num_cores_total'],
+                                     stats_data['diskspace_total'], stats_data['memory_total'],
+                                     stats_data['vm_count'], stats_data['credit']))
 
 
 class UserCreditChecker(GlobalUtility):
@@ -42,12 +64,10 @@ class UserCreditChecker(GlobalUtility):
         def get_profile_and_need_update():
             try:
                 profile = traverse1('/home/%s' % principal.id)
-                log.debug('Next update for "%s": %s', principal.id,
-                          datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
-                          timedelta(seconds=credit_check_cooldown))
-                return (profile, profile.uid,
-                        (datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
-                         timedelta(seconds=credit_check_cooldown)) < datetime.now())
+                timeout = (datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
+                           timedelta(seconds=credit_check_cooldown))
+                log.debug('Next update for "%s": %s', principal.id, timeout)
+                return (profile, profile.uid, timeout < datetime.now())
             except Exception as e:
                 log.error('%s', e)
                 raise

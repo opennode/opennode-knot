@@ -1,9 +1,11 @@
+from datetime import datetime
 from grokcore.component import implements, GlobalUtility
+from zope.component import getAllUtilitiesRegisteredFor
 
 import logging
-from datetime import datetime
 
 from opennode.knot.model.user import IUserStatisticsProvider
+from opennode.knot.model.user import IUserStatisticsLogger
 from opennode.knot.model.compute import IVirtualCompute
 
 from opennode.oms.zodb import db
@@ -18,7 +20,7 @@ class UserComputeStatisticsAggregator(GlobalUtility):
     def __init__(self):
         self._statistics = {}
 
-    def get_user_computes(self, username):
+    def get_computes(self, username):
         computes = db.get_root()['oms_root']['computes']
         user_computes = []
         for compute in computes.listcontent():
@@ -28,9 +30,13 @@ class UserComputeStatisticsAggregator(GlobalUtility):
                 user_computes.append(compute)
         return user_computes
 
+    def get_credit(self, username):
+        userprofile = db.get_root()['oms_root'][username]
+        return userprofile.credit
+
     @db.ro_transact
     def update(self, username):
-        user_computes = self.get_user_computes(username)
+        user_computes = self.get_computes(username)
 
         user_stats = {'num_cores_total': 0,
                       'disksize_total': 0,
@@ -43,7 +49,13 @@ class UserComputeStatisticsAggregator(GlobalUtility):
             user_stats['disksize_total'] += compute.disksize[u'total']
 
         user_stats['timestamp'] = datetime.now()
+        user_stats['credit'] = self.get_credit(username)
         self._statistics[username] = user_stats
+
+        loggers = getAllUtilitiesRegisteredFor(IUserStatisticsLogger)
+        for logger in loggers:
+            logger.log(username, user_stats)
+
         return user_stats
 
     def get_user_statistics(self, username):

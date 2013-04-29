@@ -4,6 +4,7 @@ from twisted.internet import task
 from twisted.internet import reactor
 from twisted.python import log
 from zope.component import handle
+from zope.component import getUtility
 
 import netaddr
 
@@ -17,6 +18,7 @@ from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitte
 from opennode.knot.model.compute import ICompute, IVirtualCompute
 from opennode.knot.model.compute import IDeployed
 from opennode.knot.model.hangar import IHangar
+from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -84,8 +86,10 @@ def delete_virtual_compute(model, event):
         log.msg('Deleting compute %s which is already in IUndeployed state' %
                 model.hostname, system='compute-backend')
 
-    ulog = UserLogger(subject=model, owner=(yield db.get(model, '__owner__')))
+    owner = yield db.get(model, '__owner__')
+    ulog = UserLogger(subject=model, owner=owner)
     ulog.log('Deleted %s' % model)
+    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
 
     @db.transact
     def deallocate_ip():
@@ -97,44 +101,15 @@ def delete_virtual_compute(model, event):
     yield deallocate_ip()
 
 
-def deploy_virtual_compute(path, event):
+def virtual_compute_action(action, path, event):
+
     @db.transact
-    def run_deploy():
+    def run():
         model = traverse1(path)
-        log.msg('Deploying VM "%s"' % model, system='deploy')
-        d = DeployAction(model).execute(DetachedProtocol(), object())
-        d.addErrback(lambda f: f.raiseException())
-    run_deploy()
+        d = action(model).execute(DetachedProtocol(), object())
+        d.addErrback(log.err)
 
-
-def allocate_virtual_compute(path, event):
-    @db.transact
-    def run_deploy():
-        model = traverse1(path)
-        log.msg('Auto-allocating VM "%s"' % model, system='allocate')
-        d = AllocateAction(model).execute(DetachedProtocol(), object())
-        d.addErrback(lambda f: f.raiseException())
-    run_deploy()
-
-
-@subscribe(IVirtualCompute, IModelCreatedEvent)
-def handle_vm_create_event(model, event):
-    if not IVirtualizationContainer.providedBy(model.__parent__):
-        return
-
-    if not ICompute.providedBy(model.__parent__.__parent__):
-        return
-
-    if IDeployed.providedBy(model):
-        return
-
-    try:
-        path = canonical_path(model)
-        ul = UserLogger(subject=model, owner=(model.__owner__))
-        d = task.deferLater(reactor, 2.0, deploy_virtual_compute, path, event)
-        d.addCallback(lambda r: ul.log('Deployed compute %s' % path))
-    except Exception:
-        log.err(system='deploy-event')
+    run()
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
@@ -142,19 +117,28 @@ def allocate_virtual_compute_from_hangar(model, event):
     if not IVirtualizationContainer.providedBy(model.__parent__):
         return
 
-    if not IHangar.providedBy(model.__parent__.__parent__):
+    if IDeployed.providedBy(model):
         return
 
-    if IDeployed.providedBy(model):
+    if IHangar.providedBy(model.__parent__.__parent__):
+        action = AllocateAction
+        msg = 'Allocated compute %s'
+    elif ICompute.providedBy(model.__parent__.__parent__):
+        action = DeployAction
+        msg = 'Deployed compute %s'
+    else:
         return
 
     try:
         path = canonical_path(model)
-        ul = UserLogger(subject=model, owner=(model.__owner__))
-        d = task.deferLater(reactor, 2.0, allocate_virtual_compute, path, event)
-        d.addCallback(lambda r: ul.log('Allocated compute %s' % path))
+        owner = model.__owner__
+        ul = UserLogger(subject=model, owner=owner)
+        d = task.deferLater(reactor, 2.0, virtual_compute_action, action, path, event)
+        d.addCallback(lambda r: ul.log(msg % path))
+        d.addCallback(lambda r: defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner))
+        d.addErrback(log.err)
     except Exception:
-        log.err(system='allocate-event')
+        log.err(system='create-event')
 
 
 @subscribe(IVirtualCompute, IModelModifiedEvent)
@@ -183,5 +167,6 @@ def handle_virtual_compute_config_change_request(compute, event):
         yield reset_to_original_values()
         raise
     else:
-        ulog = UserLogger(subject=compute, owner=(yield db.get(compute, '__owner__')))
-        ulog.log('Compute "%s" configuration changed' % compute)
+        owner = yield db.get(compute, '__owner__')
+        UserLogger(subject=compute, owner=owner).log('Compute "%s" configuration changed' % compute)
+        yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
