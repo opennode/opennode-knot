@@ -34,7 +34,7 @@ from opennode.oms.zodb import db
 def handle_compute_state_change_request(compute, event):
 
     if not event.modified.get('state', None):
-        defer.returnValue(None)
+        return
 
     def get_action(original, modified):
         action_mapping = {'inactive': {'active': IStartVM},
@@ -50,7 +50,7 @@ def handle_compute_state_change_request(compute, event):
     action = get_action(original, modified)
 
     if not action:
-        defer.returnValue(None)
+        return
 
     submitter = IVirtualizationContainerSubmitter(compute.__parent__)
     try:
@@ -85,7 +85,7 @@ def delete_virtual_compute(model, event):
                 model.hostname, system='compute-backend')
 
     ulog = UserLogger(subject=model, owner=(yield db.get(model, '__owner__')))
-    ulog.log('Deleted compute')
+    ulog.log('Deleted %s' % model)
 
     @db.transact
     def deallocate_ip():
@@ -176,9 +176,12 @@ def handle_virtual_compute_config_change_request(compute, event):
     try:
         yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), *update_values)
     except Exception:
-        for mk, mv in event.modified.iteritems():
-            setattr(compute, mk, event.original[mk])
+        @db.transact
+        def reset_to_original_values():
+            for mk, mv in event.modified.iteritems():
+                setattr(compute, mk, event.original[mk])
+        yield reset_to_original_values()
         raise
     else:
         ulog = UserLogger(subject=compute, owner=(yield db.get(compute, '__owner__')))
-        ulog.log('Compute configuration changed')
+        ulog.log('Compute "%s" configuration changed' % compute)
