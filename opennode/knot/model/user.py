@@ -13,6 +13,21 @@ from opennode.oms.model.model.root import OmsRoot
 from opennode.oms.security.directives import permissions
 
 
+class IUserStatisticsProvider(Interface):
+
+    def update(self, username):
+        """ Collect statistics """
+
+    def get_user_statistics(self, username):
+        """ Get stored user statistics """
+
+
+class IUserStatisticsLogger(Interface):
+
+    def log(self, data):
+        """ Log statistics collected using IUserStatisticsProvider """
+
+
 class IUserProfile(Interface):
     uid = schema.Int(title=u'ID', description=u'Application-specific numerical ID', required=False)
     name = schema.TextLine(title=u"Name", min_length=1)

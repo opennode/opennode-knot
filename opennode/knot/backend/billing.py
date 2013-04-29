@@ -8,6 +8,7 @@ import logging
 import sys
 
 from opennode.knot.model.compute import IVirtualCompute
+from opennode.knot.model.user import IUserStatisticsLogger
 
 from opennode.oms.config import get_config
 from opennode.oms.model.model.hooks import IPreValidateHook
@@ -16,6 +17,15 @@ from opennode.oms.zodb import db
 
 
 log = logging.getLogger(__name__)
+
+
+class UserStatsLogger(GlobalUtility):
+    implements(IUserStatisticsLogger)
+
+    def log(self, user, stats_data):
+        slog = logging.getLogger("%s.userstats" % __name__)
+        data = {'username': user, 'stats': stats_data}
+        slog.info('', extra=data)
 
 
 class UserCreditChecker(GlobalUtility):
@@ -37,7 +47,7 @@ class UserCreditChecker(GlobalUtility):
                           timedelta(seconds=credit_check_cooldown))
                 return (profile, profile.uid,
                         (datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
-                                  timedelta(seconds=credit_check_cooldown)) < datetime.now())
+                         timedelta(seconds=credit_check_cooldown)) < datetime.now())
             except Exception as e:
                 log.error('%s', e)
                 raise
@@ -75,5 +85,6 @@ class UserCreditChecker(GlobalUtility):
 
 
 class ICreditCheckCall(Interface):
+
     def get_credit(self, uid):
         """ Get credit """

@@ -18,6 +18,7 @@ from opennode.knot.backend.billing import ICreditCheckCall
 
 from opennode.oms.config import get_config
 
+
 log = logging.getLogger(__name__)
 
 
@@ -37,6 +38,10 @@ class ResponseProtocol(Protocol):
             self.finished.callback(self.data.getvalue())
         else:
             self.finished.errback(reason)
+
+
+class WHMCSAPIError(Exception):
+    pass
 
 
 class WHMCSRequestBody(object):
@@ -93,7 +98,7 @@ class WhmcsCreditChecker(GlobalUtility):
         if response.code < 400:
             data = json.loads(data)
             if data.get('result') == 'error':
-                raise Exception('%s' % (data.get('message')))
+                raise WHMCSAPIError('%s' % (data.get('message')))
             defer.returnValue(data.get('credit'))
 
-        raise Exception('%s: %s' % (response.code, data))
+        raise WHMCSAPIError('%s: %s' % (response.code, data))
