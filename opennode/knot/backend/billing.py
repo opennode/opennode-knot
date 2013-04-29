@@ -35,10 +35,10 @@ class MysqlUserStatsLogger(GlobalUtility):
     implements(IUserStatisticsLogger)
 
     def __init__(self):
-        self._db = adbapi.ConnectionPool('mysqldb',
-                                         get_config().getstring('stats', 'mysql_db'),
-                                         get_config().getstring('stats', 'mysql_user'),
-                                         get_config().getstring('stats', 'mysql_password'))
+        self._db = adbapi.ConnectionPool(get_config().getstring('stats', 'db_backend'),
+                                         get_config().getstring('stats', 'db'),
+                                         get_config().getstring('stats', 'user'),
+                                         get_config().getstring('stats', 'password'))
 
     @defer.inlineCallbacks
     def log(self, user, stats_data):
