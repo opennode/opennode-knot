@@ -7,8 +7,7 @@ from twisted.web.client import Agent, ResponseDone
 from twisted.web.http_headers import Headers
 from twisted.web.http import PotentialDataLoss
 from twisted.web.iweb import IBodyProducer
-from urllib import urlencode, unquote
-from urlparse import urlparse
+from urllib import urlencode
 
 import json
 import hashlib
@@ -69,17 +68,17 @@ class WhmcsCreditChecker(GlobalUtility):
             whmcs_api_uri = get_config().getstring('whmcs', 'api_uri')
             whmcs_user = get_config().getstring('whmcs', 'user', '')
             whmcs_password = get_config().getstring('whmcs', 'password', '')
-            log.error('"%s":"%s"' % (whmcs_user, whmcs_password))
 
             pwmd5 = hashlib.md5()
             pwmd5.update(whmcs_password)
-            reqbody = WHMCSRequestBody({'user': whmcs_user,
+            reqbody = WHMCSRequestBody({'username': whmcs_user,
                                         'password': pwmd5.hexdigest(),
                                         'clientid': uid,
                                         'action': 'getclientsdetails',
                                         'responsetype': 'json'})
 
-            headers = Headers({'User-Agent': ['OMS-KNOT 2.0']})
+            headers = Headers({'User-Agent': ['OMS-KNOT 2.0'],
+                               'Content-Type': ['application/x-www-form-urlencoded']})
 
             response = yield agent.request('POST', whmcs_api_uri, headers, reqbody)
 
@@ -87,18 +86,14 @@ class WhmcsCreditChecker(GlobalUtility):
             rbody = ResponseProtocol(finished, 1024 * 10)
             response.deliverBody(rbody)
             data = yield finished
-
-            if response.code < 400:
-                try:
-                    data = json.loads(data)
-                    defer.returnValue(data.get('credit'))
-                except ValueError:
-                    q = unquote(urlparse(data).query)
-                    log.error(q)
-
         except Exception as e:
-            import ipdb; ipdb.set_trace()
             log.error(e, exc_info=sys.exc_info())
             raise
 
-        raise Exception('Error checking credit: %s: %s' % (response.code, data))
+        if response.code < 400:
+            data = json.loads(data)
+            if data.get('result') == 'error':
+                raise Exception('%s' % (data.get('message')))
+            defer.returnValue(data.get('credit'))
+
+        raise Exception('%s: %s' % (response.code, data))
