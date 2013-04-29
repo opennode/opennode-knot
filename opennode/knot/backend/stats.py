@@ -1,5 +1,4 @@
 from grokcore.component import implements, GlobalUtility
-from twisted.internet import defer
 
 import logging
 from datetime import datetime
@@ -19,7 +18,6 @@ class UserComputeStatisticsAggregator(GlobalUtility):
     def __init__(self):
         self._statistics = {}
 
-    @db.ro_transact
     def get_user_computes(self, username):
         computes = db.get_root()['oms_root']['computes']
         user_computes = []
@@ -30,17 +28,14 @@ class UserComputeStatisticsAggregator(GlobalUtility):
                 user_computes.append(compute)
         return user_computes
 
-    @defer.inlineCallbacks
+    @db.ro_transact
     def update(self, username):
-        user_computes = yield self.get_user_computes(username)
+        user_computes = self.get_user_computes(username)
 
-        user_stats = {'timestamp': datetime.now(),
-                      'num_cores_total': 0,
+        user_stats = {'num_cores_total': 0,
                       'disksize_total': 0,
                       'memory_total': 0,
                       'vm_count': len(user_computes)}
-
-        self._statistics[username] = user_stats
 
         for compute in user_computes:
             user_stats['num_cores_total'] += compute.num_cores
@@ -48,7 +43,8 @@ class UserComputeStatisticsAggregator(GlobalUtility):
             user_stats['disksize_total'] += compute.disksize[u'total']
 
         user_stats['timestamp'] = datetime.now()
-        defer.returnValue(user_stats)
+        self._statistics[username] = user_stats
+        return user_stats
 
     def get_user_statistics(self, username):
         return self._statistics[username]

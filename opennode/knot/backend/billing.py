@@ -22,9 +22,10 @@ log = logging.getLogger(__name__)
 class UserStatsLogger(GlobalUtility):
     implements(IUserStatisticsLogger)
 
-    def log(self, user, data):
+    def log(self, user, stats_data):
         slog = logging.getLogger("%s.userstats" % __name__)
-        slog.info("%s, %s", user, data)
+        data = {'username': user, 'stats': stats_data}
+        slog.info('', extra=data)
 
 
 class UserCreditChecker(GlobalUtility):
