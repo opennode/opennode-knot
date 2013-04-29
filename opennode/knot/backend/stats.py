@@ -31,22 +31,21 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         return user_computes
 
     def get_credit(self, username):
-        userprofile = db.get_root()['oms_root'][username]
-        return userprofile.credit
+        return db.get_root()['oms_root']['home'][username].credit
 
     @db.ro_transact
     def update(self, username):
         user_computes = self.get_computes(username)
 
         user_stats = {'num_cores_total': 0,
-                      'disksize_total': 0,
+                      'diskspace_total': 0,
                       'memory_total': 0,
                       'vm_count': len(user_computes)}
 
         for compute in user_computes:
             user_stats['num_cores_total'] += compute.num_cores
             user_stats['memory_total'] += compute.memory
-            user_stats['disksize_total'] += compute.disksize[u'total']
+            user_stats['diskspace_total'] += compute.diskspace[u'total']
 
         user_stats['timestamp'] = datetime.now()
         user_stats['credit'] = self.get_credit(username)

@@ -117,7 +117,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_action_done(self, r, cmd):
-        msg = '%s finished successfully' % type(self).__name__
+        msg = '%s finished' % type(self).__name__
         yield self.add_log_event(cmd, msg)
         log.msg(msg, system='compute-action')
 

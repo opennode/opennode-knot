@@ -15,6 +15,7 @@ from opennode.oms.config import get_config
 from opennode.oms.model.model.hooks import IPreValidateHook
 from opennode.oms.model.traversal import traverse1
 from opennode.oms.zodb import db
+from opennode.oms.util import blocking_yield
 
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ log = logging.getLogger(__name__)
 
 class UserStatsLogger(GlobalUtility):
     implements(IUserStatisticsLogger)
+    name('user-stats-logger')
 
     def __init__(self):
         self.slog = logging.getLogger("%s.userstats" % __name__)
@@ -31,23 +33,46 @@ class UserStatsLogger(GlobalUtility):
         self.slog.info('', extra=data)
 
 
-class MysqlUserStatsLogger(GlobalUtility):
+class SqlDBUserStatsLogger(GlobalUtility):
     implements(IUserStatisticsLogger)
+    name('user-stats-sqldb-logger')
 
-    def __init__(self):
-        self._db = adbapi.ConnectionPool(get_config().getstring('stats', 'db_backend'),
-                                         get_config().getstring('stats', 'db'),
-                                         get_config().getstring('stats', 'user'),
-                                         get_config().getstring('stats', 'password'))
+    @defer.inlineCallbacks
+    def initdb(self):
+        op = get_config().getstring('stats', 'db_init')
+        try:
+            yield self._db.runOperation(op)
+        except Exception:
+            log.error('', exc_info=sys.exc_info())
+
+    def config(self):
+        self.db_backend = get_config().getstring('stats', 'db_backend', 'sqlite3')
+        self.db_conn_param = get_config().getstring('stats', 'db_conn_param', ':memory:').split(';')
+        self.db_conn_kw = eval(get_config().getstring('stats', 'db_conn_kw', ''))
+        self.db_operation = get_config().getstring('stats', 'db_operation',
+                                                   'INSERT INTO CONF_CHANGES (username, timestamp, cores,'
+                                                   'disk, memory, number_of_vms, last_known_credit) '
+                                                   'VALUES (%s, %s, %s, %s, %s, %s, %s)')
+
+        self._db = adbapi.ConnectionPool(self.db_backend, *self.db_conn_param, **self.db_conn_kw)
+
+        if get_config().getstring('stats', 'db_init', None):
+            return self.initdb()
+
+        return defer.succeed(None)
 
     @defer.inlineCallbacks
     def log(self, user, stats_data):
-        yield self._db.runOperation('INSERT INTO CONF_CHANGES (username, timestamp, cores, disk, memory, '
-                                    'number_of_vms, last_known_credit) '
-                                    'VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                                    (user, stats_data['timestamp'], stats_data['num_cores_total'],
-                                     stats_data['diskspace_total'], stats_data['memory_total'],
-                                     stats_data['vm_count'], stats_data['credit']))
+        if not hasattr(self, '_db'):
+            yield self.config()
+
+        try:
+            yield self._db.runOperation(self.db_operation,
+                                        (user, stats_data['timestamp'], stats_data['num_cores_total'],
+                                         stats_data['diskspace_total'], stats_data['memory_total'],
+                                         stats_data['vm_count'], stats_data['credit']))
+        except Exception:
+            log.error('DB error', exc_info=sys.exc_info())
 
 
 class UserCreditChecker(GlobalUtility):
