@@ -215,7 +215,7 @@ class IPv4Pool(Container):
         """ Search through the range to find first unallocated IP and mark it as used and return it"""
         for ip in xrange(int(self.minimum), int(self.maximum)):
             ip = netaddr.IPAddress(ip)
-            if str(ip) not in self._items:
+            if int(ip) not in self._items:
                 self.use(ip)
                 return ip
 
