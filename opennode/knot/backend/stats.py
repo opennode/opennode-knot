@@ -8,6 +8,7 @@ from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.user import IUserStatisticsLogger
 from opennode.knot.model.compute import IVirtualCompute
 
+from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.zodb import db
 
 
@@ -23,7 +24,7 @@ class UserComputeStatisticsAggregator(GlobalUtility):
     def get_computes(self, username):
         computes = db.get_root()['oms_root']['computes']
         user_computes = []
-        for compute in computes.listcontent():
+        for compute in map(follow_symlinks, computes.listcontent()):
             if not IVirtualCompute.providedBy(compute):
                 continue
             if compute.__owner__ == username:
