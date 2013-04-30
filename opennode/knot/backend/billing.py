@@ -62,10 +62,10 @@ class SqlDBUserStatsLogger(GlobalUtility):
 
     @defer.inlineCallbacks
     def log(self, user, stats_data):
-        if not hasattr(self, '_db'):
-            yield self.config()
-
         try:
+            if not hasattr(self, '_db'):
+                yield self.config()
+
             yield self._db.runOperation(self.db_operation,
                                         (user, stats_data['timestamp'], stats_data['num_cores_total'],
                                          stats_data['diskspace_total'], stats_data['memory_total'],
