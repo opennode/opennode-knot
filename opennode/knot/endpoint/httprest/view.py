@@ -27,6 +27,13 @@ class MachinesView(ContainerView):
         return super(MachinesView, self).blacklisted(item) or isinstance(item, Hangar)
 
 
+class SetEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
+
+
 class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
     context(VirtualizationContainer)
 
@@ -98,7 +105,8 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
                                'Creation of %s (%s) (via web) successful' % (compute.hostname, compute))
 
             request.write(json.dumps({'success': True,
-                                      'result': IHttpRestView(compute).render_GET(request)}))
+                                      'result': IHttpRestView(compute).render_GET(request)},
+                                     cls=SetEncoder))
             request.finish()
 
         def handle_pre_execute_hook_error(f, compute, principal):
