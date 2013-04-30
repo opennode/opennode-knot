@@ -3,7 +3,7 @@ from grokcore.component import context, name
 from opennode.oms.endpoint.webterm.root import ConsoleView, SSHClientTerminalProtocol
 from opennode.oms.endpoint.webterm.ssh import ssh_connect_interactive_shell
 
-from opennode.knot.model.compute import Computes
+from opennode.knot.model.computes import Computes
 from opennode.knot.model.console import ISshConsole, ITtyConsole, IOpenVzConsole
 
 
