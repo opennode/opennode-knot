@@ -36,13 +36,9 @@ class SqlDBUserStatsLogger(GlobalUtility):
     implements(IUserStatisticsLogger)
     name('user-stats-sqldb-logger')
 
-    @defer.inlineCallbacks
     def initdb(self):
         op = get_config().getstring('stats', 'db_init')
-        try:
-            yield self._db.runOperation(op)
-        except Exception:
-            log.error('', exc_info=sys.exc_info())
+        return self._db.runOperation(op)
 
     def config(self):
         self.db_backend = get_config().getstring('stats', 'db_backend', 'sqlite3')
