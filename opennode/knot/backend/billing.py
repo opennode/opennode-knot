@@ -47,7 +47,7 @@ class SqlDBUserStatsLogger(GlobalUtility):
     def config(self):
         self.db_backend = get_config().getstring('stats', 'db_backend', 'sqlite3')
         self.db_conn_param = get_config().getstring('stats', 'db_conn_param', ':memory:').split(';')
-        self.db_conn_kw = eval(get_config().getstring('stats', 'db_conn_kw', ''))
+        self.db_conn_kw = eval(get_config().getstring('stats', 'db_conn_kw', '{}'))
         self.db_operation = get_config().getstring('stats', 'db_operation',
                                                    'INSERT INTO CONF_CHANGES (username, timestamp, cores,'
                                                    'disk, memory, number_of_vms, last_known_credit) '

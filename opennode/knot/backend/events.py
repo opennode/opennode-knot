@@ -133,6 +133,7 @@ def allocate_virtual_compute_from_hangar(model, event):
         path = canonical_path(model)
         owner = model.__owner__
         ul = UserLogger(subject=model, owner=owner)
+        log.msg('Attempting %s for %s (%s)' % (action.__name__, model, path), system='create-event')
         d = task.deferLater(reactor, 2.0, virtual_compute_action, action, path, event)
         d.addCallback(lambda r: ul.log(msg % path))
         d.addCallback(lambda r: defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner))
