@@ -15,7 +15,6 @@ from opennode.oms.config import get_config
 from opennode.oms.model.model.hooks import IPreValidateHook
 from opennode.oms.model.traversal import traverse1
 from opennode.oms.zodb import db
-from opennode.oms.util import blocking_yield
 
 
 log = logging.getLogger(__name__)
@@ -104,9 +103,6 @@ class UserCreditChecker(GlobalUtility):
             log.debug('Updated credit of %s: %s', profile, profile.credit)
             return profile
 
-        log.debug('%s in %s: %s', billable_group,
-                  map(str, principal.groups), billable_group in map(str, principal.groups))
-
         if billable_group in map(str, principal.groups):
             profile, uid, need_update = yield get_profile_and_need_update()
             log.debug('%s (uid=%s) need_update: %s', profile, uid, need_update)
@@ -124,6 +120,9 @@ class UserCreditChecker(GlobalUtility):
                 assert profile.has_credit(), ('User %s does not have enough credit' % principal.id)
 
             yield check_credit(profile)
+        else:
+            log.info('User is not a member of a billable group "%s": %s. Not updating credit.',
+                     billable_group, map(str, principal.groups))
 
     def applicable(self, context):
         return IVirtualCompute.providedBy(context)
