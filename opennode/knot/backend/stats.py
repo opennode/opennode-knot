@@ -42,6 +42,8 @@ class UserComputeStatisticsAggregator(GlobalUtility):
                       'memory_total': 0,
                       'vm_count': len(user_computes)}
 
+        log.debug('%s computes of user %s', len(user_computes), username)
+
         for compute in user_computes:
             user_stats['num_cores_total'] += compute.num_cores
             user_stats['memory_total'] += compute.memory
