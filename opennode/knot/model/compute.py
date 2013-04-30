@@ -1,10 +1,7 @@
 from __future__ import absolute_import
 
 from grokcore.component import context
-import logging
 import netaddr
-from types import GeneratorType
-from twisted.python import log
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface, implements
@@ -16,14 +13,10 @@ from opennode.knot.model.zabbix import IZabbixConfiguration
 from opennode.oms.config import get_config
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
-from opennode.oms.model.model.base import Container, AddingContainer, ReadonlyContainer
-from opennode.oms.model.model.base import IMarkable, IDisplayName, ContainerInjector
-from opennode.oms.model.model.byname import ByNameContainerExtension
-from opennode.oms.model.model.proc import ITask
-from opennode.oms.model.model.root import OmsRoot
+from opennode.oms.model.model.base import Container
+from opennode.oms.model.model.base import IMarkable, IDisplayName
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
-from opennode.oms.model.model.symlink import Symlink
 from opennode.oms.model.schema import Path
 from opennode.oms.security.directives import permissions
 from opennode.oms.util import adapter_value
@@ -405,116 +398,9 @@ class ComputeTags(ModelTags):
         return res
 
 
-class Computes(AddingContainer):
-    __contains__ = IVirtualCompute
-    __name__ = 'computes'
-
-    def __str__(self):
-        return 'Compute list'
-
-    @property
-    def _items(self):
-        # break an import cycle
-        from opennode.oms.zodb import db
-        machines = db.get_root()['oms_root']['machines']
-
-        computes = {}
-
-        def collect(container):
-            from opennode.knot.model.machines import Machines
-            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
-
-            seen = set()
-            for item in container.listcontent():
-                if ICompute.providedBy(item):
-                    computes[item.__name__] = Symlink(item.__name__, item)
-
-                if (isinstance(item, Machines) or isinstance(item, Computes) or
-                        ICompute.providedBy(item) or IVirtualizationContainer.providedBy(item)):
-
-                    if item.__name__ not in seen:
-                        seen.add(item.__name__)
-                        collect(item)
-
-        collect(machines)
-        return computes
-
-    def _add(self, item):
-        # break an import cycle
-        from opennode.oms.zodb import db
-        machines = db.get_root()['oms_root']['machines']
-        # TODO: fix adding computes to vms instead of hangar
-        if not machines.hangar['vms']:
-            pass
-        return (machines.hangar if IVirtualCompute.providedBy(item) else machines).add(item)
-
-    def __delitem__(self, key):
-        item = self._items[key]
-        if isinstance(item, Symlink):
-            del item.target.__parent__[item.target.__name__]
-
-
-class ComputesRootInjector(ContainerInjector):
-    context(OmsRoot)
-    __class__ = Computes
-
-
-class ComputeTasks(ReadonlyContainer):
-    context(Compute)
-    __contains__ = ITask
-    __name__ = 'tasks'
-
-    @property
-    def _items(self):
-        from opennode.oms.zodb import db
-        processes = db.get_root()['oms_root']['proc']
-        tasks = {}
-
-        def collect(container):
-            seen = set()
-            for item in container.listcontent():
-                name = item.__name__
-                if not ITask.providedBy(item):
-                    continue
-
-                # Cmd.subject() implemented incorrectly (must not return a generator)
-                # XXX: for some reason, when I let subject stick to a generator instance,
-                # I get an empty generator here, while it magically works when I save
-                # it as a tuple under item.subject
-                assert not isinstance(item.subject, GeneratorType)
-
-                iterable = isinstance(item.subject, tuple)
-
-                if iterable:
-                    log.msg('\t CMD: %s %s' % (item.__name__, item.cmdline),
-                            system='proc',
-                            logLevel=logging.DEBUG)
-                    for s in item.subject:
-                        log.msg('\t\tSUBJ: %s, %s' % (s.__name__ == self.__parent__.__name__,
-                                                      self.__parent__),
-                                system='proc',
-                                logLevel=logging.DEBUG)
-
-                if iterable and self.__parent__.__name__ in map(lambda s: s.__name__, item.subject):
-                    tasks[name] = Symlink(name, item)
-
-                if name not in seen:
-                    seen.add(name)
-                    collect(item)
-
-        collect(processes)
-        return tasks
-
-
-class ComputeTasksInjector(ContainerInjector):
-    context(Compute)
-    __class__ = ComputeTasks
-
-
 provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']),
                adapts=(Compute, ), provides=IMetrics)
 
 
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(Compute, ))
-provideSubscriptionAdapter(ByNameContainerExtension, adapts=(Computes, ))
 provideSubscriptionAdapter(MetricsContainerExtension, adapts=(Compute, ))

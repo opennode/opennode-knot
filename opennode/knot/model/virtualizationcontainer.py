@@ -7,7 +7,8 @@ from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
 
-from opennode.knot.model.compute import ICompute, Computes, IVirtualCompute, IInCompute
+from opennode.knot.model.compute import ICompute, IVirtualCompute, IInCompute
+from opennode.knot.model.computes import Computes
 from opennode.knot.model.hangar import IInHangar
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
@@ -60,7 +61,6 @@ class OpenVZContainer(ReadonlyContainer):
 
         def collect(container):
             from opennode.knot.model.machines import Machines
-            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
             seen = set()
             for item in container.listcontent():
