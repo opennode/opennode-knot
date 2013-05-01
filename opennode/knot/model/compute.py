@@ -128,6 +128,8 @@ class ICompute(Interface):
     agent_version = schema.TextLine(title=u'Agent version', required=False,
                                     readonly=True, default=u'')
 
+    exclude_from_allocation = schema.Bool(title=u'Exclude from allocation', required=False, default=False)
+
 
 class IVirtualCompute(Interface):
     """A virtual compute."""
@@ -183,6 +185,7 @@ class Compute(Container):
                      template=('read', 'modify'),
                      autostart=('read', 'modify'),
                      ctid=('read', 'modify'),
+                     exclude_from_allocation=('read', 'modify')
                      ))
 
     __contains__ = IInCompute
@@ -241,6 +244,8 @@ class Compute(Container):
     zabbix_agent_port = 10050
 
     agent_version = u''
+
+    exclude_from_allocation = False
 
     def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()

@@ -51,6 +51,7 @@ def get_manageable_machine_hostnames():
 
 
 def set_compute_failure_status(uuid, status):
+    from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
     compute = db.get_root()['oms_root']['machines'][uuid]
     compute.failure = bool(status)
 
@@ -60,7 +61,6 @@ def set_compute_failure_status(uuid, status):
             if ICompute.providedBy(item):
                 item.failure = bool(status)
 
-            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
             if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
                 if item.__name__ not in seen:
                     seen.add(item.__name__)
@@ -70,6 +70,7 @@ def set_compute_failure_status(uuid, status):
 
 
 def set_compute_suspicious_status(uuid, status):
+    from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
     compute = db.get_root()['oms_root']['machines'][uuid]
     compute.suspicious = bool(status)
 
@@ -79,7 +80,6 @@ def set_compute_suspicious_status(uuid, status):
             if ICompute.providedBy(item):
                 item.suspicious = bool(status)
 
-                from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
                 if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
                     if item.__name__ not in seen:
                         seen.add(item.__name__)
@@ -116,6 +116,7 @@ class SyncDaemonProcess(DaemonProcess):
         yield self.gather_users()
         log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
+        yield self.gather_vms_for_hangar()
         yield self.execute_ping_tests()
         yield self.gather_ippools()
 
@@ -164,6 +165,28 @@ class SyncDaemonProcess(DaemonProcess):
         log.msg('Hosts accepted: %s' % accepted, system='sync')
 
         yield self.cleanup_machines(accepted)
+
+    @defer.inlineCallbacks
+    def gather_vms_for_hangar(self):
+        from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+        from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
+
+        @db.transact
+        def ensure_hangar_v12ncontainers():
+            machines = db.get_root()['oms_root']['machines']
+            backends = set()
+            for machine in machines.listcontent():
+                for o in machine.listcontent():
+                    if IVirtualizationContainer.providedBy(o):
+                        backends.add(o.backend)
+
+            hangar = machines['hangar']
+            for backend in backends:
+                if str(backend) not in hangar.listnames():
+                    vms = VirtualizationContainer(unicode(backend))
+                    hangar.add(vms)
+
+        yield ensure_hangar_v12ncontainers()
 
     def delete_outstanding_request(self, compute):
         if str(compute) in self.outstanding_requests:
