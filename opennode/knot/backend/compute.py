@@ -1,4 +1,5 @@
 from grokcore.component import context, baseclass
+from grokcore.component import implements
 from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
 from twisted.python import log, failure
@@ -25,8 +26,11 @@ from opennode.knot.model.template import ITemplate
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.config import get_config
-from opennode.oms.endpoint.ssh.detached import DetachedProtocol
+from opennode.oms.endpoint.ssh.cmd.base import Cmd
+from opennode.oms.endpoint.ssh.cmd.directives import command
+from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
+from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
@@ -310,7 +314,7 @@ class DeployAction(VComputeAction):
                     'nameservers': db.remove_persistent_proxy(self.context.nameservers),
                     'autostart': self.context.autostart,
                     'ip_address': self.context.ipv4_address.split('/')[0],
-                    'passwd': getattr(self.context, 'root_password', None),}
+                    'passwd': getattr(self.context, 'root_password', None)}
 
         @db.transact
         def cleanup_root_password():
@@ -602,3 +606,35 @@ class RebootAction(VComputeAction):
     action('reboot')
 
     job = IRebootVM
+
+
+class StopAllVmsCmd(Cmd):
+    implements(ICmdArgumentsSyntax)
+    command('stopvms')
+
+    def arguments(self):
+        parser = VirtualConsoleArgumentParser()
+        parser.add_argument('-u', help="Stop all VMs belonging to the user")
+        return parser
+
+    @db.ro_transact
+    def get_computes(self, args):
+        computes = db.get_root()['oms_root']['computes']
+        user_vms = []
+        for c in map(follow_symlinks, computes.listcontent()):
+            if not IVirtualCompute.providedBy(c):
+                continue
+            if c.__owner__ == args.u:
+                user_vms.append(c)
+        return user_vms
+
+    @defer.inlineCallbacks
+    def execute(self, args):
+        log.msg('Stopping all VMs of "%s"...' % args.u)
+
+        computes = yield self.get_computes(args)
+        for c in computes:
+            self.write("Stopping %s...\n" % c)
+            yield ShutdownComputeAction(c).execute(DetachedProtocol(), object())
+
+        self.write("Stopping done. %s VMs stopped\n" % (len(computes)))
