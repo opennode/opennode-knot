@@ -202,6 +202,7 @@ class AllocateAction(ComputeAction):
 
             def condition_generator(m):
                 yield ICompute.providedBy(m)
+                yield not m.exclude_from_allocation
                 yield find_compute_v12n_container(m, container)
                 yield self.context.memory_usage < m.memory
                 yield sum(map(lambda (pk, pv): pv,
