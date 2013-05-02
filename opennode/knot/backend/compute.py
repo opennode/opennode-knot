@@ -201,26 +201,29 @@ class AllocateAction(ComputeAction):
                                                    default=u'/storage'))
 
             def condition_generator(m):
-                yield ICompute.providedBy(m)
-                yield not m.exclude_from_allocation
-                yield find_compute_v12n_container(m, container)
-                yield self.context.memory_usage < m.memory
-                yield sum(map(lambda (pk, pv): pv,
+                yield (ICompute.providedBy(m), 'Is compute?')
+                yield (not m.exclude_from_allocation, 'Not excluded from allocation')
+                yield (find_compute_v12n_container(m, container), 'Has virt container %s' % container)
+                yield (self.context.memory_usage < m.memory, 'Has more than %s MB memory' %
+                       self.context.memory_usage)
+                yield (sum(map(lambda (pk, pv): pv,
                               filter(lambda (pk, pv): pk != 'total',
-                                     self.context.diskspace.iteritems()))) < m.diskspace.get(param, 0)
-                yield self.context.num_cores <= m.num_cores
-                yield self.context.template in map(lambda t: t.name,
+                                     self.context.diskspace.iteritems()))) < m.diskspace.get(param, 0),
+                       'Enough diskspace')
+                yield (self.context.num_cores <= m.num_cores, 'Enough cores')
+                yield (self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
-                                                          m['templates'].listcontent()))
+                                                          m['templates'].listcontent())),
+                       'Template is available')
 
             def unwind_until_false(generator):
-                for idx, r in enumerate(generator):
+                for idx, (r, desc) in enumerate(generator):
                     if not r:
-                        return 'Fail at %d' % idx
+                        return 'Fail at %d: %s' % (idx, desc)
                 return 'Match'
 
             log.msg('Searching in (index of failed condition or MATCH): %s' % (
-                map(lambda m: (m, unwind_until_false(condition_generator(m))), all_machines)),
+                map(lambda m: (str(m), unwind_until_false(condition_generator(m))), all_machines)),
                 logLevel=DEBUG, system='action-allocate')
 
             return filter(lambda m: all(condition_generator(m)), all_machines)

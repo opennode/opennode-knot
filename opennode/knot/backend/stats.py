@@ -3,6 +3,7 @@ from grokcore.component import implements, GlobalUtility
 from zope.component import getAllUtilitiesRegisteredFor
 
 import logging
+import sys
 
 from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.user import IUserStatisticsLogger
@@ -46,9 +47,12 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         log.debug('%s computes of user %s', len(user_computes), username)
 
         for compute in user_computes:
-            user_stats['num_cores_total'] += compute.num_cores
-            user_stats['memory_total'] += compute.memory
-            user_stats['diskspace_total'] += compute.diskspace[u'total']
+            try:
+                user_stats['num_cores_total'] += compute.num_cores
+                user_stats['memory_total'] += compute.memory or 0
+                user_stats['diskspace_total'] += compute.diskspace.get(u'total') or 0
+            except Exception:
+                log.error('Error collecting stats from %s', compute, exc_info=sys.exc_info())
 
         user_stats['timestamp'] = datetime.now()
         user_stats['credit'] = self.get_credit(username)

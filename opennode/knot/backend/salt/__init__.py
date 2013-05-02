@@ -87,6 +87,9 @@ class SimpleSaltExecutor(object):
         defer.returnValue(rdata)
 
     def _handle_errors(self, data):
+        if type(data) is not dict:
+            raise TypeError('data received from salt is not dict: %s (%s)' % (type(data).__name__, data))
+
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
         if hostkey not in data:
