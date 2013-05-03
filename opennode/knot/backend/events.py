@@ -23,10 +23,10 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
-from opennode.oms.model.form import IModelModifiedEvent
-from opennode.oms.model.form import IModelDeletedEvent
-from opennode.oms.model.form import IModelCreatedEvent
-from opennode.oms.model.form import ModelModifiedEvent
+from opennode.oms.model.model.events import IModelModifiedEvent
+from opennode.oms.model.model.events import IModelDeletedEvent
+from opennode.oms.model.model.events import IModelCreatedEvent
+from opennode.oms.model.model.events import ModelModifiedEvent
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
 

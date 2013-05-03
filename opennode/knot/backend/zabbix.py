@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from twisted.python import log
 
 from grokcore.component import subscribe
-from opennode.oms.model.form import IModelCreatedEvent, IModelDeletedEvent
+from opennode.oms.model.model.events import IModelCreatedEvent, IModelDeletedEvent
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.hangar import IHangar
 

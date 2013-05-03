@@ -10,7 +10,8 @@ from opennode.knot.model.compute import IManageable
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
-from opennode.oms.model.form import ModelDeletedEvent, alsoProvides, noLongerProvides
+from opennode.oms.model.form import alsoProvides, noLongerProvides
+from opennode.oms.model.model.events import ModelDeletedEvent
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.zodb import db
