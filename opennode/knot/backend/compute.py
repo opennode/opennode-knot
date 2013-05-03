@@ -202,8 +202,8 @@ class AllocateAction(ComputeAction):
 
             def condition_generator(m):
                 yield (ICompute.providedBy(m), 'Is compute?')
-                yield (not m.exclude_from_allocation, 'Not excluded from allocation')
                 yield (find_compute_v12n_container(m, container), 'Has virt container %s' % container)
+                yield (not m.exclude_from_allocation, 'Not excluded from allocation')
                 yield (self.context.memory_usage < m.memory, 'Has more than %s MB memory' %
                        self.context.memory_usage)
                 yield (sum(map(lambda (pk, pv): pv,
@@ -217,10 +217,14 @@ class AllocateAction(ComputeAction):
                        'Template is available')
 
             def unwind_until_false(generator):
-                for idx, (r, desc) in enumerate(generator):
-                    if not r:
-                        return 'Fail at %d: %s' % (idx, desc)
-                return 'Match'
+                try:
+                    for idx, (r, desc) in enumerate(generator):
+                        if not r:
+                            return 'Fail at %d: %s' % (idx, desc)
+                    return 'Match'
+                except Exception as e:
+                    log.err(system='action-allocate')
+                    return 'Fail (exception)' % (desc, e)
 
             log.msg('Searching in (index of failed condition or MATCH): %s' % (
                 map(lambda m: (str(m), unwind_until_false(condition_generator(m))), all_machines)),
