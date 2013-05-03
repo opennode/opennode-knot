@@ -7,6 +7,7 @@ from zope.component import handle
 from zope.component import getUtility
 
 import netaddr
+import transaction
 
 from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction, AllocateAction
 from opennode.knot.backend.operation import IResumeVM
@@ -23,11 +24,13 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
-from opennode.oms.model.form import IModelModifiedEvent
-from opennode.oms.model.form import IModelDeletedEvent
-from opennode.oms.model.form import IModelCreatedEvent
-from opennode.oms.model.form import ModelModifiedEvent
+from opennode.oms.model.model.events import IModelModifiedEvent
+from opennode.oms.model.model.events import IModelDeletedEvent
+from opennode.oms.model.model.events import IModelCreatedEvent
+from opennode.oms.model.model.events import IOwnerChangedEvent
+from opennode.oms.model.model.events import ModelModifiedEvent
 from opennode.oms.model.traversal import canonical_path, traverse1
+from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
@@ -171,3 +174,27 @@ def handle_virtual_compute_config_change_request(compute, event):
         owner = yield db.get(compute, '__owner__')
         UserLogger(subject=compute, owner=owner).log('Compute "%s" configuration changed' % compute)
         yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
+
+@subscribe(IVirtualCompute, IOwnerChangedEvent)
+@defer.inlineCallbacks
+def handle_ownership_change(model, event):
+
+    @defer.inlineCallbacks
+    def update_statistics_after_commit(oldowner, newowner):
+        log.msg('Owner changed from %s to %s on %s: updating user statistics' %
+                (oldowner, newowner, model), system='ownership-change-event')
+        try:
+            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, newowner)
+            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, oldowner)
+        except Exception:
+            log.err(system='ownership-change-event')
+            raise
+
+    def update_statistics_dbhook(success, *args):
+        if success:
+            blocking_yield(update_statistics_after_commit(*args))
+
+    curtransaction = transaction.get()
+    # Trigger user statistics updates after compute changes ownership
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=(event.oldowner, event.nextowner))

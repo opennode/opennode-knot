@@ -15,8 +15,8 @@ from opennode.knot.model.machines import IIncomingMachineRequest
 from opennode.knot.model.machines import IncomingMachineRequest
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
-from opennode.oms.model.form import IModelDeletedEvent
 from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.events import IModelDeletedEvent
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
