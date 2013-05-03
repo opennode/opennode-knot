@@ -42,9 +42,9 @@ class SetGlobalTemplatePermissionsAction(Action, SetAclMixin):
     def execute(self, cmd, args):
         self.write = cmd.write
         try:
+            gtemplates = db.get_root()['oms_root']['templates']
             for path in args.paths:
                 proto = cmd.traverse(path)
-                gtemplates = db.get_root()['oms_root']['templates']
                 action_list = []
                 for t in filter(ITemplate.providedBy, map(follow_symlinks, gtemplates.listcontent())):
                     if t.name == proto.name:

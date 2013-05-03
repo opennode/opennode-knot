@@ -182,7 +182,7 @@ class SyncDaemonProcess(DaemonProcess):
 
             hangar = machines['hangar']
             for backend in backends:
-                if str(backend) not in hangar.listnames():
+                if unicode(backend) not in hangar.listnames():
                     vms = VirtualizationContainer(unicode(backend))
                     hangar.add(vms)
 
