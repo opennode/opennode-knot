@@ -199,36 +199,40 @@ class AllocateAction(ComputeAction):
             all_machines = db.get_root()['oms_root']['machines']
             param = unicode(get_config().getstring('allocate', 'diskspace_filter_param',
                                                    default=u'/storage'))
-
             def condition_generator(m):
-                yield (ICompute.providedBy(m), 'Is compute?')
-                yield (find_compute_v12n_container(m, container), 'Has virt container %s' % container)
-                yield (not getattr(m, 'exclude_from_allocation', None), 'Not excluded from allocation')
-                yield (self.context.memory_usage < m.memory, 'Has more than %s MB memory' %
-                       self.context.memory_usage)
-                yield (sum(map(lambda (pk, pv): pv,
+                yield ICompute.providedBy(m)
+                yield find_compute_v12n_container(m, container)
+                yield not getattr(m, 'exclude_from_allocation', None)
+                yield self.context.memory_usage < m.memory
+                yield sum(map(lambda (pk, pv): pv,
                               filter(lambda (pk, pv): pk != 'total',
-                                     self.context.diskspace.iteritems()))) < m.diskspace.get(param, 0),
-                       'Enough diskspace')
-                yield (self.context.num_cores <= m.num_cores, 'Enough cores')
-                yield (self.context.template in map(lambda t: t.name,
+                                     self.context.diskspace.iteritems()))) < m.diskspace.get(param, 0)
+                yield self.context.num_cores <= m.num_cores
+                yield self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
-                                                          m['templates'].listcontent())),
-                       'Template is available')
+                                                          m['templates'].listcontent()
+                                                            if m['templates'] else []))
 
             def unwind_until_false(generator):
+                fail_description = ['Not a compute',
+                                    'No virt container %s' % container,
+                                    'Excluded from allocation',
+                                    'Has less than %s MB memory' % self.context.memory_usage,
+                                    'Not enough diskspace',
+                                    'Not eough cores',
+                                    'Template is unavailable']
+
                 try:
-                    for idx, (r, desc) in enumerate(generator):
+                    for idx, r in enumerate(generator):
                         if not r:
-                            return 'Fail at %d: %s' % (idx, desc)
+                            return 'Fail at %d: %s' % (idx, fail_description[idx])
                     return 'Match'
                 except Exception as e:
                     log.err(system='action-allocate')
-                    return 'Fail (exception)' % (desc, e)
+                    return 'Fail (exception)' % (fail_description, e)
 
-            log.msg('Searching in (index of failed condition or MATCH): %s' % (
-                map(lambda m: (str(m), unwind_until_false(condition_generator(m))), all_machines)),
-                logLevel=DEBUG, system='action-allocate')
+            results  = map(lambda m: (str(m), unwind_until_false(condition_generator(m))), all_machines)
+            log.msg('Searching in: %s' % (results), logLevel=DEBUG, system='action-allocate')
 
             return filter(lambda m: all(condition_generator(m)), all_machines)
 
