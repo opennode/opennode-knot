@@ -199,6 +199,7 @@ class AllocateAction(ComputeAction):
             all_machines = db.get_root()['oms_root']['machines']
             param = unicode(get_config().getstring('allocate', 'diskspace_filter_param',
                                                    default=u'/storage'))
+
             def condition_generator(m):
                 yield ICompute.providedBy(m)
                 yield find_compute_v12n_container(m, container)
@@ -211,7 +212,7 @@ class AllocateAction(ComputeAction):
                 yield self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
                                                           m['templates'].listcontent()
-                                                            if m['templates'] else []))
+                                                          if m['templates'] else []))
 
             def unwind_until_false(generator):
                 fail_description = ['Not a compute',
@@ -231,20 +232,19 @@ class AllocateAction(ComputeAction):
                     log.err(system='action-allocate')
                     return 'Fail (exception)' % (fail_description, e)
 
-            results  = map(lambda m: (str(m), unwind_until_false(condition_generator(m))), all_machines)
+            results = map(lambda m: (str(m), unwind_until_false(condition_generator(m))), all_machines)
             log.msg('Searching in: %s' % (results), logLevel=DEBUG, system='action-allocate')
 
             return filter(lambda m: all(condition_generator(m)), all_machines)
 
-        log.msg('Allocating %s: searching for allocation targets...' % self.context,
-                system='action-allocate')
+        log.msg('Allocating %s: searching for targets...' % self.context, system='action-allocate')
 
         vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
         machines = yield get_matching_machines(vmsbackend)
 
         if len(machines) <= 0:
-            log.msg('Found no fitting machines to allocate to. Action aborted.', system='action-allocate')
-            cmd.write('Found no fitting machines to allocate to. Aborting.\n')
+            log.msg('Found no fitting machines. Action aborted.', system='action-allocate')
+            cmd.write('Found no fitting machines. Aborting.\n')
             return
 
         @db.ro_transact
@@ -363,9 +363,8 @@ class DeployAction(VComputeAction):
                               'will let it use a local value instead\n')
 
             log.msg('Deploying %s to %s: issuing agent command' % (self.context, target), system='deploy')
-            res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
+            yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
-            log.msg('IDeployVM result: %s' % res, system='deploy', logLevel=DEBUG)
 
             # TODO: refactor (eliminate duplication with MigrateAction)
             name = yield db.get(self.context, '__name__')
@@ -374,7 +373,6 @@ class DeployAction(VComputeAction):
             log.msg('Checking post-deploy...', system='deploy')
 
             if (yield self._check_vm_post(cmd, name, hostname, target)):
-                log.msg('Deployment finished successfully!', system='deploy')
 
                 @db.ro_transact
                 def get_canonical_paths(context, target):
@@ -382,15 +380,15 @@ class DeployAction(VComputeAction):
 
                 yield mv_compute_model(*(yield get_canonical_paths(self.context, target)))
 
-            @db.transact
-            def finalize_vm():
-                noLongerProvides(self.context, IUndeployed)
-                alsoProvides(self.context, IDeployed)
+                @db.transact
+                def finalize_vm():
+                    noLongerProvides(self.context, IUndeployed)
+                    alsoProvides(self.context, IDeployed)
 
-                log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
-                cmd.write("Changed state from undeployed to deployed\n")
+                    log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
+                    cmd.write("Deployment finished. VM is deployed\n")
 
-            yield finalize_vm()
+                yield finalize_vm()
         finally:
             @db.transact
             def cleanup_deploying():
@@ -426,8 +424,7 @@ class UndeployAction(VComputeAction):
         parent = yield db.get(self.context, '__parent__')
 
         submitter = IVirtualizationContainerSubmitter(parent)
-        res = yield submitter.submit(IUndeployVM, name)
-        cmd.write('%s\n' % (res,))
+        yield submitter.submit(IUndeployVM, name)
 
         @db.transact
         def finalize_vm():
