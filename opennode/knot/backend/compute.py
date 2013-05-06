@@ -203,7 +203,7 @@ class AllocateAction(ComputeAction):
             def condition_generator(m):
                 yield (ICompute.providedBy(m), 'Is compute?')
                 yield (find_compute_v12n_container(m, container), 'Has virt container %s' % container)
-                yield (not m.exclude_from_allocation, 'Not excluded from allocation')
+                yield (not getattr(m, 'exclude_from_allocation', None), 'Not excluded from allocation')
                 yield (self.context.memory_usage < m.memory, 'Has more than %s MB memory' %
                        self.context.memory_usage)
                 yield (sum(map(lambda (pk, pv): pv,
