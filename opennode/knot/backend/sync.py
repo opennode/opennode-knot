@@ -50,35 +50,16 @@ def get_manageable_machine_hostnames():
     defer.returnValue(map(lambda h: h[0].hostname, (yield get_manageable_machines())))
 
 
-def set_compute_failure_status(uuid, status):
+def set_compute_status(uuid, status_name, status):
     from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
     compute = db.get_root()['oms_root']['machines'][uuid]
-    compute.failure = bool(status)
+    setattr(compute, status_name, bool(status))
 
     def iterate_recursively(container):
         seen = set()
         for item in container.listcontent():
             if ICompute.providedBy(item):
-                item.failure = bool(status)
-
-            if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
-                if item.__name__ not in seen:
-                    seen.add(item.__name__)
-                    iterate_recursively(item)
-
-    iterate_recursively(compute)
-
-
-def set_compute_suspicious_status(uuid, status):
-    from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
-    compute = db.get_root()['oms_root']['machines'][uuid]
-    compute.suspicious = bool(status)
-
-    def iterate_recursively(container):
-        seen = set()
-        for item in container.listcontent():
-            if ICompute.providedBy(item):
-                item.suspicious = bool(status)
+                setattr(item, status_name, bool(status))
 
                 if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
                     if item.__name__ not in seen:
@@ -113,6 +94,7 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def sync(self):
+        log.msg('Synchronizing users...', system='sync')
         yield self.gather_users()
         log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
@@ -196,37 +178,37 @@ class SyncDaemonProcess(DaemonProcess):
                     % (str(compute), self.outstanding_requests.keys()), system='sync-unlock')
 
     @db.transact
-    def handle_error(self, e, action, c, compute):
+    def handle_error(self, e, action, c, compute, status_name):
         e.trap(Exception)
         log.msg("Got exception on %s of '%s': %s" % (action, c, e), system='sync')
         if get_config().getboolean('debug', 'print_exceptions'):
             log.err(system='sync')
         self.delete_outstanding_request(compute)
-        set_compute_failure_status(compute.__name__, True)
+        set_compute_status(compute.__name__, status_name, True)
 
     @db.transact
-    def handle_success(self, r, action, hostname, compute):
+    def handle_success(self, r, action, hostname, compute, status_name):
         log.msg("%s completed: '%s'" % (action, hostname), system='sync')
         self.delete_outstanding_request(compute)
-        set_compute_failure_status(compute.__name__, False)
+        set_compute_status(compute.__name__, status_name, False)
 
     @db.transact
-    def handle_remote_error(self, ore, c, compute):
+    def handle_remote_error(self, ore, c, compute, status_name):
         ore.trap(OperationRemoteError)
         if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
             log.err(system='sync')
         else:
             log.msg(str(ore.value), system='sync', logLevel=ERROR)
         self.delete_outstanding_request(compute)
-        set_compute_failure_status(compute.__name__, True)
+        set_compute_status(compute.__name__, status_name, True)
 
     def execute_sync_action(self, hostname, compute):
         log.msg("Syncing started: '%s' (%s)" % (hostname, str(compute)), system='sync')
         syncaction = SyncAction(compute)
         deferred = syncaction.execute(DetachedProtocol(), object())
-        deferred.addCallback(self.handle_success, 'sync action', hostname, compute)
-        deferred.addErrback(self.handle_remote_error, hostname, compute)
-        deferred.addErrback(self.handle_error, 'Sync action', hostname, compute)
+        deferred.addCallback(self.handle_success, 'synchronization', hostname, compute, 'suspicious')
+        deferred.addErrback(self.handle_remote_error, hostname, compute, 'suspicious')
+        deferred.addErrback(self.handle_error, 'Synchronization', hostname, compute, 'suspicious')
         curtime = datetime.now().isoformat()
         self.outstanding_requests[str(compute)] = [deferred, curtime, 0, defer.Deferred()]
         return deferred
@@ -238,8 +220,7 @@ class SyncDaemonProcess(DaemonProcess):
             curtime = datetime.now().isoformat()
 
             if (targetkey in self.outstanding_requests and self.outstanding_requests[targetkey][2] > 5):
-                log.msg('Killing all previous requests to %s (%s)' % (hostname, targetkey),
-                        system='sync')
+                log.msg('Killing all previous requests to %s (%s)' % (hostname, targetkey), system='sync')
                 self.outstanding_requests[targetkey][3].callback(None)
                 del self.outstanding_requests[targetkey]
 
@@ -249,9 +230,9 @@ class SyncDaemonProcess(DaemonProcess):
                 killhook = defer.Deferred()
                 deferred = pingtest.run(__killhook=killhook)
                 self.outstanding_requests[targetkey] = [deferred, curtime, 0, killhook]
-                deferred.addCallback(self.handle_success, 'ping test', hostname, compute)
-                deferred.addErrback(self.handle_remote_error, hostname, compute)
-                deferred.addErrback(self.handle_error, 'Ping test', hostname, compute)
+                deferred.addCallback(self.handle_success, 'ping test', hostname, compute, 'failure')
+                deferred.addErrback(self.handle_remote_error, hostname, compute, 'failure')
+                deferred.addErrback(self.handle_error, 'Ping test', hostname, compute, 'failure')
 
                 def sync_action(r, hostname, compute):
                     self.execute_sync_action(hostname, compute)
