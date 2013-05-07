@@ -396,7 +396,6 @@ class DeployAction(VComputeAction):
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
 
-
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)

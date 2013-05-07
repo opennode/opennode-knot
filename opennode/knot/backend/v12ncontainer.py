@@ -184,7 +184,7 @@ class SyncVmsAction(Action):
             self.context[vm_uuid].state = u'inactive'
 
             if get_config().getboolean('sync', 'delete_on_sync'):
-                log.msg("Deleting compute", vm_uuid, system='v12n')
+                log.msg("Deleting compute %s" % vm_uuid, system='v12n')
                 compute = self.context[vm_uuid]
                 del self.context[vm_uuid]
                 handle(compute, ModelDeletedEvent(self.context))
