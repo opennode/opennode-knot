@@ -261,7 +261,6 @@ class AllocateAction(ComputeAction):
         yield DeployAction(self.context)._execute(DetachedProtocol(), bestvmscontainer)
 
 
-@db.transact
 def mv_compute_model(context_path, target_path):
     try:
         vm = traverse1(context_path)
@@ -378,12 +377,14 @@ class DeployAction(VComputeAction):
                 def get_canonical_paths(context, target):
                     return (canonical_path(context), canonical_path(target))
 
-                yield mv_compute_model(*(yield get_canonical_paths(self.context, target)))
+                canonical_paths = yield get_canonical_paths(self.context, target)
 
                 @db.transact
                 def finalize_vm():
-                    noLongerProvides(self.context, IUndeployed)
-                    alsoProvides(self.context, IDeployed)
+                    vm = traverse1(canonical_paths[0])
+                    mv_compute_model(*canonical_paths)
+                    noLongerProvides(vm, IUndeployed)
+                    alsoProvides(vm, IDeployed)
 
                     log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
                     cmd.write("Deployment finished. VM is deployed\n")
