@@ -34,6 +34,7 @@ from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
+
 @subscribe(ICompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
@@ -89,7 +90,7 @@ def delete_virtual_compute(model, event):
         log.msg('Deleting compute %s which is already in IUndeployed state' %
                 model.hostname, system='compute-backend')
 
-    owner = yield db.get(model, '__owner__')
+    owner = (yield db.get(model, '__owner__'))
     ulog = UserLogger(subject=model, owner=owner)
     ulog.log('Deleted %s' % model)
     yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
@@ -171,7 +172,7 @@ def handle_virtual_compute_config_change_request(compute, event):
         yield reset_to_original_values()
         raise
     else:
-        owner = yield db.get(compute, '__owner__')
+        owner = (yield db.get(compute, '__owner__'))
         UserLogger(subject=compute, owner=owner).log('Compute "%s" configuration changed' % compute)
         yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
 
@@ -196,5 +197,6 @@ def handle_ownership_change(model, event):
             blocking_yield(update_statistics_after_commit(*args))
 
     curtransaction = transaction.get()
+
     # Trigger user statistics updates after compute changes ownership
     curtransaction.addAfterCommitHook(update_statistics_dbhook, args=(event.oldowner, event.nextowner))
