@@ -165,7 +165,7 @@ class SyncVmsAction(Action):
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
 
-                # for now let's force synced computes to not have salt installed
+                # for now let's force new synced computes to not have salt installed
                 # XXX: not sure if removing a parent interface will remove the child also
                 noLongerProvides(new_compute, IManageable)
                 self.context.add(new_compute)

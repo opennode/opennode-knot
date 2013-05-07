@@ -77,7 +77,7 @@ class SimpleSaltExecutor(object):
                           ['--no-color', '--out=json',
                            ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
-                          map(lambda s: '"%s"' % s, map(str, self.args)))),
+                          map(lambda s: '"%s"' % s, map(json.dumps, self.args)))),
             killhook=killhook)
 
         log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
@@ -87,6 +87,7 @@ class SimpleSaltExecutor(object):
         defer.returnValue(rdata)
 
     def _handle_errors(self, data):
+
         if type(data) is not dict:
             raise TypeError('data received from salt is not dict: %s (%s)' % (type(data).__name__, data))
 
@@ -96,11 +97,11 @@ class SimpleSaltExecutor(object):
             raise op.OperationRemoteError(msg='Remote "%s" returned empty response to "%s"' %
                                           (hostkey, self.action))
 
-        if type(data[hostkey]) in (str, unicode) and data[hostkey].startswith('Traceback'):
+        if type(data[hostkey]) in (str, unicode) and str(data[hostkey]).startswith('Traceback'):
             raise op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey, self.action),
                                           remote_tb=data[hostkey])
 
-        if type(data[hostkey]) in (str, unicode) and data[hostkey].endswith('is not available.'):
+        if type(data[hostkey]) in (str, unicode) and str(data[hostkey]).endswith('is not available.'):
             # TODO: mark the host as unmanageable (agent modules are missing)
             raise op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
                                           (hostkey, self.action))

@@ -162,7 +162,6 @@ class SyncAction(ComputeAction):
         parent = yield db.get(self.context, '__parent__')
         name = yield db.get(self.context, '__name__')
         submitter = IVirtualizationContainerSubmitter(parent)
-        # TODO: sync VMs in parallel, eliminating most of the network roundtrip overhead
         vmlist = yield submitter.submit(IListVMS)
         for vm in vmlist:
             if vm['uuid'] == name:
@@ -230,7 +229,7 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def sync_hw(self):
         if not any_stack_installed(self.context):
-            defer.returnValue(None)
+            return
 
         try:
             info = yield IGetComputeInfo(self.context).run()
@@ -240,7 +239,7 @@ class SyncAction(ComputeAction):
             log.msg(e.message, system='sync-hw')
             if e.remote_tb:
                 log.msg(e.remote_tb, system='sync-hw')
-            defer.returnValue(None)
+            return
 
         # TODO: Improve error handling
         def disk_info(aspect):
