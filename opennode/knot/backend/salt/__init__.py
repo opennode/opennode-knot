@@ -77,7 +77,9 @@ class SimpleSaltExecutor(object):
                           ['--no-color', '--out=json',
                            ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
                            self.hostname, self.action] +
-                          map(lambda s: '"%s"' % s, map(json.dumps, self.args)))),
+                          map(lambda s: '"%s"' % s,
+                              map(lambda a: json.dumps(a) if type(a) not in (str, unicode) else str(a),
+                                  self.args)))),
             killhook=killhook)
 
         log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
