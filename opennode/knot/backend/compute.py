@@ -396,6 +396,7 @@ class DeployAction(VComputeAction):
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
 
+
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
@@ -436,9 +437,10 @@ class UndeployAction(VComputeAction):
                                   subject=self.context, owner=self.context.__owner__)
                 ulog.log('Deallocated IP: %s', ip)
 
-            noLongerProvides(self.context, IDeployed)
-            alsoProvides(self.context, IUndeployed)
-            cmd.write('Changed state from deployed to undeployed\n')
+            vm = traverse1(canonical_path(self.context))
+            if vm is not None:
+                noLongerProvides(vm, IDeployed)
+                alsoProvides(vm, IUndeployed)
 
         yield finalize_vm()
 
