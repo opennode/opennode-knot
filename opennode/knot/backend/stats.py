@@ -1,5 +1,7 @@
 from datetime import datetime
 from grokcore.component import implements, GlobalUtility
+from zope.authentication.interfaces import IAuthentication
+from zope.component import getUtility
 from zope.component import getAllUtilitiesRegisteredFor
 
 import logging
@@ -33,10 +35,20 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         return user_computes
 
     def get_credit(self, username):
-        return db.get_root()['oms_root']['home'][username].credit
+        profile = db.get_root()['oms_root']['home'][username]
+        if profile:
+            return profile.credit
+        else:
+            log.warning('%s is not found among user profiles under /home!', username)
+            return 0
 
     @db.ro_transact
     def update(self, username):
+        if username is None:
+            auth = getUtility(IAuthentication)
+            p = auth.getPrincipal(username)
+            username = p.id
+
         user_computes = self.get_computes(username)
 
         user_stats = {'num_cores_total': 0,
