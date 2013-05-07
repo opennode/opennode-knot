@@ -1,8 +1,8 @@
 from datetime import datetime
 from grokcore.component import implements, GlobalUtility
 from zope.authentication.interfaces import IAuthentication
-from zope.component import getUtility
 from zope.component import getAllUtilitiesRegisteredFor
+from zope.component import getUtility
 
 import logging
 import sys
