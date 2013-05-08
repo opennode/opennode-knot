@@ -325,7 +325,8 @@ class DeployAction(VComputeAction):
                     'nameservers': db.remove_persistent_proxy(self.context.nameservers),
                     'autostart': self.context.autostart,
                     'ip_address': self.context.ipv4_address.split('/')[0],
-                    'passwd': getattr(self.context, 'root_password', None)}
+                    'passwd': getattr(self.context, 'root_password', None),
+                    'memory': self.context.memory}
 
         @db.transact
         def cleanup_root_password():
@@ -362,7 +363,7 @@ class DeployAction(VComputeAction):
                               'will let it use a local value instead\n')
 
             log.msg('Deploying %s to %s: issuing agent command' % (self.context, target), system='deploy')
-            yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
+            res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
 
             # TODO: refactor (eliminate duplication with MigrateAction)
@@ -390,6 +391,9 @@ class DeployAction(VComputeAction):
                     cmd.write("Deployment finished. VM is deployed\n")
 
                 yield finalize_vm()
+            else:
+                self.log_error('Deployment result: %s' % res)
+
         finally:
             @db.transact
             def cleanup_deploying():
