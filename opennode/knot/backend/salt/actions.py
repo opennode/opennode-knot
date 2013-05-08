@@ -43,7 +43,8 @@ class InstallSaltCmd(Cmd):
 
     @db.ro_transact(proxy=False)
     def subject(self, args):
-        return tuple(self.traverse(path) for path in args.paths)
+        return [machine for machine in db.get_root()['oms_root']['machines']
+                if ICompute.providedBy(machine) and not IVirtualCompute.providedBy(machine)]
 
     @db.transact
     def execute(self, args):
