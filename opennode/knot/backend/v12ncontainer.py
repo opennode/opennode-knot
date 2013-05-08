@@ -59,6 +59,7 @@ class VirtualizationContainerSubmitter(Adapter):
             e.trap(Exception)
             log.msg('Unexpected error! %s' % e.value, system='v12n-submitter')
             log.err(system='v12n-submitter')
+            e.raiseException()
 
         d.addErrback(on_remote_error)
         d.addErrback(on_unexpected_error)

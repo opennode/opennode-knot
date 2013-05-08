@@ -163,9 +163,9 @@ class SyncDaemonProcess(DaemonProcess):
                         backends.add(o.backend)
 
             hangar = machines['hangar']
-            for backend in backends:
-                if unicode(backend) not in map(lambda vms: vms.backend, hangar.listcontent()):
-                    vms = VirtualizationContainer(unicode(backend))
+            for backend in map(unicode, backends):
+                if backend not in map(lambda vms: vms.backend, hangar.listcontent()):
+                    vms = VirtualizationContainer(backend)
                     hangar.add(vms)
 
         yield ensure_hangar_v12ncontainers()

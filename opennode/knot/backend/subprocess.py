@@ -1,10 +1,13 @@
 # Copyright (c) 2012 Alan Franzoni
 # Licensed under Apache license 2.0
 # Published: http://code.activestate.com/recipes/578021-async-subprocess-check_output-replacement-for-twis/
+import logging
+
 from twisted.internet.defer import Deferred
 from twisted.internet.error import ProcessDone
 from twisted.internet.protocol import ProcessProtocol
 
+log = logging.getLogger(__name__)
 
 class SubprocessProtocol(ProcessProtocol):
     outBuffer = ""
@@ -32,6 +35,8 @@ def async_check_output(args, ireactorprocess=None, killhook=None):
     :type ireactorprocess: :class: twisted.internet.interfaces.IReactorProcess
     :rtype: Deferred
     """
+    log.debug('%s (killhook=%s)', ' '.join(args), killhook is not None)
+
     if ireactorprocess is None:
         from twisted.internet import reactor
         ireactorprocess = reactor
