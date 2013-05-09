@@ -83,29 +83,91 @@ class ComputeAction(Action, PreValidateHookMixin):
     baseclass()
 
     _lock_registry = {}
+    _do_not_enqueue = False
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
+    @property
+    def lock_keys(self):
+        """ Returns list of object-related 'hashes' to lock against. Overload in derived classes
+        to add more objects """
+        return (canonical_path(self.context),)
+
     def locked(self):
-        return str(self.context) in self._lock_registry
+        return any(key in self._lock_registry for key in self.lock_keys)
 
-    def lock(self):
+    def acquire(self):
         d = defer.Deferred()
-        self._lock_registry[str(self.context)] = (d, self)
+        log.msg('%s acquiring locks for: %s' % (type(self).__name__, self.lock_keys),
+                system='compute-action')
+        self._used_lock_keys = []
+        for key in self.lock_keys:
+            self._lock_registry[key] = (d, self)
+            self._used_lock_keys.append(key)
         return d
 
-    def _remove_lock(self, uuid):
-        del self._lock_registry[uuid]
+    def reacquire(self):
+        """ Add more locks for the currently executed action. Meant to be called from _execute to add
+        locks for objects that are evaluated in _execute() and added to _lock_keys.
+        Returns a deferred list of all deferreds that already have locks on, or None if no other action
+        locks have been found"""
+        d = self._lock_registry[self.lock_keys[0]][0]
+        deferred_list = []
 
-    def unlock(self, d):
-        d.chainDeferred(self._lock_registry[str(self.context)][0])
-        d.addBoth(lambda r: self._remove_lock(str(self.context)))
+        log.msg('%s adding locks for: %s' % (type(self).__name__, self.lock_keys),
+                system='compute-action')
+
+        for key in self.lock_keys:
+            if key not in self._lock_registry:
+                self._lock_registry[key] = (d, self)
+                self._used_lock_keys.append(key)
+            elif self._lock_registry[key][0] is not d:
+                dother, actionother = self._lock_registry[key]
+                log.msg('Another action %s locked %s... %s will wait until it finishes'
+                    % (actionother, key, type(self).__name__), system='compute-action')
+                deferred_list.append(dother)
+
+        if len(deferred_list) > 0:
+            return defer.DeferredList(deferred_list, consumeErrors=True)
+
+    @defer.inlineCallbacks
+    def reacquire_until_clear(self):
+        while True:
+            dl = self.reacquire()
+
+            if dl is None:
+                break
+
+            log.msg('%s is waiting for other actions locking its target %s...'
+                    % (type(self).__name__, self._additional_keys), system='compute-action')
+
+            yield dl  # wait for any actions locking our targets
+
+            log.msg('%s will attempt to reacquire locks again (%s)...'
+                    % (type(self).__name__, self._additional_keys), system='compute-action')
+
+    def _release_and_fire_next_now(self):
+        ld = None
+        for key in self._used_lock_keys:
+            if not ld:
+                ld, _ = self._lock_registry[key]
+            del self._lock_registry[key]
+        del self._used_lock_keys
+        ld.callback(None)
+
+    def release(self, d):
+        d.addBoth(lambda r: self._release_and_fire_next_now())
         return d
+
+    def _action_log(self, cmd, msg):
+        log.msg(msg, system='compute-action')
+        cmd.write('%s\n' % msg)
 
     @defer.inlineCallbacks
     def add_log_event(self, cmd, msg, *args, **kwargs):
+        self._action_log(cmd, msg)
         owner = yield db.get(self.context, '__owner__')
         ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                           subject=self.context, owner=owner)
@@ -114,33 +176,48 @@ class ComputeAction(Action, PreValidateHookMixin):
     @defer.inlineCallbacks
     def handle_error(self, f, cmd):
         msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, type(self).__name__)
-        log.msg(msg, system='compute-action', logLevel=ERROR)
-        log.err(f, system='compute-action')
         yield self.add_log_event(cmd, msg)
+        log.err(f, system='compute-action')
         defer.returnValue(f)
 
-    @defer.inlineCallbacks
     def handle_action_done(self, r, cmd):
-        msg = '%s finished' % type(self).__name__
-        yield self.add_log_event(cmd, msg)
-        log.msg(msg, system='compute-action')
+        return self.add_log_event(cmd, '%s(%s) finished' % (type(self).__name__, self.context))
 
     def execute(self, cmd, args):
         if self.locked():
-            lock_action = self._lock_registry[str(self.context)][1]
-            log.msg('%s: %s is locked. Scheduling to run after finish of a previous action: %s'
-                    % (self, self.context, lock_action), system='compute-action')
-            # XXX: must be self.execute(), not self._execute(), otherwise a deadlock may occur
-            self._lock_registry[str(self.context)][0].addBoth(lambda r: self.execute(cmd, args))
-            return self._lock_registry[str(self.context)][0]
+            for key in self.lock_keys:
+                data = self._lock_registry.get(key)
+                if data is not None:
+                    break
+            else:
+                self._action_log(cmd, 'CONCURRENCY BUG: locked() returned True, but now it is false! %s'
+                                 % (self))
+                raise KeyError(self.lock_keys)
 
-        ld = self.lock()
+            ld, lock_action = data
+
+            if self._do_not_enqueue:
+                self._action_log(cmd, '%s: %s is locked by %s. Skipping due to no-enqueue feature of '
+                                 'the action.' % (self, self.context, lock_action))
+                return ld
+
+            self._action_log(cmd, '%s: %s is locked by %s. Scheduling to run after finish of previous action'
+                             % (self, self.context, lock_action))
+
+            def execute_on_unlock(r):
+                self._action_log(cmd, '%s: %s is unlocked. Executing now' % (self, self.context))
+                # XXX: must be self.execute(), not self._execute(): next action must lock all its objects
+                self.execute(cmd, args)
+
+            ld.addBoth(execute_on_unlock)
+            return ld
+
+        ld = self.acquire()
 
         @defer.inlineCallbacks
         def cancel_action(e, cmd):
             e.trap(Exception)
             msg = 'Canceled executing "%s" due to validate_hook failure' % type(self).__name__
-            cmd.write('%s\n' % msg)
             yield self.add_log_event(cmd, msg)
 
         try:
@@ -148,13 +225,13 @@ class ComputeAction(Action, PreValidateHookMixin):
         except Exception:
             ld.errback(failure.Failure())
             ld.addErrback(cancel_action, cmd)
-            self._remove_lock(str(self.context))
+            self._release_and_fire_next_now()
             return ld
 
         d.addCallback(lambda r: self._execute(cmd, args))
         d.addErrback(self.handle_error, cmd)
         d.addCallback(self.handle_action_done, cmd)
-        return self.unlock(d)
+        return self.release(d)
 
     def _execute(self, cmd, args):
         """ Must be overloaded by child classes """
@@ -165,6 +242,12 @@ class VComputeAction(ComputeAction):
     """Common code for virtual compute actions."""
     context(IVirtualCompute)
     baseclass()
+
+    @property
+    def lock_keys(self):
+        return [canonical_path(self.context),
+                canonical_path(self.context.__parent__),
+                canonical_path(self.context.__parent__.__parent__)]
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -190,6 +273,14 @@ class DiskspaceInvalidConfigError(KeyError):
 class AllocateAction(ComputeAction):
     context(IUndeployed)
     action('allocate')
+
+    _additional_keys = []
+
+    @property
+    def lock_keys(self):
+        return [canonical_path(self.context),
+                canonical_path(self.context.__parent__),
+                canonical_path(self.context.__parent__.__parent__)] + self._additional_keys
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -252,11 +343,17 @@ class AllocateAction(ComputeAction):
             return sorted(machines, key=lambda m: m.__name__)
 
         best = (yield rank(machines))[0]
-
         log.msg('Found %s as the best candidate. Attempting to allocate...' % (best),
                 system='action-allocate')
 
         bestvmscontainer = yield db.ro_transact(find_compute_v12n_container)(best, vmsbackend)
+
+        @db.transact
+        def set_additional_keys():
+            self._additional_keys = [canonical_path(best), canonical_path(bestvmscontainer)]
+        yield set_additional_keys()
+
+        yield self.reacquire_until_clear()
 
         yield DeployAction(self.context)._execute(DetachedProtocol(), bestvmscontainer)
 
@@ -423,6 +520,12 @@ class UndeployAction(VComputeAction):
 
     action('undeploy')
 
+    @property
+    def lock_keys(self):
+        return (canonical_path(self.context),
+                canonical_path(self.context.__parent__),
+                canonical_path(self.context.__parent__.__parent__))
+
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         name = yield db.get(self.context, '__name__')
@@ -493,12 +596,21 @@ class MigrateAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name not in map(lambda x: x['uuid'], vmlist)):
-            self.log_error(cmd,
-                           'Failed migration of %s to %s: VM not found in destination after migration'
+            self.log_error(cmd, 'Failed migration of %s to %s: VM not found in destination after migration'
                            % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
+
+    _additional_keys = []
+
+    @property
+    def lock_keys(self):
+        # TODO: figure out how to best extend the list while the action is being executed with the
+        # destination HN too
+        return (canonical_path(self.context),
+                canonical_path(self.context.__parent__),
+                canonical_path(self.context.__parent__.__parent__)) + self._additional_keys
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -522,6 +634,13 @@ class MigrateAction(VComputeAction):
         destination_vms = follow_symlinks(destination['vms'])
         assert (yield db.get(destination_vms, 'backend')) == (yield db.get(source_vms, 'backend')),\
                 'Destination backend is different from source'
+
+        @db.transact
+        def set_additional_keys():
+            self._additional_keys = [canonical_path(destination_vms), canonical_path(destination)]
+        yield set_additional_keys()
+
+        yield self.reacquire_until_clear()
 
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
