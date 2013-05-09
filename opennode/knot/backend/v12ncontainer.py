@@ -195,6 +195,7 @@ class SyncVmsAction(Action):
         # TODO: eliminate cross-import between compute and v12ncontainer
         from opennode.knot.backend.compute import ICompute
         from opennode.knot.backend.syncaction import SyncAction
+
         # sync each vm
         for compute in self.context.listcontent():
             if not IVirtualCompute.providedBy(compute):
@@ -206,12 +207,7 @@ class SyncVmsAction(Action):
                         % (compute.__parent__.__parent__, compute),
                         system='sync-vms', logLevel=logging.WARNING)
 
-                @db.transact
-                def fix_parent():
-                    compute.__parent__ = self.context
-                    return compute
-
-                compute = yield fix_parent()
+                compute.__parent__ = self.context
 
                 log.msg('Fixing %s %s' % (compute,
                                           'successful!'
