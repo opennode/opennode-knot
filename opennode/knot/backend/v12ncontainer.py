@@ -202,10 +202,25 @@ class SyncVmsAction(Action):
 
             log.msg('Attempting to sync %s' % compute, system='sync-vms')
             if not ICompute.providedBy(compute.__parent__.__parent__):
-                log.msg('Inconsistent data: %s, Compute is expected. Skipping syncing %s'
+                log.msg('Inconsistent data: %s, Compute is expected. Attempting to fix %s'
                         % (compute.__parent__.__parent__, compute),
                         system='sync-vms', logLevel=logging.WARNING)
-                continue
+
+                @db.transact
+                def fix_parent():
+                    compute.__parent__ = self.context
+                    return compute
+
+                compute = yield fix_parent()
+
+                log.msg('Fixing %s %s' % (compute,
+                                          'successful!'
+                                          if ICompute.providedBy(compute.__parent__.__parent__)
+                                          else 'failed!'),
+                        system='sync-vms', logLevel=logging.WARNING)
+
+                if not ICompute.providedBy(compute.__parent__.__parent__):
+                    return
 
             action = SyncAction(compute)
 
