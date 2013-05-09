@@ -61,10 +61,10 @@ def set_compute_status(uuid, status_name, status):
             if ICompute.providedBy(item):
                 setattr(item, status_name, bool(status))
 
-                if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
-                    if item.__name__ not in seen:
-                        seen.add(item.__name__)
-                        iterate_recursively(item)
+            if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
+                if item.__name__ not in seen:
+                    seen.add(item.__name__)
+                    iterate_recursively(item)
 
     iterate_recursively(compute)
 
@@ -94,12 +94,15 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def sync(self):
-        log.msg('Synchronizing users...', system='sync')
+        log.msg('Synchronizing system users', system='sync')
         yield self.gather_users()
-        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
+        log.msg('Synchronizing machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
+        log.msg('Synchronizing vms for hangar', system='sync')
         yield self.gather_vms_for_hangar()
+        log.msg('Executing SyncActions w/ ping tests', system='sync')
         yield self.execute_ping_tests()
+        log.msg('Synchronizing IP pools', system='sync')
         yield self.gather_ippools()
 
     @defer.inlineCallbacks
@@ -204,13 +207,13 @@ class SyncDaemonProcess(DaemonProcess):
 
     def execute_sync_action(self, hostname, compute):
         log.msg("Syncing started: '%s' (%s)" % (hostname, str(compute)), system='sync')
+        curtime = datetime.now().isoformat()
         syncaction = SyncAction(compute)
         deferred = syncaction.execute(DetachedProtocol(), object())
+        self.outstanding_requests[str(compute)] = [deferred, curtime, 0, defer.Deferred()]
         deferred.addCallback(self.handle_success, 'synchronization', hostname, compute, 'suspicious')
         deferred.addErrback(self.handle_remote_error, hostname, compute, 'suspicious')
         deferred.addErrback(self.handle_error, 'Synchronization', hostname, compute, 'suspicious')
-        curtime = datetime.now().isoformat()
-        self.outstanding_requests[str(compute)] = [deferred, curtime, 0, defer.Deferred()]
         return deferred
 
     @defer.inlineCallbacks
@@ -235,7 +238,7 @@ class SyncDaemonProcess(DaemonProcess):
                 deferred.addErrback(self.handle_error, 'Ping test', hostname, compute, 'failure')
 
                 def sync_action(r, hostname, compute):
-                    self.execute_sync_action(hostname, compute)
+                    return self.execute_sync_action(hostname, compute)
 
                 deferred.addCallback(sync_action, hostname, compute)
             else:
@@ -247,7 +250,6 @@ class SyncDaemonProcess(DaemonProcess):
         def get_ippools():
             return db.get_root()['oms_root']['ippools']
 
-        log.msg('Syncing IP pools...', system='sync')
         yield SyncIPUsageAction((yield get_ippools())).execute(DetachedProtocol(), object())
 
 

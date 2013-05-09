@@ -297,7 +297,7 @@ class Compute(Container):
         return getattr(self, '_ctid', None)
 
     def set_ctid(self, value):
-        self._ctid = int(value)
+        self._ctid = int(value) if value is not None else None
 
     ctid = property(get_ctid, set_ctid)
 

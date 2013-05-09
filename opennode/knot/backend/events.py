@@ -164,13 +164,13 @@ def handle_virtual_compute_config_change_request(compute, event):
     submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:
         yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), *update_values)
-    except Exception:
+    except Exception as e:
         @db.transact
         def reset_to_original_values():
             for mk, mv in event.modified.iteritems():
                 setattr(compute, mk, event.original[mk])
         yield reset_to_original_values()
-        raise
+        raise e  # must re-throw, because sys.exc_info seems to get erased with the yield
     else:
         owner = (yield db.get(compute, '__owner__'))
         UserLogger(subject=compute, owner=owner).log('Compute "%s" configuration changed' % compute)
