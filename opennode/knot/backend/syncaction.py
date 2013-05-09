@@ -19,7 +19,7 @@ from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitte
 from opennode.knot.backend.v12ncontainer import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import backends
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
-from opennode.knot.model.compute import IVirtualCompute
+from opennode.knot.model.compute import IVirtualCompute, ICompute
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
@@ -31,31 +31,41 @@ from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
+from opennode.oms.model.traversal import canonical_path
 from opennode.oms.util import get_u, get_i, get_f
 from opennode.oms.zodb import db
-
 
 class SyncAction(ComputeAction):
     """Force compute sync"""
     action('sync')
 
+    _do_not_enqueue = True
+
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
         return tuple((self.context,))
 
+    @property
+    def lock_keys(self):
+        if IVirtualCompute.providedBy(self.context):
+            return (str(self.context), canonical_path(self.context.__parent__))
+        else:
+            return (str(self.context),)
+
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+        log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
+                 system='sync-action')
         yield self.sync_agent_version()
 
         default = yield self.default_console()
 
         yield self.sync_consoles()
-        yield self.sync_hw()
 
         if any_stack_installed(self.context):
+            yield self.sync_hw()
             yield self.ensure_vms()
-
-        yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
+            yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
 
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
@@ -306,20 +316,25 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def ensure_vms(self):
-        if not follow_symlinks(self.context['vms']) and any_stack_installed(self.context):
-            vms_types = yield IGetVirtualizationContainers(self.context).run()
-            if vms_types:
-                url_to_backend_type = dict((v, k) for k, v in backends.items())
-                backend_type = url_to_backend_type[vms_types[0]]
+        if follow_symlinks(self.context['vms']) or any_stack_installed(self.context):
+            return
 
-                @db.transact
-                def add_container(backend_type):
-                    vms = VirtualizationContainer(unicode(backend_type))
-                    self.context.add(vms)
-                    if not self.context['vms']:
-                        self.context.add(Symlink('vms', self.context[vms.__name__]))
+        vms_types = yield IGetVirtualizationContainers(self.context).run()
 
-                yield add_container(backend_type)
+        if not vms_types:
+            return
+
+        url_to_backend_type = dict((v, k) for k, v in backends.items())
+        backend_type = url_to_backend_type[vms_types[0]]
+
+        @db.transact
+        def add_container(backend_type):
+            vms = VirtualizationContainer(unicode(backend_type))
+            self.context.add(vms)
+            if not self.context['vms']:
+                self.context.add(Symlink('vms', self.context[vms.__name__]))
+
+        yield add_container(backend_type)
 
     def sync_vms(self):
         vms = follow_symlinks(self.context['vms'])

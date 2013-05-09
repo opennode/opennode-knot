@@ -1,3 +1,5 @@
+import logging
+
 from grokcore.component import Adapter, context, implements
 from twisted.internet import defer
 from twisted.python import log
@@ -191,10 +193,18 @@ class SyncVmsAction(Action):
                 handle(compute, ModelDeletedEvent(self.context))
 
         # TODO: eliminate cross-import between compute and v12ncontainer
+        from opennode.knot.backend.compute import ICompute
         from opennode.knot.backend.syncaction import SyncAction
         # sync each vm
         for compute in self.context.listcontent():
             if not IVirtualCompute.providedBy(compute):
+                continue
+
+            log.msg('Attempting to sync %s' % compute, system='sync-vms')
+            if not ICompute.providedBy(compute.__parent__.__parent__):
+                log.msg('Inconsistent data: %s, Compute is expected. Skipping syncing %s'
+                        % (compute.__parent__.__parent__, compute),
+                        system='sync-vms', logLevel=logging.WARNING)
                 continue
 
             action = SyncAction(compute)

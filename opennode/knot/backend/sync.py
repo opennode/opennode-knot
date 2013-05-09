@@ -61,10 +61,10 @@ def set_compute_status(uuid, status_name, status):
             if ICompute.providedBy(item):
                 setattr(item, status_name, bool(status))
 
-                if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
-                    if item.__name__ not in seen:
-                        seen.add(item.__name__)
-                        iterate_recursively(item)
+            if (IVirtualizationContainer.providedBy(item) or ICompute.providedBy(item)):
+                if item.__name__ not in seen:
+                    seen.add(item.__name__)
+                    iterate_recursively(item)
 
     iterate_recursively(compute)
 
@@ -94,12 +94,15 @@ class SyncDaemonProcess(DaemonProcess):
 
     @defer.inlineCallbacks
     def sync(self):
-        log.msg('Synchronizing users...', system='sync')
+        log.msg('Synchronizing system users', system='sync')
         yield self.gather_users()
-        log.msg('Synchronizing. Machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
+        log.msg('Synchronizing machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
+        log.msg('Synchronizing vms for hangar', system='sync')
         yield self.gather_vms_for_hangar()
+        log.msg('Executing SyncActions w/ ping tests', system='sync')
         yield self.execute_ping_tests()
+        log.msg('Synchronizing IP pools', system='sync')
         yield self.gather_ippools()
 
     @defer.inlineCallbacks
@@ -247,7 +250,6 @@ class SyncDaemonProcess(DaemonProcess):
         def get_ippools():
             return db.get_root()['oms_root']['ippools']
 
-        log.msg('Syncing IP pools...', system='sync')
         yield SyncIPUsageAction((yield get_ippools())).execute(DetachedProtocol(), object())
 
 
