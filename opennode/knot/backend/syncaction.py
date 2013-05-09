@@ -19,7 +19,7 @@ from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitte
 from opennode.knot.backend.v12ncontainer import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import backends
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
-from opennode.knot.model.compute import IVirtualCompute, ICompute
+from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
@@ -35,6 +35,7 @@ from opennode.oms.model.traversal import canonical_path
 from opennode.oms.util import get_u, get_i, get_f
 from opennode.oms.zodb import db
 
+
 class SyncAction(ComputeAction):
     """Force compute sync"""
     action('sync')
@@ -48,9 +49,11 @@ class SyncAction(ComputeAction):
     @property
     def lock_keys(self):
         if IVirtualCompute.providedBy(self.context):
-            return (str(self.context), canonical_path(self.context.__parent__))
+            return (canonical_path(self.context),
+                    canonical_path(self.context.__parent__),
+                    canonical_path(self.context.__parent__.__parent__))
         else:
-            return (str(self.context),)
+            return (canonical_path(self.context),)
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -66,6 +69,8 @@ class SyncAction(ComputeAction):
             yield self.sync_hw()
             yield self.ensure_vms()
             yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
+        else:
+            log.msg('No stacks installed: %s' % self.context.features)
 
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
@@ -316,7 +321,7 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def ensure_vms(self):
-        if follow_symlinks(self.context['vms']) or any_stack_installed(self.context):
+        if follow_symlinks(self.context['vms']) or not any_stack_installed(self.context):
             return
 
         vms_types = yield IGetVirtualizationContainers(self.context).run()

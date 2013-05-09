@@ -207,13 +207,13 @@ class SyncDaemonProcess(DaemonProcess):
 
     def execute_sync_action(self, hostname, compute):
         log.msg("Syncing started: '%s' (%s)" % (hostname, str(compute)), system='sync')
+        curtime = datetime.now().isoformat()
         syncaction = SyncAction(compute)
         deferred = syncaction.execute(DetachedProtocol(), object())
+        self.outstanding_requests[str(compute)] = [deferred, curtime, 0, defer.Deferred()]
         deferred.addCallback(self.handle_success, 'synchronization', hostname, compute, 'suspicious')
         deferred.addErrback(self.handle_remote_error, hostname, compute, 'suspicious')
         deferred.addErrback(self.handle_error, 'Synchronization', hostname, compute, 'suspicious')
-        curtime = datetime.now().isoformat()
-        self.outstanding_requests[str(compute)] = [deferred, curtime, 0, defer.Deferred()]
         return deferred
 
     @defer.inlineCallbacks
@@ -238,7 +238,7 @@ class SyncDaemonProcess(DaemonProcess):
                 deferred.addErrback(self.handle_error, 'Ping test', hostname, compute, 'failure')
 
                 def sync_action(r, hostname, compute):
-                    self.execute_sync_action(hostname, compute)
+                    return self.execute_sync_action(hostname, compute)
 
                 deferred.addCallback(sync_action, hostname, compute)
             else:

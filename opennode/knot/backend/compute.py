@@ -85,8 +85,6 @@ class ComputeAction(Action, PreValidateHookMixin):
     _lock_registry = {}
     _do_not_enqueue = False
 
-    _additional_keys = []
-
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
@@ -95,7 +93,7 @@ class ComputeAction(Action, PreValidateHookMixin):
     def lock_keys(self):
         """ Returns list of object-related 'hashes' to lock against. Overload in derived classes
         to add more objects """
-        return (str(self.context),)
+        return (canonical_path(self.context),)
 
     def locked(self):
         return any(key in self._lock_registry for key in self.lock_keys)
@@ -104,8 +102,10 @@ class ComputeAction(Action, PreValidateHookMixin):
         d = defer.Deferred()
         log.msg('%s acquiring locks for: %s' % (type(self).__name__, self.lock_keys),
                 system='compute-action')
+        self._used_lock_keys = []
         for key in self.lock_keys:
             self._lock_registry[key] = (d, self)
+            self._used_lock_keys.append(key)
         return d
 
     def reacquire(self):
@@ -122,6 +122,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         for key in self.lock_keys:
             if key not in self._lock_registry:
                 self._lock_registry[key] = (d, self)
+                self._used_lock_keys.append(key)
             elif self._lock_registry[key][0] is not d:
                 dother, actionother = self._lock_registry[key]
                 log.msg('Another action %s locked %s... %s will wait until it finishes'
@@ -144,15 +145,16 @@ class ComputeAction(Action, PreValidateHookMixin):
 
             yield dl  # wait for any actions locking our targets
 
-            log.msg('%s will attempt to reacquire locks again...'
+            log.msg('%s will attempt to reacquire locks again (%s)...'
                     % (type(self).__name__, self._additional_keys), system='compute-action')
 
     def _release_and_fire_next_now(self):
         ld = None
-        for key in self.lock_keys:
+        for key in self._used_lock_keys:
             if not ld:
                 ld, _ = self._lock_registry[key]
             del self._lock_registry[key]
+        del self._used_lock_keys
         ld.callback(None)
 
     def release(self, d):
@@ -243,8 +245,9 @@ class VComputeAction(ComputeAction):
 
     @property
     def lock_keys(self):
-        return (str(self.context), canonical_path(self.context.__parent__),
-                canonical_path(self.context.__parent__.__parent__))
+        return [canonical_path(self.context),
+                canonical_path(self.context.__parent__),
+                canonical_path(self.context.__parent__.__parent__)]
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -271,9 +274,12 @@ class AllocateAction(ComputeAction):
     context(IUndeployed)
     action('allocate')
 
+    _additional_keys = []
+
     @property
     def lock_keys(self):
-        return [str(self.context), canonical_path(self.context.__parent__),
+        return [canonical_path(self.context),
+                canonical_path(self.context.__parent__),
                 canonical_path(self.context.__parent__.__parent__)] + self._additional_keys
 
     @defer.inlineCallbacks
@@ -377,11 +383,6 @@ class DeployAction(VComputeAction):
     def log_error(self, cmd, msg):
         log.msg(msg, system='deploy')
         cmd.write(str(msg + '\n'))
-
-    @property
-    def lock_keys(self):
-        return (str(self.context), canonical_path(self.context.__parent__),
-                canonical_path(self.context.__parent__.__parent__))
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -517,7 +518,8 @@ class UndeployAction(VComputeAction):
 
     @property
     def lock_keys(self):
-        return (str(self.context), canonical_path(self.context.__parent__),
+        return (canonical_path(self.context),
+                canonical_path(self.context.__parent__),
                 canonical_path(self.context.__parent__.__parent__))
 
     @defer.inlineCallbacks
@@ -590,19 +592,21 @@ class MigrateAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name not in map(lambda x: x['uuid'], vmlist)):
-            self.log_error(cmd,
-                           'Failed migration of %s to %s: VM not found in destination after migration'
+            self.log_error(cmd, 'Failed migration of %s to %s: VM not found in destination after migration'
                            % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
 
+    _additional_keys = []
+
     @property
     def lock_keys(self):
         # TODO: figure out how to best extend the list while the action is being executed with the
         # destination HN too
-        return (str(self.context), canonical_path(self.context.__parent__),
-                canonical_path(self.context.__parent__.__parent__))
+        return (canonical_path(self.context),
+                canonical_path(self.context.__parent__),
+                canonical_path(self.context.__parent__.__parent__)) + self._additional_keys
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
