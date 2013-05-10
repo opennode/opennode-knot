@@ -3,6 +3,7 @@ from twisted.internet import defer
 from twisted.internet import task
 from twisted.internet import reactor
 from twisted.python import log
+from zope.authentication.interfaces import IAuthentication
 from zope.component import handle
 from zope.component import getUtility
 
@@ -15,6 +16,8 @@ from opennode.knot.backend.operation import IShutdownVM
 from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUpdateVM
+from opennode.knot.backend.operation import ISetOwner
+from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, IVirtualCompute
 from opennode.knot.model.compute import IDeployed
@@ -137,7 +140,8 @@ def allocate_virtual_compute_from_hangar(model, event):
         path = canonical_path(model)
         owner = model.__owner__
         ul = UserLogger(subject=model, owner=owner)
-        log.msg('Attempting %s for %s (%s)' % (action.__name__, model, path), system='create-event')
+        log.msg('Attempting %s for %s (%s, %s)' % (action.__name__, model, path, owner),
+                system='create-event')
         d = task.deferLater(reactor, 2.0, virtual_compute_action, action, path, event)
         d.addCallback(lambda r: ul.log(msg % path))
         d.addCallback(lambda r: defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner))
@@ -178,13 +182,12 @@ def handle_virtual_compute_config_change_request(compute, event):
 
 
 @subscribe(IVirtualCompute, IOwnerChangedEvent)
-@defer.inlineCallbacks
 def handle_ownership_change(model, event):
 
     @defer.inlineCallbacks
     def update_statistics_after_commit(oldowner, newowner):
-        log.msg('Owner changed from %s to %s on %s: updating user statistics' %
-                (oldowner, newowner, model), system='ownership-change-event')
+        log.msg('%s owner changed from %s to %s: updating user statistics' %
+                (model, oldowner, newowner), system='ownership-change-event')
         try:
             yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, newowner)
             yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, oldowner)
@@ -196,7 +199,22 @@ def handle_ownership_change(model, event):
         if success:
             blocking_yield(update_statistics_after_commit(*args))
 
-    curtransaction = transaction.get()
+    msg = 'Compute "%s" owner changed from "%s" to "%s"' % (model, event.oldowner, event.nextoner)
 
-    # Trigger user statistics updates after compute changes ownership
+    oldowner = getUtility(IAuthentication).getPrincipal(event.oldowner)
+    newowner = getUtility(IAuthentication).getPrincipal(event.nextowner)
+    oldulog = UserLogger(subject=model, owner=oldowner)
+    newulog = UserLogger(subject=model, owner=newowner)
+    log.msg(msg, system='ownership-change-event')
+    oldulog.log(msg)
+    newulog.log(msg)
+
+    try:
+        submitter = IVirtualizationContainerSubmitter(model.__parent__)
+        blocking_yield(submitter.submit(ISetOwner, model.__name__, model.__owner__))
+    except Exception:
+        log.err(system='ownership-change-event')
+        raise
+
+    curtransaction = transaction.get()
     curtransaction.addAfterCommitHook(update_statistics_dbhook, args=(event.oldowner, event.nextowner))

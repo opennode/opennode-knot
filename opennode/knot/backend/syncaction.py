@@ -3,6 +3,8 @@ import netaddr
 
 from twisted.internet import defer
 from twisted.python import log
+from zope.authentication.interfaces import IAuthentication
+from zope.component import getUtility
 
 from opennode.knot.backend.compute import any_stack_installed
 from opennode.knot.backend.compute import ComputeAction
@@ -14,6 +16,7 @@ from opennode.knot.backend.operation import IGetLocalTemplates
 from opennode.knot.backend.operation import IGetRoutes
 from opennode.knot.backend.operation import IGetHWUptime
 from opennode.knot.backend.operation import IGetDiskUsage
+from opennode.knot.backend.operation import ISetOwner
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.backend.v12ncontainer import SyncVmsAction
@@ -190,6 +193,23 @@ class SyncAction(ComputeAction):
     def sync_vm(self, vm):
         compute = TmpObj(self.context)
 
+        if vm.get('owner') and self.context.__owner__ != vm['owner']:
+            newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+            compute.__owner__ = newowner
+        elif self.context.__owner__ is not None:
+            log.msg('Attempting to push owner (%s) of %s to VM config' % (self.context.__owner__,
+                                                                          self.context), system='sync')
+            submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
+            d = submitter.submit(ISetOwner, self.context.__name__, self.context.__owner__)
+
+            def handle_success(r):
+                log.msg('Owner pushing for %s successful' % self.context, system='sync')
+
+            def handle_error(f):
+                log.err(f, system='sync')
+
+            d.addCallbacks(handle_success, handle_error)
+
         compute.state = unicode(vm['state'])
         compute.effective_state = compute.state
 
@@ -234,10 +254,10 @@ class SyncAction(ComputeAction):
 
         compute.diskspace = diskspace
 
-        if compute.effective_state != 'active':
-            compute.uptime = None
-        else:
+        if compute.effective_state == 'active':
             compute.uptime = get_f(vm, 'uptime')
+        else:
+            compute.uptime = None
 
         compute.apply()
 
