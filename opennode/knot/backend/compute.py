@@ -394,6 +394,7 @@ class DeployAction(VComputeAction):
                 'autostart': self.context.autostart,
                 'ip_address': self.context.ipv4_address.split('/')[0],
                 'passwd': getattr(self.context, 'root_password', None),
+                'start_vm': getattr(self.context, 'start_vm', False),
                 'memory': self.context.memory}
 
     @defer.inlineCallbacks
