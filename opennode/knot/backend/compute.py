@@ -414,7 +414,7 @@ class DeployAction(VComputeAction):
                 self._action_log(cmd, 'Allocated IP: %s for %s' % (ip, self.context), system='deploy')
                 ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                                   subject=self.context, owner=self.context.__owner__)
-                ulog.log('Allocated IP for %s: %s', self.context, ip)
+                ulog.log('Allocated IP for %s: %s' % (self.context, ip))
                 return ip
             else:
                 raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')

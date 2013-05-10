@@ -17,7 +17,6 @@ from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUpdateVM
 from opennode.knot.backend.operation import ISetOwner
-from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, IVirtualCompute
 from opennode.knot.model.compute import IDeployed

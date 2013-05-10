@@ -117,8 +117,8 @@ class UserCreditChecker(GlobalUtility):
 
             yield check_credit(profile)
         else:
-            log.info('User is not a member of a billable group "%s": %s. Not updating credit.',
-                     billable_group, map(str, principal.groups))
+            log.info('User "%s" is not a member of a billable group "%s": %s. Not updating credit.',
+                     principal.id, billable_group, map(str, principal.groups))
 
     def applicable(self, context):
         return IVirtualCompute.providedBy(context)
