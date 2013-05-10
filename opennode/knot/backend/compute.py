@@ -30,6 +30,7 @@ from opennode.oms.endpoint.ssh.cmd.base import Cmd
 from opennode.oms.endpoint.ssh.cmd.directives import command
 from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
+from opennode.oms.endpoint.ssh.cmd.security import require_admins_only
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
@@ -101,7 +102,7 @@ class ComputeAction(Action, PreValidateHookMixin):
     def acquire(self):
         d = defer.Deferred()
         log.msg('%s acquiring locks for: %s' % (type(self).__name__, self.lock_keys),
-                system='compute-action')
+                system='compute-action', logLevel=DEBUG)
         self._used_lock_keys = []
         for key in self.lock_keys:
             self._lock_registry[key] = (d, self)
@@ -117,7 +118,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         deferred_list = []
 
         log.msg('%s adding locks for: %s' % (type(self).__name__, self.lock_keys),
-                system='compute-action')
+                system='compute-action', logLevel=DEBUG)
 
         for key in self.lock_keys:
             if key not in self._lock_registry:
@@ -140,7 +141,7 @@ class ComputeAction(Action, PreValidateHookMixin):
             if dl is None:
                 break
 
-            log.msg('%s is waiting for other actions locking its target %s...'
+            log.msg('%s is waiting for other actions locking additional objects (%s)...'
                     % (type(self).__name__, self._additional_keys), system='compute-action')
 
             yield dl  # wait for any actions locking our targets
@@ -161,8 +162,10 @@ class ComputeAction(Action, PreValidateHookMixin):
         d.addBoth(lambda r: self._release_and_fire_next_now())
         return d
 
-    def _action_log(self, cmd, msg):
-        log.msg(msg, system='compute-action')
+    def _action_log(self, cmd, msg, **kwargs):
+        if not kwargs.get('system'):
+            kwargs['system'] ='compute-action'
+        log.msg(msg, **kwargs)
         cmd.write('%s\n' % msg)
 
     @defer.inlineCallbacks
@@ -190,8 +193,8 @@ class ComputeAction(Action, PreValidateHookMixin):
                 if data is not None:
                     break
             else:
-                self._action_log(cmd, 'CONCURRENCY BUG: locked() returned True, but now it is false! %s'
-                                 % (self))
+                self._action_log(cmd,
+                                 'CONCURRENCY BUG: locked() returned True, but now it is False! %s' % (self))
                 raise KeyError(self.lock_keys)
 
             ld, lock_action = data
@@ -205,7 +208,8 @@ class ComputeAction(Action, PreValidateHookMixin):
                              % (self, self.context, lock_action))
 
             def execute_on_unlock(r):
-                self._action_log(cmd, '%s: %s is unlocked. Executing now' % (self, self.context))
+                self._action_log(cmd, '%s: %s is unlocked. Executing now' % (self, self.context),
+                                 logLevel=DEBUG)
                 # XXX: must be self.execute(), not self._execute(): next action must lock all its objects
                 self.execute(cmd, args)
 
@@ -334,8 +338,8 @@ class AllocateAction(ComputeAction):
         machines = yield get_matching_machines(vmsbackend)
 
         if len(machines) <= 0:
-            log.msg('Found no fitting machines. Action aborted.', system='action-allocate')
-            cmd.write('Found no fitting machines. Aborting.\n')
+            self._action_log('Found no fitting machines. Action aborted.', system='action-allocate',
+                             logLevel=WARNING)
             return
 
         @db.ro_transact
@@ -380,50 +384,39 @@ class DeployAction(VComputeAction):
 
     action('deploy')
 
-    def log_error(self, cmd, msg):
-        log.msg(msg, system='deploy')
-        cmd.write(str(msg + '\n'))
+    @db.ro_transact(proxy=False)
+    def get_parameters(self):
+        return {'template_name': self.context.template,
+                'hostname': self.context.hostname,
+                'vm_type': self.context.__parent__.backend,
+                'uuid': self.context.__name__,
+                'nameservers': db.remove_persistent_proxy(self.context.nameservers),
+                'autostart': self.context.autostart,
+                'ip_address': self.context.ipv4_address.split('/')[0],
+                'passwd': getattr(self.context, 'root_password', None),
+                'memory': self.context.memory}
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         template = yield db.get(self.context, 'template')
 
         if not template:
-            cmd.write("Cannot deploy %s because no template was specified\n" % self.context.hostname)
-            log.msg('Cannot deploy %s (%s) because no template was specified' %
-                    (self.context.hostname, self.context),
-                    system='deploy-action', logLevel=ERROR)
+            self._action_log(cmd, 'Cannot deploy %s (%s) because no template was specified' %
+                             (self.context.hostname, self.context), system='deploy', logLevel=ERROR)
             return
-
-        @db.ro_transact
-        def check_ip_address():
-            log.msg('IP address on deployed VM: %s' % (self.context.ipv4_address), system='deploy')
-            return self.context.ipv4_address not in (None, '0.0.0.0/32', '0.0.0.0')
 
         @db.ro_transact
         def allocate_ip_address():
             ippools = db.get_root()['oms_root']['ippools']
             ip = ippools.allocate()
             if ip is not None:
-                log.msg('Allocated IP: %s for %s' % (ip, self.context), system='deploy')
+                self._action_log(cmd, 'Allocated IP: %s for %s' % (ip, self.context), system='deploy')
                 ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                                   subject=self.context, owner=self.context.__owner__)
-                ulog.log('Allocated IP: %s', ip)
+                ulog.log('Allocated IP for %s: %s', self.context, ip)
                 return ip
             else:
                 raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')
-
-        @db.ro_transact(proxy=False)
-        def get_parameters():
-            return {'template_name': self.context.template,
-                    'hostname': self.context.hostname,
-                    'vm_type': self.context.__parent__.backend,
-                    'uuid': self.context.__name__,
-                    'nameservers': db.remove_persistent_proxy(self.context.nameservers),
-                    'autostart': self.context.autostart,
-                    'ip_address': self.context.ipv4_address.split('/')[0],
-                    'passwd': getattr(self.context, 'root_password', None),
-                    'memory': self.context.memory}
 
         @db.transact
         def cleanup_root_password():
@@ -441,7 +434,7 @@ class DeployAction(VComputeAction):
         try:
             yield db.transact(alsoProvides)(self.context, IDeploying)
 
-            vm_parameters = yield get_parameters()
+            vm_parameters = yield self.get_parameters()
 
             if vm_parameters['ip_address'] in (None, u'0.0.0.0/32', u'0.0.0.0', '0.0.0.0/32', '0.0.0.0'):
                 ipaddr = yield allocate_ip_address()
@@ -449,15 +442,14 @@ class DeployAction(VComputeAction):
 
             vms_backend = yield db.get(target, 'backend')
             if vms_backend == 'openvz':
-                log.msg('Deploying %s to %s: hinting CTID' % (self.context, target), system='deploy')
                 ctid = yield get_current_ctid()
                 if ctid is not None:
+                    log.msg('Deploying %s to %s: hinting CTID (%s)' % (self.context, target, ctid),
+                            system='deploy')
                     vm_parameters.update({'ctid': ctid + 1})
                 else:
-                    log.msg('Information about current global CTID is unavailable yet, will let it '
-                            'use a local value instead', system='action-deploy', logLevel=WARNING)
-                    cmd.write('Information about current global CTID is unavailable yet, '
-                              'will let it use a local value instead\n')
+                    self._action_log(cmd, 'Information about current global CTID is unavailable yet, '
+                                     'will let it use HN-local value instead')
 
             log.msg('Deploying %s to %s: issuing agent command' % (self.context, target), system='deploy')
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
@@ -484,12 +476,12 @@ class DeployAction(VComputeAction):
                     noLongerProvides(vm, IUndeployed)
                     alsoProvides(vm, IDeployed)
 
-                    log.msg('Deployment of "%s" is finished' % (vm_parameters['hostname']), system='deploy')
-                    cmd.write("Deployment finished. VM is deployed\n")
+                    self._action_log(cmd, 'Deployment of "%s" is finished' % (vm_parameters['hostname']),
+                                     system='deploy')
 
                 yield finalize_vm()
             else:
-                self.log_error('Deployment result: %s' % res)
+                self._action_log('Deployment result: %s' % res)
 
         finally:
             @db.transact
@@ -508,8 +500,8 @@ class DeployAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if not vmlist or (name not in map(lambda x: x['uuid'], vmlist)):
-            self.log_error(cmd, 'Failed deployment of %s to %s: '
-                           'VM not found in destination after deployment' % (name, destination_hostname))
+            self._action_log(cmd, 'Failed deployment of %s to %s: '
+                             'VM not found in destination after deployment' % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -563,10 +555,6 @@ class MigrateAction(VComputeAction):
                             help="Force offline migration, shutdown VM before migrating")
         return parser
 
-    def log_error(self, cmd, msg):
-        log.msg(msg, system='migrate')
-        cmd.write(str(msg + '\n'))
-
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
@@ -578,15 +566,15 @@ class MigrateAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name in map(lambda x: x['uuid'], vmlist)):
-            self.log_error(cmd,
-                           'Failed migration of %s to %s: destination already contains this VM'
-                           % (name, destination_hostname))
+            self._action_log(cmd,
+                             'Failed migration of %s to %s: destination already contains this VM'
+                             % (name, destination_hostname))
             defer.returnValue(False)
 
         if ((yield db.get(self.context, 'ctid')) in map(lambda x: x.get('ctid'), vmlist)):
-            self.log_error(cmd,
-                           'Failed migration of %s to %s: destination container ID conflict'
-                           % (name, destination_hostname))
+            self._action_log(cmd,
+                             'Failed migration of %s to %s: destination container ID conflict'
+                             % (name, destination_hostname))
             defer.renderValue(False)
 
         defer.returnValue(True)
@@ -596,8 +584,8 @@ class MigrateAction(VComputeAction):
         vmlist = yield self._get_vmlist(destination_vms)
 
         if (name not in map(lambda x: x['uuid'], vmlist)):
-            self.log_error(cmd, 'Failed migration of %s to %s: VM not found in destination after migration'
-                           % (name, destination_hostname))
+            self._action_log(cmd, 'Failed migration of %s to %s: VM not found in destination after migration'
+                             % (name, destination_hostname))
             defer.returnValue(False)
 
         defer.returnValue(True)
@@ -673,8 +661,9 @@ class MigrateAction(VComputeAction):
                         log.msg('Model NOT moved: already moved by sync?', system='migrate')
                 yield mv_and_inherit()
         except OperationRemoteError as e:
-            self.log_error(cmd, 'Failed migration of %s to %s: remote error %s' % (
-                name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''))
+            self._action_log(cmd, 'Failed migration of %s to %s: remote error %s' % (
+                name, destination_hostname, '\n%s' % e.remote_tb if e.remote_tb else ''),
+                logLevel=ERROR, system='migrate')
 
 
 class InfoAction(VComputeAction):
@@ -694,7 +683,6 @@ class InfoAction(VComputeAction):
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
-            # TODO: not efficient, improve
             for vm in (yield submitter.submit(IListVMS)):
                 if vm['uuid'] == name:
                     max_key_len = max(len(key) for key in vm)
@@ -762,9 +750,10 @@ class StopAllVmsCmd(Cmd):
                 user_vms.append(c)
         return user_vms
 
+    @require_admins_only
     @defer.inlineCallbacks
     def execute(self, args):
-        log.msg('Stopping all VMs of "%s"...' % args.u)
+        log.msg('Stopping all VMs of "%s"...' % args.u, system='stopallvms')
 
         computes = yield self.get_computes(args)
         for c in computes:
@@ -772,3 +761,4 @@ class StopAllVmsCmd(Cmd):
             yield ShutdownComputeAction(c).execute(DetachedProtocol(), object())
 
         self.write("Stopping done. %s VMs stopped\n" % (len(computes)))
+        log.msg('Stopping done. %s VMs of "%s" stopped' % (len(computes), args.u), system='stopallvms')
