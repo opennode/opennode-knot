@@ -242,7 +242,9 @@ ACTIONS = {
     op.IUpdateVM: 'onode.vm_update_vm',
     op.IPing: 'test.ping',
     op.IAgentVersion: 'test.version',
-    op.IInstallPkg: 'pkg.install'
+    op.IInstallPkg: 'pkg.install',
+    op.IGetOwner: 'onode.vm_get_owner',
+    op.ISetOwner: 'onode.vm_set_owner'
 }
 
 
