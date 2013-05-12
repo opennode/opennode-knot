@@ -188,8 +188,8 @@ def handle_ownership_change(model, event):
         log.msg('%s owner changed from %s to %s: updating user statistics' %
                 (model, oldowner, newowner), system='ownership-change-event')
         try:
-            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, newowner)
-            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, oldowner)
+            for owner in (newowner, oldowner):
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
         except Exception:
             log.err(system='ownership-change-event')
             raise

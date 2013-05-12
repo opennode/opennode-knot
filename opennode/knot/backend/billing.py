@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from grokcore.component import context, implements, name, GlobalUtility
+from grokcore.component import implements, name, GlobalUtility
 from twisted.internet import defer
 from twisted.enterprise import adbapi
 from zope.interface import Interface
@@ -10,6 +10,7 @@ import sys
 
 from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.model.user import IUserStatisticsLogger
+from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.config import get_config
 from opennode.oms.model.model.hooks import IPreValidateHook
@@ -72,7 +73,6 @@ class SqlDBUserStatsLogger(GlobalUtility):
 
 class UserCreditChecker(GlobalUtility):
     implements(IPreValidateHook)
-    context(IVirtualCompute)
     name('user-credit-check')
 
     @defer.inlineCallbacks
@@ -123,7 +123,7 @@ class UserCreditChecker(GlobalUtility):
                      principal.id, billable_group, map(str, principal.groups))
 
     def applicable(self, context):
-        return IVirtualCompute.providedBy(context)
+        return IVirtualCompute.providedBy(context) or IVirtualizationContainer.providedBy(context)
 
 
 class ICreditCheckCall(Interface):
