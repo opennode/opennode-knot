@@ -99,6 +99,6 @@ class WhmcsCreditChecker(GlobalUtility):
             data = json.loads(data)
             if data.get('result') == 'error':
                 raise WHMCSAPIError('%s' % (data.get('message')))
-            defer.returnValue(data.get('credit'))
+            defer.returnValue(float(data.get('credit')))
 
         raise WHMCSAPIError('%s: %s' % (response.code, data))

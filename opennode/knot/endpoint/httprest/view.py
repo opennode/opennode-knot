@@ -76,7 +76,7 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
                 del data[k]
 
         if 'memory' in data:
-            data['memory'] = data['memory'] / 1024.0  # Memory sent by ONC is in GB, model keeps it in MB
+            data['memory'] = data['memory'] * 1024  # Memory sent by ONC is in GB, model keeps it in MB
 
         form = RawDataValidatingFactory(data, Compute, marker=IVirtualCompute)
 
