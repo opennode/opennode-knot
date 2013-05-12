@@ -2,8 +2,10 @@ from grokcore.component import context, baseclass
 from grokcore.component import implements
 from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
-from twisted.python import log, failure
+from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
+from zope.authentication.interfaces import IAuthentication
+from zope.component import getUtility
 
 import netaddr
 
@@ -225,9 +227,10 @@ class ComputeAction(Action, PreValidateHookMixin):
             yield self.add_log_event(cmd, msg)
 
         try:
-            d = self.validate_hook(cmd.protocol.interaction.participations[0].principal)
+            principal = cmd.protocol.interaction.participations[0].principal
+            owner = getUtility(IAuthentication).getPrincipal(self.context.__owner__)
+            d = defer.maybeDeferred(self.validate_hook, principal if principal.id != 'root' else owner)
         except Exception:
-            ld.errback(failure.Failure())
             ld.addErrback(cancel_action, cmd)
             self._release_and_fire_next_now()
             return ld
@@ -267,6 +270,7 @@ class VComputeAction(ComputeAction):
             yield submitter.submit(self.job, name)
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
+            raise
 
 
 class DiskspaceInvalidConfigError(KeyError):
@@ -315,7 +319,7 @@ class AllocateAction(ComputeAction):
                                     'Excluded from allocation',
                                     'Has less than %s MB memory' % self.context.memory_usage,
                                     'Not enough diskspace',
-                                    'Not eough cores',
+                                    'Not enough CPU cores',
                                     'Template is unavailable']
 
                 try:
@@ -414,7 +418,7 @@ class DeployAction(VComputeAction):
                 self._action_log(cmd, 'Allocated IP: %s for %s' % (ip, self.context), system='deploy')
                 ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                                   subject=self.context, owner=self.context.__owner__)
-                ulog.log('Allocated IP for %s: %s', self.context, ip)
+                ulog.log('Allocated IP for %s: %s' % (self.context, ip))
                 return ip
             else:
                 raise Exception('Could not allocate IP for the new compute: pools exhausted or undefined')

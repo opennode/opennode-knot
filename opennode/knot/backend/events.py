@@ -17,7 +17,6 @@ from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUpdateVM
 from opennode.knot.backend.operation import ISetOwner
-from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, IVirtualCompute
 from opennode.knot.model.compute import IDeployed
@@ -189,8 +188,8 @@ def handle_ownership_change(model, event):
         log.msg('%s owner changed from %s to %s: updating user statistics' %
                 (model, oldowner, newowner), system='ownership-change-event')
         try:
-            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, newowner)
-            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, oldowner)
+            for owner in (newowner, oldowner):
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
         except Exception:
             log.err(system='ownership-change-event')
             raise
