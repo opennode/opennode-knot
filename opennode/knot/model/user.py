@@ -71,7 +71,12 @@ class UserProfile(Model):
         return self._credit_timestamp
 
     def set_credit(self, value):
-        self._credit = value
+        if type(value) in (int, long):
+            self._credit = value
+        elif type(value) is float:
+            self._credit = int(value * 100)
+        else:
+            raise ValueError('credit must be integer or float!')
         self._credit_timestamp = datetime.now().isoformat()
 
     def get_credit(self):
@@ -80,7 +85,6 @@ class UserProfile(Model):
     credit = property(get_credit, set_credit)
 
     def has_credit(self):
-        ## TODO: make configurable
         return self.credit > 0
 
     def display_name(self):

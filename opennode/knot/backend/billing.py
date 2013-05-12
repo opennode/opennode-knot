@@ -113,6 +113,8 @@ class UserCreditChecker(GlobalUtility):
 
             @db.ro_transact()
             def check_credit(profile):
+                log.debug('Checking if user %s has credit (%s): %s (%s)',
+                          profile, profile.credit, profile.has_credit(), profile.credit > 0)
                 assert profile.has_credit(), ('User %s does not have enough credit' % principal.id)
 
             yield check_credit(profile)
