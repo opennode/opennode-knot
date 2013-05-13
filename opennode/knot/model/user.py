@@ -51,7 +51,7 @@ class UserProfile(Model):
     _credit_timestamp = None
     uid = None
 
-    def __init__(self, name, groups, credit=0, credit_timestamp='', uid=0):
+    def __init__(self, name, groups, credit=0, credit_timestamp='', uid=None):
         self.__name__ = name
         self.groups = groups
         self.credit = credit
