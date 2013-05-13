@@ -342,7 +342,7 @@ class AllocateAction(ComputeAction):
         machines = yield get_matching_machines(vmsbackend)
 
         if len(machines) <= 0:
-            self._action_log('Found no fitting machines. Action aborted.', system='action-allocate',
+            self._action_log(cmd, 'Found no fitting machines. Action aborted.', system='action-allocate',
                              logLevel=WARNING)
             return
 
@@ -486,7 +486,7 @@ class DeployAction(VComputeAction):
 
                 yield finalize_vm()
             else:
-                self._action_log('Deployment result: %s' % res)
+                self._action_log(cmd, 'Deployment result: %s' % res)
 
         finally:
             @db.transact
