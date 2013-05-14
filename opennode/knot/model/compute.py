@@ -371,6 +371,9 @@ class Compute(Container):
             return self._ipv4_address
         return unicode(addresses[0])
 
+    def __repr__(self):
+        return '<Compute %s>' % self.__name__
+
 
 class ComputeTags(ModelTags):
     context(Compute)
