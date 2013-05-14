@@ -70,8 +70,8 @@ def handle_compute_state_change_request(compute, event):
         compute.effective_state = event.modified['state']
 
     ulog = UserLogger()
-    ulog.log('Changed state of %s (%s): %s -> %s',
-             compute, (yield db.get(compute, '__owner__')), original, modified)
+    ulog.log('Changed state of %s (%s): %s -> %s' %
+             (compute, (yield db.get(compute, '__owner__')), original, modified))
 
     handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
                                        {'effective_state': compute.effective_state}))
