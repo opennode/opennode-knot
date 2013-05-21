@@ -60,8 +60,10 @@ class UserComputeStatisticsAggregator(GlobalUtility):
 
         for compute in user_computes:
             try:
-                user_stats['num_cores_total'] += compute.num_cores
-                user_stats['memory_total'] += compute.memory or 0
+                # only account for cores and RAM of the running VMs
+                if compute.effective_state == 'active':
+                    user_stats['num_cores_total'] += compute.num_cores
+                    user_stats['memory_total'] += compute.memory or 0
                 user_stats['diskspace_total'] += compute.diskspace.get(u'total') or 0
             except Exception:
                 log.error('Error collecting stats from %s', compute, exc_info=sys.exc_info())
