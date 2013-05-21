@@ -36,7 +36,6 @@ from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
-
 @subscribe(ICompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
@@ -69,9 +68,11 @@ def handle_compute_state_change_request(compute, event):
     else:
         compute.effective_state = event.modified['state']
 
+    owner = (yield db.get(compute, '__owner__'))
     ulog = UserLogger()
     ulog.log('Changed state of %s (%s): %s -> %s' %
              (compute, (yield db.get(compute, '__owner__')), original, modified))
+    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
 
     handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
                                        {'effective_state': compute.effective_state}))
