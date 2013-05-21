@@ -65,7 +65,8 @@ class SqlDBUserStatsLogger(GlobalUtility):
 
             yield self._db.runOperation(self.db_operation,
                                         (user, stats_data['timestamp'], stats_data['num_cores_total'],
-                                         stats_data['diskspace_total'], stats_data['memory_total'],
+                                         # OMS_USAGE db assumes GBs for memory while as OMS internally calculates in MBs
+                                         stats_data['diskspace_total'], stats_data['memory_total'] / 1024.0,
                                          stats_data['vm_count'], stats_data['credit']))
         except Exception:
             log.error('DB error', exc_info=sys.exc_info())
