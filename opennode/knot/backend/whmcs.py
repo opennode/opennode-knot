@@ -101,6 +101,6 @@ class WhmcsCreditChecker(GlobalUtility):
                 raise WHMCSAPIError('%s' % (data.get('message')))
             credit_balance_field = 'customfields%s' % get_config().getstring('whmcs', 'balance_limit', 2)
             credit_balance = float(data.get(credit_balance_field)) if credit_balance_field in data else 0
-            defer.returnValue(float(data.get('credit')), credit_balance)
+            defer.returnValue((float(data.get('credit')), credit_balance))
 
         raise WHMCSAPIError('%s: %s' % (response.code, data))
