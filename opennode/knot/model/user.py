@@ -33,6 +33,7 @@ class IUserProfile(Interface):
     name = schema.TextLine(title=u"Name", min_length=1)
     groups = schema.List(title=u"Groups", min_length=1)
     credit = schema.Int(title=u'Resource usage credit', required=False)
+    balance_limit = schema.Int(title=u'Limit of the negative credit', required=False, default=0)
     credit_timestamp = schema.TextLine(title=u'Last credit update',
                                        description=u'Timestamp of last credit recording',
                                        required=False)
@@ -43,18 +44,21 @@ class UserProfile(Model):
     permissions({'name': ('read', 'modify'),
                  'group': ('read', 'modify'),
                  'credit': ('read', 'modify'),
+                 'balance_limit': ('read', 'modify'),
                  'userid': ('read', 'modify')})
 
     __name__ = None
     groups = []
     _credit = 0
+    _balance_limit = 0
     _credit_timestamp = None
     uid = None
 
-    def __init__(self, name, groups, credit=0, credit_timestamp='', uid=None):
+    def __init__(self, name, groups, credit=0, credit_timestamp='', uid=None, balance_limit=0):
         self.__name__ = name
         self.groups = groups
         self.credit = credit
+        self.balance_limit = balance_limit
         self._credit_timestamp = credit_timestamp if credit_timestamp else self._credit_timestamp
         self.uid = uid
 
@@ -84,15 +88,30 @@ class UserProfile(Model):
 
     credit = property(get_credit, set_credit)
 
+    def set_balance_limit(self, value):
+        if type(value) in (int, long):
+            self._balance_limit = value
+        elif type(value) is float:
+            self._balance_limit = int(value * 100)
+        else:
+            raise ValueError('balance limit must be integer or float!')
+
+    def get_balance_limit(self):
+        return self._balance_limit
+
+    balance_limit = property(get_balance_limit, set_balance_limit)
+
     def has_credit(self):
-        return self.credit > 0
+        return self.credit > 0 - self.balance_limit
 
     def display_name(self):
         return self.name
 
     def __repr__(self):
-        return "UserProfile('%s', %s, %s, '%s', %s)" % (self.__name__, self.groups, self.credit,
-                                                        self.credit_timestamp, self.uid)
+        return "UserProfile('%s', %s, %s, %s, '%s', %s)" % (self.__name__, self.groups,
+                                                            self.credit, self.balance_limit,
+                                                            self.credit_timestamp, self.uid)
+
 
 class IHome(Interface):
     """ User profile container """
