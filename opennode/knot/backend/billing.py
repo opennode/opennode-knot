@@ -93,10 +93,11 @@ class UserCreditChecker(GlobalUtility):
                 raise
 
         @db.transact
-        def update_credit(credit):
+        def update_credit(credit, balance_limit):
             profile = traverse1('/home/%s' % principal.id)
             profile.credit = credit
-            log.debug('Updated credit of %s: %s', profile, profile.credit)
+            profile.balance_limit = balance_limit
+            log.debug('Updated credit of %s: %s, %s', profile, profile.credit, profile.balance_limit)
             return profile
 
         if billable_group in map(str, principal.groups):
@@ -106,15 +107,15 @@ class UserCreditChecker(GlobalUtility):
             if need_update:
                 try:
                     check_call = getUtility(ICreditCheckCall)
-                    credit = yield defer.maybeDeferred(check_call.get_credit, uid)
-                    profile = yield update_credit(credit)
+                    credit, balance_limit = yield defer.maybeDeferred(check_call.get_credit, uid)
+                    profile = yield update_credit(credit, balance_limit)
                 except Exception as e:
                     log.error('Error updating credit: %s', e, exc_info=sys.exc_info())
 
             @db.ro_transact()
             def check_credit(profile):
                 log.debug('Checking if user %s has credit (%s): %s (%s)',
-                          profile, profile.credit, profile.has_credit(), profile.credit > 0)
+                          profile, profile.credit, profile.has_credit(), profile.credit > 0 - profile.balance_limit)
                 assert profile.has_credit(), ('User %s does not have enough credit' % principal.id)
 
             yield check_credit(profile)
