@@ -53,6 +53,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 def dict_to_kwargs(arg):
     return ['%s=%s' % (k, v) for k, v in arg.iteritems()]
 
+
 class SimpleSaltExecutor(object):
     """ Simple executor implementation.
     NOTE: Ignores hard_timeout configuration parameter and obsoletes other parameters under salt section
