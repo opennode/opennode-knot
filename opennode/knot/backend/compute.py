@@ -399,7 +399,7 @@ class DeployAction(VComputeAction):
                 'ip_address': self.context.ipv4_address.split('/')[0],
                 'passwd': getattr(self.context, 'root_password', None),
                 'start_vm': getattr(self.context, 'start_vm', False),
-                'memory': self.context.memory}
+                'memory': self.context.memory / 1024.0 }
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
