@@ -15,7 +15,6 @@ from opennode.knot.backend import operation as op
 from opennode.knot.backend import subprocess
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
-from opennode.oms.security.authentication import async_sudo
 from opennode.oms.zodb import db
 
 
@@ -209,7 +208,7 @@ class SaltBase(Adapter):
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
         executor_class = self.__executor__
-        hostname = yield async_sudo(op.IMinion(self.context).hostname)()
+        hostname = yield op.IMinion(self.context).hostname()
         interaction = db.context(self.context).get('interaction', None)
         executor = executor_class(hostname, self.action, interaction, timeout=self.timeout)
         res = yield executor.run(*args, **kwargs)
