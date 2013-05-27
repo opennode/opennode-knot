@@ -15,7 +15,6 @@ from opennode.knot.backend import operation as op
 from opennode.knot.backend import subprocess
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
-from opennode.oms.security.authentication import async_sudo
 from opennode.oms.zodb import db
 
 
