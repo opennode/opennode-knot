@@ -398,7 +398,8 @@ class DeployAction(VComputeAction):
                 'hostname': self.context.hostname,
                 'vm_type': self.context.__parent__.backend,
                 'uuid': self.context.__name__,
-                'nameservers': db.remove_persistent_proxy(self.context.nameservers),
+                # XXX a hack as TUI atm doesn't support multiple nameserver decoding
+                'nameservers': db.remove_persistent_proxy(self.context.nameservers)[0],
                 'autostart': self.context.autostart,
                 'ip_address': self.context.ipv4_address.split('/')[0],
                 'passwd': getattr(self.context, 'root_password', None),
