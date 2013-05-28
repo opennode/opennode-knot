@@ -398,13 +398,12 @@ class DeployAction(VComputeAction):
                 'hostname': self.context.hostname,
                 'vm_type': self.context.__parent__.backend,
                 'uuid': self.context.__name__,
-                # XXX a hack as TUI atm doesn't support multiple nameserver decoding
-                'nameservers': db.remove_persistent_proxy(self.context.nameservers)[0],
+                'nameservers': db.remove_persistent_proxy(self.context.nameservers),
                 'autostart': self.context.autostart,
                 'ip_address': self.context.ipv4_address.split('/')[0],
                 'passwd': getattr(self.context, 'root_password', None),
                 'start_vm': getattr(self.context, 'start_vm', False),
-                'memory': self.context.memory / 1024.0 }
+                'memory': self.context.memory / 1024.0}
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
