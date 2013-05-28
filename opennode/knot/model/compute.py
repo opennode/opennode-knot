@@ -197,7 +197,7 @@ class Compute(Container):
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
-    nameservers = ['8.8.8.8']
+    nameservers = [u'8.8.8.8']
     dns_domains = []
 
     architecture = (u'x86_64', u'linux', u'centos')
