@@ -371,6 +371,10 @@ def mv_compute_model(context_path, target_path):
         vm = traverse1(context_path)
         destination = traverse1(target_path)
 
+        if vm is None or vm.__parent__ is None or destination is None:
+            log.msg('Source or destination not found: %s (%s) -> %s (%s)' %
+                    (context_path, vm, target_path, destination), system='deploy')
+
         if vm.__parent__.__parent__ != destination.__parent__:
             destination.add(vm)
             log.msg('Model moved.', system='deploy')
