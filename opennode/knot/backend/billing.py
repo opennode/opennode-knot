@@ -59,17 +59,23 @@ class SqlDBUserStatsLogger(GlobalUtility):
 
     @defer.inlineCallbacks
     def log(self, user, stats_data):
-        try:
-            if not hasattr(self, '_db'):
-                yield self.config()
+        fail = True
+        retries = 5
+        while fail and retries > 0:
+            retries -= 1
+            try:
+                if not hasattr(self, '_db'):
+                    yield self.config()
 
-            yield self._db.runOperation(self.db_operation,
-                                        (user, stats_data['timestamp'], stats_data['num_cores_total'],
-                                         # OMS_USAGE db assumes GBs for memory while as OMS internally calculates in MBs
-                                         stats_data['diskspace_total'], stats_data['memory_total'] / 1024.0,
-                                         stats_data['vm_count'], stats_data['credit']))
-        except Exception:
-            log.error('DB error', exc_info=sys.exc_info())
+                yield self._db.runOperation(self.db_operation,
+                                            (user, stats_data['timestamp'], stats_data['num_cores_total'],
+                                             # OMS_USAGE db assumes GBs for memory while as OMS internally calculates in MBs
+                                             stats_data['diskspace_total'], stats_data['memory_total'] / 1024.0,
+                                             stats_data['vm_count'], stats_data['credit']))
+                fail = False
+            except Exception:
+                log.error('DB error', exc_info=sys.exc_info())
+                fail = True
 
 
 class UserCreditChecker(GlobalUtility):
