@@ -113,6 +113,9 @@ def virtual_compute_action(action, path, event):
     @db.transact
     def run():
         model = traverse1(path)
+        if model is None:
+            log.msg('Model is not found while performing %s for %s: %s' % (action, event, path))
+            return
         d = action(model).execute(DetachedProtocol(), object())
         d.addErrback(log.err)
 
