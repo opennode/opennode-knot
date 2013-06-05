@@ -4,6 +4,7 @@ import netaddr
 
 from grokcore.component import context
 from zope import schema
+from zope.annotation.interfaces import IAttributeAnnotatable
 from zope.schema.interfaces import IFromUnicode, IInt
 from zope.interface import Interface, implements, implementer
 
@@ -164,10 +165,21 @@ class Networks(Container):
 
 class IPAddressStorable(netaddr.IPAddress):
 
+    implements(IAttributeAnnotatable)
+
     def __init__(self, parent, *args, **kw):
         super(IPAddressStorable, self).__init__(*args, **kw)
-        self.__name__ = str(self)
         self.__parent__ = parent
+
+    @property
+    def __name__(self):
+        return str(self)
+
+    @property
+    def __owner__(self):
+        return None
+
+    inherit_permissions = True
 
 
 @implementer(IFromUnicode, IInt)
