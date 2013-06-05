@@ -24,6 +24,7 @@ from opennode.knot.model.hangar import IHangar
 from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
+from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.model.events import IModelModifiedEvent
@@ -128,6 +129,11 @@ def allocate_virtual_compute_from_hangar(model, event):
         return
 
     if IDeployed.providedBy(model):
+        return
+
+    auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
+
+    if not auto_allocate:
         return
 
     if IHangar.providedBy(model.__parent__.__parent__):
