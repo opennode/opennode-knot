@@ -132,3 +132,11 @@ class IAgentVersion(IJob):
 
 class IInstallPkg(IJob):
     """ Install a package using system package manager (e.g. yum) """
+
+
+class IGetOwner(IJob):
+    """ Pull ownership information from the VM config """
+
+
+class ISetOwner(IJob):
+    """ Push ownership information to the VM config """

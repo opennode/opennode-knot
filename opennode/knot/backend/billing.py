@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from grokcore.component import context, implements, name, GlobalUtility
+from grokcore.component import implements, name, GlobalUtility
 from twisted.internet import defer
 from twisted.enterprise import adbapi
 from zope.interface import Interface
@@ -10,6 +10,7 @@ import sys
 
 from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.model.user import IUserStatisticsLogger
+from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.config import get_config
 from opennode.oms.model.model.hooks import IPreValidateHook
@@ -58,21 +59,31 @@ class SqlDBUserStatsLogger(GlobalUtility):
 
     @defer.inlineCallbacks
     def log(self, user, stats_data):
-        try:
-            if not hasattr(self, '_db'):
-                yield self.config()
+        fail = True
+        retries = 1
+        while fail and retries > 0:
+            retries -= 1
+            try:
+                if not hasattr(self, '_db'):
+                    yield self.config()
 
-            yield self._db.runOperation(self.db_operation,
-                                        (user, stats_data['timestamp'], stats_data['num_cores_total'],
-                                         stats_data['diskspace_total'], stats_data['memory_total'],
-                                         stats_data['vm_count'], stats_data['credit']))
-        except Exception:
-            log.error('DB error', exc_info=sys.exc_info())
+                yield self._db.runOperation(self.db_operation,
+                                            (user, stats_data['timestamp'],
+                                             stats_data['num_cores_total'],
+                                             # OMS_USAGE db assumes GBs for
+                                             # memory while as OMS internally calculates in MBs
+                                             stats_data['diskspace_total'],
+                                             stats_data['memory_total'] / 1024.0,
+                                             stats_data['vm_count'],
+                                             stats_data['credit']))
+                fail = False
+            except Exception:
+                log.error('DB error', exc_info=sys.exc_info())
+                fail = True
 
 
 class UserCreditChecker(GlobalUtility):
     implements(IPreValidateHook)
-    context(IVirtualCompute)
     name('user-credit-check')
 
     @defer.inlineCallbacks
@@ -93,10 +104,11 @@ class UserCreditChecker(GlobalUtility):
                 raise
 
         @db.transact
-        def update_credit(credit):
+        def update_credit(credit, balance_limit):
             profile = traverse1('/home/%s' % principal.id)
             profile.credit = credit
-            log.debug('Updated credit of %s: %s', profile, profile.credit)
+            profile.balance_limit = balance_limit
+            log.debug('Updated credit of %s: %s, %s', profile, profile.credit, profile.balance_limit)
             return profile
 
         if billable_group in map(str, principal.groups):
@@ -106,22 +118,24 @@ class UserCreditChecker(GlobalUtility):
             if need_update:
                 try:
                     check_call = getUtility(ICreditCheckCall)
-                    credit = yield defer.maybeDeferred(check_call.get_credit, uid)
-                    profile = yield update_credit(credit)
+                    credit, balance_limit = yield defer.maybeDeferred(check_call.get_credit, uid)
+                    profile = yield update_credit(credit, balance_limit)
                 except Exception as e:
                     log.error('Error updating credit: %s', e, exc_info=sys.exc_info())
 
             @db.ro_transact()
             def check_credit(profile):
+                log.debug('Checking if user %s has credit (%s): %s (%s)',
+                          profile, profile.credit, profile.has_credit(), profile.credit > 0 - profile.balance_limit)
                 assert profile.has_credit(), ('User %s does not have enough credit' % principal.id)
 
             yield check_credit(profile)
         else:
-            log.info('User is not a member of a billable group "%s": %s. Not updating credit.',
-                     billable_group, map(str, principal.groups))
+            log.info('User "%s" is not a member of a billable group "%s": %s. Not updating credit.',
+                     principal.id, billable_group, map(str, principal.groups))
 
     def applicable(self, context):
-        return IVirtualCompute.providedBy(context)
+        return IVirtualCompute.providedBy(context) or IVirtualizationContainer.providedBy(context)
 
 
 class ICreditCheckCall(Interface):

@@ -197,7 +197,7 @@ class Compute(Container):
 
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
-    nameservers = []
+    nameservers = [u'8.8.8.8']
     dns_domains = []
 
     architecture = (u'x86_64', u'linux', u'centos')
@@ -297,7 +297,7 @@ class Compute(Container):
         return getattr(self, '_ctid', None)
 
     def set_ctid(self, value):
-        self._ctid = int(value)
+        self._ctid = int(value) if value is not None else None
 
     ctid = property(get_ctid, set_ctid)
 
@@ -370,6 +370,9 @@ class Compute(Container):
         if not addresses:
             return self._ipv4_address
         return unicode(addresses[0])
+
+    def __repr__(self):
+        return '<Compute %s>' % self.__name__
 
 
 class ComputeTags(ModelTags):

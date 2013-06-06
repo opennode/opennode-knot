@@ -50,6 +50,10 @@ class SaltMultiprocessingClient(multiprocessing.Process):
             self.q.put(cPickle.dumps({'_error': e}))
 
 
+def dict_to_kwargs(arg):
+    return ['%s=%s' % (k, v) for k, v in arg.iteritems()]
+
+
 class SimpleSaltExecutor(object):
     """ Simple executor implementation.
     NOTE: Ignores hard_timeout configuration parameter and obsoletes other parameters under salt section
@@ -72,14 +76,18 @@ class SimpleSaltExecutor(object):
         if killhook:
             killhook.addCallback(lambda r: log.msg('"%s" to "%s" aborted' % (self.action, self.hostname)))
 
+        timeout = ('--timeout=%s' % self.timeout) if self.timeout is not None else None
+
+        if args:
+            args = list(reduce(lambda a, b: a + b,
+                               map(lambda a:
+                                   (dict_to_kwargs(a) if type(a) is dict else ['"%s"' % str(a)]), args)))
+        else:
+            args = []
+
         output = yield subprocess.async_check_output(
             filter(None, (cmd.split(' ') +
-                          ['--no-color', '--out=json',
-                           ('--timeout=%s' % self.timeout) if self.timeout is not None else None,
-                           self.hostname, self.action] +
-                          map(lambda s: '"%s"' % s,
-                              map(lambda a: json.dumps(a) if type(a) not in (str, unicode) else str(a),
-                                  self.args)))),
+                          ['--no-color', '--out=json', timeout, self.hostname, self.action] + args)),
             killhook=killhook)
 
         log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
@@ -89,7 +97,6 @@ class SimpleSaltExecutor(object):
         defer.returnValue(rdata)
 
     def _handle_errors(self, data):
-
         if type(data) is not dict:
             raise TypeError('data received from salt is not dict: %s (%s)' % (type(data).__name__, data))
 
@@ -99,14 +106,17 @@ class SimpleSaltExecutor(object):
             raise op.OperationRemoteError(msg='Remote "%s" returned empty response to "%s"' %
                                           (hostkey, self.action))
 
+        def error_conditions(data):
+            yield data.strip().endswith('is not available.')
+            yield data.strip().startswith('Missing arguments')
+
         if type(data[hostkey]) in (str, unicode) and str(data[hostkey]).startswith('Traceback'):
             raise op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey, self.action),
                                           remote_tb=data[hostkey])
 
-        if type(data[hostkey]) in (str, unicode) and str(data[hostkey]).endswith('is not available.'):
-            # TODO: mark the host as unmanageable (agent modules are missing)
-            raise op.OperationRemoteError(msg="Remote error on %s: module (%s) unavailable" %
-                                          (hostkey, self.action))
+        if type(data[hostkey]) in (str, unicode) and any(error_conditions(str(data[hostkey]))):
+            raise op.OperationRemoteError(msg="Remote error on %s (%s): %s" %
+                                          (hostkey, self.action, str(data[hostkey])))
 
         return data[hostkey]
 
@@ -233,7 +243,9 @@ ACTIONS = {
     op.IUpdateVM: 'onode.vm_update_vm',
     op.IPing: 'test.ping',
     op.IAgentVersion: 'test.version',
-    op.IInstallPkg: 'pkg.install'
+    op.IInstallPkg: 'pkg.install',
+    op.IGetOwner: 'onode.vm_get_owner',
+    op.ISetOwner: 'onode.vm_set_owner'
 }
 
 

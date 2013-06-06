@@ -8,6 +8,7 @@ from opennode.knot.model.compute import ICompute, IVirtualCompute
 
 from opennode.oms.endpoint.ssh.cmd.base import Cmd
 from opennode.oms.endpoint.ssh.cmd.directives import command
+from opennode.oms.endpoint.ssh.cmd.security import require_admins_only
 from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -43,8 +44,10 @@ class InstallSaltCmd(Cmd):
 
     @db.ro_transact(proxy=False)
     def subject(self, args):
-        return tuple(self.traverse(path) for path in args.paths)
+        return tuple(machine for machine in db.get_root()['oms_root']['machines']
+                     if ICompute.providedBy(machine) and not IVirtualCompute.providedBy(machine))
 
+    @require_admins_only
     @db.transact
     def execute(self, args):
         for machine in db.get_root()['oms_root']['machines']:
