@@ -414,7 +414,7 @@ class DeployAction(VComputeAction):
                              (self.context.hostname, self.context), system='deploy', logLevel=ERROR)
             return
 
-        @db.ro_transact
+        @db.transact
         def allocate_ip_address():
             ippools = db.get_root()['oms_root']['ippools']
             ip = ippools.allocate()
@@ -441,6 +441,11 @@ class DeployAction(VComputeAction):
             return max([follow_symlinks(symlink).ctid for symlink in ctidlist.listcontent()] + [100])
 
         try:
+            if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
+                log.msg('Attempt to deploy a compute that is already deployed: %s' % (self.context),
+                        system='deploy')
+                return
+
             yield db.transact(alsoProvides)(self.context, IDeploying)
 
             vm_parameters = yield self.get_parameters()
@@ -448,6 +453,7 @@ class DeployAction(VComputeAction):
             if vm_parameters['ip_address'] in (None, u'0.0.0.0/32', u'0.0.0.0', '0.0.0.0/32', '0.0.0.0'):
                 ipaddr = yield allocate_ip_address()
                 vm_parameters.update({'ip_address': str(ipaddr)})
+                # TODO: set IP to the model
 
             vms_backend = yield db.get(target, 'backend')
             if vms_backend == 'openvz':
