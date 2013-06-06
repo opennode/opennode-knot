@@ -60,7 +60,7 @@ class SqlDBUserStatsLogger(GlobalUtility):
     @defer.inlineCallbacks
     def log(self, user, stats_data):
         fail = True
-        retries = 5
+        retries = 1
         while fail and retries > 0:
             retries -= 1
             try:
