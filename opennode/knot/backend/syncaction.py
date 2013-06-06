@@ -350,16 +350,22 @@ class SyncAction(ComputeAction):
             return
 
         url_to_backend_type = dict((v, k) for k, v in backends.items())
-        backend_type = url_to_backend_type[vms_types[0]]
 
         @db.transact
         def add_container(backend_type):
+            log.msg('Adding backend %s' % backend_type, system='sync')
             vms = VirtualizationContainer(unicode(backend_type))
             self.context.add(vms)
             if not self.context['vms']:
                 self.context.add(Symlink('vms', self.context[vms.__name__]))
 
-        yield add_container(backend_type)
+        for vms_type in vms_types:
+            backend_type = url_to_backend_type.get(vms_type)
+            if not backend_type:
+                log.msg('Unrecognized backend: %s. Skipping' % vms_type, system='sync')
+                continue
+
+            yield add_container(backend_type)
 
     def sync_vms(self):
         vms = follow_symlinks(self.context['vms'])
