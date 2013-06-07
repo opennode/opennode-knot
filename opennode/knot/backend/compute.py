@@ -293,6 +293,10 @@ class AllocateAction(ComputeAction):
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
 
+        if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
+            log.msg('Attempt to allocate a deployed compute: %s' % (self.context), system='deploy')
+            return
+
         @db.ro_transact
         def get_matching_machines(container):
             all_machines = db.get_root()['oms_root']['machines']
@@ -414,6 +418,10 @@ class DeployAction(VComputeAction):
                              (self.context.hostname, self.context), system='deploy', logLevel=ERROR)
             return
 
+        if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
+            log.msg('Attempt to deploy a deployed compute: %s' % (self.context), system='deploy')
+            return
+
         @db.transact
         def allocate_ip_address():
             ippools = db.get_root()['oms_root']['ippools']
@@ -441,11 +449,6 @@ class DeployAction(VComputeAction):
             return max([follow_symlinks(symlink).ctid for symlink in ctidlist.listcontent()] + [100])
 
         try:
-            if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
-                log.msg('Attempt to deploy a compute that is already deployed: %s' % (self.context),
-                        system='deploy')
-                return
-
             yield db.transact(alsoProvides)(self.context, IDeploying)
 
             vm_parameters = yield self.get_parameters()
