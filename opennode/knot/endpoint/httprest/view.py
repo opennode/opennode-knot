@@ -1,4 +1,5 @@
 import json
+import logging
 
 from grokcore.component import context
 from twisted.web.server import NOT_DONE_YET
@@ -122,9 +123,16 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
                                       'errors': [{'id': 'vm', 'msg': str(f.value)}]}))
             request.finish()
 
+        @db.data_integrity_validator
+        def validate_db(r, compute):
+            log = logging.getLogger('opennode.oms.zodb.db')
+            log.debug('integrity: %s == %s', compute.__name__, self.context._items)
+            assert compute.__name__ in self.context._items
+
         d = self.validate_hook(principal)
         d.addCallback(handle_success, compute, principal)
         d.addErrback(handle_pre_execute_hook_error, compute, principal)
+        d.addCallback(validate_db, compute)
         return NOT_DONE_YET
 
     def add_log_event(self, principal, msg, *args, **kwargs):
