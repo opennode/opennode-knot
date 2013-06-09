@@ -67,6 +67,12 @@ class SqlDBUserStatsLogger(GlobalUtility):
                 if not hasattr(self, '_db'):
                     yield self.config()
 
+                logdata = {'user': user}
+                logdata.update(stats_data)
+
+                log.debug('writing stats: %(user)s numcores: %(num_cores_total)s disk: %(diskspace_total)s '
+                          'memory: %(memory_total)s vmcount: %(vm_count)s credit: %(credit)s', logdata)
+
                 yield self._db.runOperation(self.db_operation,
                                             (user, stats_data['timestamp'],
                                              stats_data['num_cores_total'],
