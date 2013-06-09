@@ -126,7 +126,7 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
         @db.data_integrity_validator
         def validate_db(r, compute):
             log = logging.getLogger('opennode.oms.zodb.db')
-            log.debug('integrity: %s == %s', compute.__name__, self.context._items)
+            log.debug('integrity: %s == %s', compute.__name__, list(self.context._items))
             assert compute.__name__ in self.context._items
 
         d = self.validate_hook(principal)
