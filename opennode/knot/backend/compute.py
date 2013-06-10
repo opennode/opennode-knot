@@ -189,7 +189,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         defer.returnValue(f)
 
     def handle_action_done(self, r, cmd):
-        return self.add_log_event(cmd, '%s(%s) finished' % (self, self.context))
+        return self.add_log_event(cmd, '%s finished' % (self))
 
     def execute(self, cmd, args):
         if self.locked():
@@ -213,7 +213,7 @@ class ComputeAction(Action, PreValidateHookMixin):
                              % (self, self.lock_keys, lock_action))
 
             def execute_on_unlock(r):
-                self._action_log(cmd, '%s: %s is unlocked. Executing now' % (self, self.context),
+                self._action_log(cmd, '%s: %s are unlocked. Executing now' % (self, self.lock_keys),
                                  logLevel=DEBUG)
                 # XXX: must be self.execute(), not self._execute(): next action must lock all its objects
                 self.execute(cmd, args)
