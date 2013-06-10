@@ -121,13 +121,13 @@ def virtual_compute_action(action, path, event):
         d.addErrback(log.err)
 
     @db.data_integrity_validator
-    def validate_db_event(r, compute):
-        computes = db.get_root()['oms_root']['computes']
-        db.log.debug('integrity: %s == %s', compute.__name__, list(computes._items))
-        assert compute.__name__ in computes._items
+    def validate_db_event(r, path):
+        compute = traverse1(path)
+        db.log.debug('integrity: %s => %s (%s)', path, compute)
+        assert compute is not None
 
     d = run()
-    d.addCallback(validate_db_event)
+    d.addCallback(validate_db_event, path)
     d.addErrback(log.err)
 
 
