@@ -92,6 +92,9 @@ class ComputeAction(Action, PreValidateHookMixin):
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
+    def __str__(self):
+        return '%s(%s)' % (type(self).__name__, self.context)
+
     @property
     def lock_keys(self):
         """ Returns list of object-related 'hashes' to lock against. Overload in derived classes
@@ -103,7 +106,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     def acquire(self):
         d = defer.Deferred()
-        log.msg('%s acquiring locks for: %s' % (type(self).__name__, self.lock_keys),
+        log.msg('%s acquiring locks for: %s' % (self, self.lock_keys),
                 system='compute-action', logLevel=DEBUG)
         self._used_lock_keys = []
         for key in self.lock_keys:
@@ -119,7 +122,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         d = self._lock_registry[self.lock_keys[0]][0]
         deferred_list = []
 
-        log.msg('%s adding locks for: %s' % (type(self).__name__, self.lock_keys),
+        log.msg('%s adding locks for: %s' % (self, self.lock_keys),
                 system='compute-action', logLevel=DEBUG)
 
         for key in self.lock_keys:
@@ -129,7 +132,7 @@ class ComputeAction(Action, PreValidateHookMixin):
             elif self._lock_registry[key][0] is not d:
                 dother, actionother = self._lock_registry[key]
                 log.msg('Another action %s locked %s... %s will wait until it finishes'
-                    % (actionother, key, type(self).__name__), system='compute-action')
+                    % (actionother, key, self), system='compute-action')
                 deferred_list.append(dother)
 
         if len(deferred_list) > 0:
@@ -144,12 +147,12 @@ class ComputeAction(Action, PreValidateHookMixin):
                 break
 
             log.msg('%s is waiting for other actions locking additional objects (%s)...'
-                    % (type(self).__name__, self._additional_keys), system='compute-action')
+                    % (self, self._additional_keys), system='compute-action')
 
             yield dl  # wait for any actions locking our targets
 
             log.msg('%s will attempt to reacquire locks again (%s)...'
-                    % (type(self).__name__, self._additional_keys), system='compute-action')
+                    % (self, self._additional_keys), system='compute-action')
 
     def _release_and_fire_next_now(self):
         ld = None
@@ -180,13 +183,13 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_error(self, f, cmd):
-        msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, type(self).__name__)
+        msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, self)
         yield self.add_log_event(cmd, msg)
         log.err(f, system='compute-action')
         defer.returnValue(f)
 
     def handle_action_done(self, r, cmd):
-        return self.add_log_event(cmd, '%s(%s) finished' % (type(self).__name__, self.context))
+        return self.add_log_event(cmd, '%s(%s) finished' % (self, self.context))
 
     def execute(self, cmd, args):
         if self.locked():
@@ -223,7 +226,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         @defer.inlineCallbacks
         def cancel_action(e, cmd):
             e.trap(Exception)
-            msg = 'Canceled executing "%s" due to validate_hook failure' % type(self).__name__
+            msg = 'Canceled executing "%s" due to validate_hook failure' % self
             yield self.add_log_event(cmd, msg)
 
         try:
