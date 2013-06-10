@@ -51,7 +51,7 @@ class SqlDBUserStatsLogger(GlobalUtility):
                                                    'VALUES (%s, %s, %s, %s, %s, %s, %s)')
 
         self._db = adbapi.ConnectionPool(self.db_backend, *self.db_conn_param, **self.db_conn_kw)
-        self._db.noisy = get_config().getbool('debug', 'stats_debug', False)
+        self._db.noisy = get_config().getboolean('debug', 'stats_debug', False)
 
         if get_config().getstring('stats', 'db_init', None):
             return self.initdb()
