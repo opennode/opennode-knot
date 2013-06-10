@@ -120,7 +120,15 @@ def virtual_compute_action(action, path, event):
         d = action(model).execute(DetachedProtocol(), object())
         d.addErrback(log.err)
 
-    run()
+    @db.data_integrity_validator
+    def validate_db(r, compute):
+        computes = db.get_root()['oms_root']['computes']
+        db.log.debug('integrity: %s == %s', compute.__name__, list(computes._items))
+        assert compute.__name__ in computes._items
+
+    d = run()
+    d.addCallback(validate_db)
+    d.addErrback(log.err)
 
 
 @subscribe(IVirtualCompute, IModelCreatedEvent)
