@@ -204,13 +204,13 @@ class ComputeAction(Action, PreValidateHookMixin):
 
             ld, lock_action = data
 
+            msg = '%s: one of %s is locked by %s.' % (self, self.lock_keys, lock_action)
+
             if self._do_not_enqueue:
-                self._action_log(cmd, '%s: one of %s is locked by %s. Skipping due to no-enqueue feature of '
-                                 'the action.' % (self, self.lock_keys, lock_action))
+                self._action_log(cmd, msg + ' Skipping due to no-enqueue feature')
                 return ld
 
-            self._action_log(cmd, '%s: one of %s is locked by %s. Scheduling to run after finish of previous action'
-                             % (self, self.lock_keys, lock_action))
+            self._action_log(cmd, msg + ' Scheduling to run after finish of previous action')
 
             def execute_on_unlock(r):
                 self._action_log(cmd, '%s: %s are unlocked. Executing now' % (self, self.lock_keys),
