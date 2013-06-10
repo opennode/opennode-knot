@@ -7,6 +7,7 @@ from zope.authentication.interfaces import IAuthentication
 from zope.component import handle
 from zope.component import getUtility
 
+import logging
 import netaddr
 import transaction
 
@@ -123,7 +124,8 @@ def virtual_compute_action(action, path, event):
     @db.data_integrity_validator
     def validate_db_event(r, path):
         compute = traverse1(path)
-        db.log.debug('integrity: %s => %s', path, compute)
+        dblog = logging.getLogger('opennode.oms.zodb.db')
+        dblog.debug('integrity: %s => %s', path, compute)
         assert compute is not None
 
     d = run()
