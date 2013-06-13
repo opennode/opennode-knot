@@ -511,7 +511,7 @@ class DeployAction(VComputeAction):
                     dblog.info('integrity: Compute not in source: %s. %s has compute: %s\n%s', s is None,
                                dpath, name in dest._items, list(dest._items))
 
-                yield validate_db_post_deploy(canonical_paths[0])
+                yield validate_db_post_deploy(*canonical_paths)
 
             else:
                 self._action_log(cmd, 'Deployment result: %s' % res)
