@@ -7,6 +7,7 @@ from uuid import uuid5, NAMESPACE_DNS
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 
+import logging
 import netaddr
 
 from opennode.knot.backend.operation import IDeployVM
@@ -497,11 +498,21 @@ class DeployAction(VComputeAction):
                     mv_compute_model(*canonical_paths)
                     noLongerProvides(vm, IUndeployed)
                     alsoProvides(vm, IDeployed)
-
-                    self._action_log(cmd, 'Deployment of "%s" is finished' % (vm_parameters['hostname']),
-                                     system='deploy')
+                    self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
+                                     % (vm_parameters['hostname'], self.context.__name__), system='deploy')
 
                 yield finalize_vm()
+
+                @db.data_integrity_validator
+                def validate_db_post_deploy(spath, dpath):
+                    dest = traverse1(dpath)
+                    s = traverse1(spath)
+                    dblog = logging.getLogger('opennode.oms.zodb.db')
+                    dblog.info('integrity: Compute not in source: %s. %s has compute: %s\n%s', s is None,
+                               dpath, name in dest._items, list(dest._items))
+
+                yield validate_db_post_deploy(canonical_paths[0])
+
             else:
                 self._action_log(cmd, 'Deployment result: %s' % res)
 
