@@ -26,6 +26,7 @@ from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.template import ITemplate
+from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.config import get_config
@@ -481,6 +482,7 @@ class DeployAction(VComputeAction):
             # TODO: refactor (eliminate duplication with MigrateAction)
             name = yield db.get(self.context, '__name__')
             hostname = yield db.get(self.context, 'hostname')
+            owner = yield db.get(self.context, '__owner__')
 
             log.msg('Checking post-deploy...', system='deploy')
 
@@ -513,6 +515,9 @@ class DeployAction(VComputeAction):
 
                 yield validate_db_post_deploy(*canonical_paths)
 
+                auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
+                if not auto_allocate:
+                    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
             else:
                 self._action_log(cmd, 'Deployment result: %s' % res)
 
