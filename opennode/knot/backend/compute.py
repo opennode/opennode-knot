@@ -481,6 +481,7 @@ class DeployAction(VComputeAction):
             name = yield db.get(self.context, '__name__')
             hostname = yield db.get(self.context, 'hostname')
             owner = yield db.get(self.context, '__owner__')
+            owner_obj = getUtility(IAuthentication).getPrincipal(owner)
 
             log.msg('Checking post-deploy...', system='deploy')
 
@@ -496,7 +497,7 @@ class DeployAction(VComputeAction):
 
                 new_compute = Compute(unicode(hostname), u'inactive')
                 new_compute.__name__ = name
-                new_compute.__owner__ = self.context.__owner__
+                new_compute.__owner__ = owner_obj
                 new_compute.template = unicode(template)
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
@@ -513,7 +514,6 @@ class DeployAction(VComputeAction):
 
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
             if not auto_allocate:
-                owner_obj = getUtility(IAuthentication).getPrincipal(owner)
                 yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner_obj)
         except Exception as e:
             @db.transact
