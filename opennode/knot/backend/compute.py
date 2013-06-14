@@ -490,30 +490,23 @@ class DeployAction(VComputeAction):
                 return
 
             @db.transact
-            def add_deployed_model(target):
+            def add_deployed_model_remove_from_hangar(c, target):
                 path = canonical_path(target)
                 target = traverse1(path)
+
                 new_compute = Compute(unicode(hostname), u'inactive')
                 new_compute.__name__ = name
+                new_compute.__owner__ = self.context.__owner__
                 new_compute.template = unicode(template)
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
                 noLongerProvides(new_compute, IManageable)
                 target.add(new_compute)
-                return new_compute
 
-            deployed = yield add_deployed_model(target)
-
-            from opennode.knot.backend.syncaction import SyncAction
-            yield SyncAction(deployed)._execute(DetachedProtocol(), object())
-
-            @db.transact
-            def remove_from_hangar(c):
                 container = c.__parent__
                 del container[c.__name__]
 
-            self._action_log(cmd, 'Removing hangar model: %s' % self.context, system='deploy')
-            yield remove_from_hangar(self.context)
+            yield add_deployed_model_remove_from_hangar(self.context, target)
 
             self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
                              % (vm_parameters['hostname'], self.context.__name__), system='deploy')
@@ -526,6 +519,7 @@ class DeployAction(VComputeAction):
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
+            raise
 
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
