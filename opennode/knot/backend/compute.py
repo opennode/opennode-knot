@@ -7,7 +7,6 @@ from uuid import uuid5, NAMESPACE_DNS
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 
-import logging
 import netaddr
 
 from opennode.knot.backend.operation import IDeployVM
@@ -21,6 +20,7 @@ from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUndeployVM
 from opennode.knot.backend.operation import OperationRemoteError
+from opennode.knot.backend.syncaction import SyncAction
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
@@ -479,53 +479,51 @@ class DeployAction(VComputeAction):
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
 
-            # TODO: refactor (eliminate duplication with MigrateAction)
             name = yield db.get(self.context, '__name__')
             hostname = yield db.get(self.context, 'hostname')
             owner = yield db.get(self.context, '__owner__')
 
             log.msg('Checking post-deploy...', system='deploy')
 
-            if (yield self._check_vm_post(cmd, name, hostname, target)):
+            if not (yield self._check_vm_post(cmd, name, hostname, target)):
+                self._action_log(cmd, 'Deployment failed. Deployment request result: %s' % res)
+                return
 
-                @db.ro_transact
-                def get_canonical_paths(context, target):
-                    return (canonical_path(context), canonical_path(target))
+            self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
+                             % (vm_parameters['hostname'], self.context.__name__), system='deploy')
 
-                canonical_paths = yield get_canonical_paths(self.context, target)
+            @db.transact
+            def add_deployed_model(target):
+                path = canonical_path(target)
+                target = traverse1(path)
+                new_compute = Compute(unicode(hostname), u'inactive')
+                new_compute.__name__ = name
+                new_compute.template = unicode(template)
+                alsoProvides(new_compute, IVirtualCompute)
+                alsoProvides(new_compute, IDeployed)
+                noLongerProvides(new_compute, IManageable)
+                target.add(new_compute)
+                return new_compute
 
-                @db.transact
-                def finalize_vm():
-                    vm = traverse1(canonical_paths[0])
-                    mv_compute_model(*canonical_paths)
-                    noLongerProvides(vm, IUndeployed)
-                    alsoProvides(vm, IDeployed)
-                    self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
-                                     % (vm_parameters['hostname'], self.context.__name__), system='deploy')
+            deployed = yield add_deployed_model(target)
 
-                yield finalize_vm()
+            yield SyncAction(deployed)._execute(DetachedProtocol(), object())
 
-                @db.data_integrity_validator
-                def validate_db_post_deploy(spath, dpath):
-                    dest = traverse1(dpath)
-                    s = traverse1(spath)
-                    dblog = logging.getLogger('opennode.oms.zodb.db')
-                    dblog.info('integrity: Compute not in source: %s. %s has compute: %s\n%s', s is None,
-                               dpath, name in dest._items, list(dest._items))
-
-                yield validate_db_post_deploy(*canonical_paths)
-
-                auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
-                if not auto_allocate:
-                    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
-            else:
-                self._action_log(cmd, 'Deployment result: %s' % res)
-
-        finally:
+            auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
+            if not auto_allocate:
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+        except:
             @db.transact
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
+        else:
+            @db.transact
+            def remove_from_hangar(context):
+                container = context.__parent__
+                del container[context.__name__]
+
+            yield remove_from_hangar(self.context)
 
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
