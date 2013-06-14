@@ -20,7 +20,6 @@ from opennode.knot.backend.operation import IStartVM
 from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUndeployVM
 from opennode.knot.backend.operation import OperationRemoteError
-from opennode.knot.backend.syncaction import SyncAction
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
@@ -507,6 +506,7 @@ class DeployAction(VComputeAction):
 
             deployed = yield add_deployed_model(target)
 
+            from opennode.knot.backend.syncaction import SyncAction
             yield SyncAction(deployed)._execute(DetachedProtocol(), object())
 
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
