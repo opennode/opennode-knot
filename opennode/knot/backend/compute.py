@@ -497,6 +497,9 @@ class DeployAction(VComputeAction):
                 path = canonical_path(target)
                 target = traverse1(path)
 
+                cpath = canonical_path(c)
+                c = traverse1(cpath)
+
                 new_compute = Compute(unicode(hostname), u'inactive')
                 new_compute.__name__ = name
                 new_compute.__owner__ = owner_obj
@@ -518,6 +521,7 @@ class DeployAction(VComputeAction):
             if not auto_allocate:
                 yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner_obj)
         except Exception as e:
+            log.err(system='deploy')
             @db.transact
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
