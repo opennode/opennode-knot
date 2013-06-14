@@ -485,11 +485,9 @@ class DeployAction(VComputeAction):
             log.msg('Checking post-deploy...', system='deploy')
 
             if not (yield self._check_vm_post(cmd, name, hostname, target)):
-                self._action_log(cmd, 'Deployment failed. Deployment request result: %s' % res)
+                self._action_log(cmd, 'Deployment failed. Deployment request result: %s' % res,
+                                 system='deploy')
                 return
-
-            self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
-                             % (vm_parameters['hostname'], self.context.__name__), system='deploy')
 
             @db.transact
             def add_deployed_model(target):
@@ -509,6 +507,17 @@ class DeployAction(VComputeAction):
             from opennode.knot.backend.syncaction import SyncAction
             yield SyncAction(deployed)._execute(DetachedProtocol(), object())
 
+            @db.transact
+            def remove_from_hangar(c):
+                container = c.__parent__
+                del container[c.__name__]
+
+            self._action_log(cmd, 'Removing hangar model: %s' % self.context, system='deploy')
+            yield remove_from_hangar(self.context)
+
+            self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
+                             % (vm_parameters['hostname'], self.context.__name__), system='deploy')
+
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
             if not auto_allocate:
                 yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
@@ -517,13 +526,6 @@ class DeployAction(VComputeAction):
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
-        else:
-            @db.transact
-            def remove_from_hangar(context):
-                container = context.__parent__
-                del container[context.__name__]
-
-            yield remove_from_hangar(self.context)
 
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
