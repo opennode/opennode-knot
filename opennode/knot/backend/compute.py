@@ -412,7 +412,9 @@ class DeployAction(VComputeAction):
                 'passwd': getattr(self.context, 'root_password', None),
                 'start_vm': getattr(self.context, 'start_vm', False),
                 'memory': self.context.memory / 1024.0,
-                'owner': self.context.__owner__}
+                'owner': self.context.__owner__,
+                'disk': self.context.diskspace.get('root', 10.0),
+                'vcpu': self.context.num_cores}
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
