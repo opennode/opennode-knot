@@ -513,7 +513,8 @@ class DeployAction(VComputeAction):
 
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
             if not auto_allocate:
-                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+                owner_obj = getUtility(IAuthentication).getPrincipal(owner)
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner_obj)
         except Exception as e:
             @db.transact
             def cleanup_deploying():
