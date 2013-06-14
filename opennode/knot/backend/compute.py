@@ -514,12 +514,12 @@ class DeployAction(VComputeAction):
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
             if not auto_allocate:
                 yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
-        except:
+        except Exception as e:
             @db.transact
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
-            raise
+            raise e
 
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):
