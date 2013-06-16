@@ -519,7 +519,8 @@ class DeployAction(VComputeAction):
 
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
             if not auto_allocate:
-                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner_obj)
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
         except Exception as e:
             log.err(system='deploy')
             @db.transact

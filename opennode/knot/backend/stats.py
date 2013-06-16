@@ -49,6 +49,9 @@ class UserComputeStatisticsAggregator(GlobalUtility):
             p = auth.getPrincipal(username)
             username = p.id
 
+        if username is not str:
+            username = username.id
+
         user_computes = self.get_computes(username)
 
         user_stats = {'num_cores_total': 0,
