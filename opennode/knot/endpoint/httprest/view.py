@@ -54,6 +54,9 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
         if 'state' not in data:
             data['state'] = 'active' if data.get('start_on_boot') else 'inactive'
 
+        if data.get('diskspace'):
+            data['diskspace'] = {'root': data['diskspace']}
+
         # XXX: ONC should send us a 'nameserver' list instead of this hackish dns1,dns2
         if 'nameservers' not in data:
             nameservers = []
