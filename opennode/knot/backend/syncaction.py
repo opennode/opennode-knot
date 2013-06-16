@@ -259,6 +259,8 @@ class SyncAction(ComputeAction):
         else:
             compute.uptime = None
 
+        compute.num_cores = vm['vcpu']
+
         compute.apply()
 
     @defer.inlineCallbacks
