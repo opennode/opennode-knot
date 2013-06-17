@@ -80,6 +80,15 @@ class SyncAction(ComputeAction):
 
         yield self._create_default_console(default)
 
+        @db.transact
+        def set_additional_keys():
+            vms = follow_symlinks(self.context['vms'])
+            if vms:
+                self._additional_keys = [canonical_path(vms)]
+
+        yield set_additional_keys()
+        yield self.reacquire_until_clear()
+
         yield self.sync_vms()
 
     @defer.inlineCallbacks
@@ -366,7 +375,7 @@ class SyncAction(ComputeAction):
     def sync_vms(self):
         vms = follow_symlinks(self.context['vms'])
         if vms:
-            return SyncVmsAction(vms).execute(DetachedProtocol(), object())
+            return SyncVmsAction(vms)._execute(DetachedProtocol(), object())
 
 
 class SyncTemplatesAction(ComputeAction):
@@ -380,14 +389,14 @@ class SyncTemplatesAction(ComputeAction):
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         if not any_stack_installed(self.context) or not follow_symlinks(self.context['vms']):
-            defer.returnValue(None)
+            return
 
         submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:
             log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
-            defer.returnValue(None)
+            return
 
         @db.transact
         def update_templates():
