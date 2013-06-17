@@ -8,7 +8,7 @@ from zope.interface import Interface
 
 from opennode.knot.backend.operation import IListVMS, IHostInterfaces, OperationRemoteError
 from opennode.knot.model.compute import IVirtualCompute, Compute, IDeployed, IUndeployed, IDeploying
-from opennode.knot.model.compute import IManageable
+from opennode.knot.model.compute import IManageable, ComputeAction
 from opennode.knot.model.network import NetworkInterface, BridgeInterface
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
@@ -16,6 +16,7 @@ from opennode.oms.model.form import alsoProvides, noLongerProvides
 from opennode.oms.model.model.events import ModelDeletedEvent
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
+from opennode.oms.model.traversal import canonical_path
 from opennode.oms.zodb import db
 
 
@@ -114,7 +115,7 @@ class ListVirtualizationContainerAction(Action):
                 cmd.write(" %s      %s\n" % (' ' * max_key_len, attrs))
 
 
-class SyncVmsAction(Action):
+class SyncVmsAction(ComputeAction):
     """Force vms sync + sync host info"""
     context(IVirtualizationContainer)
 
@@ -124,8 +125,15 @@ class SyncVmsAction(Action):
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__,))
 
+    @property
+    def lock_keys(self):
+        """ Returns list of object-related 'hashes' to lock against. Overload in derived classes
+        to add more objects """
+        return (canonical_path(self.context),
+                canonical_path(self.context.__parent__),)
+
     @defer.inlineCallbacks
-    def execute(self, cmd, args):
+    def _execute(self, cmd, args):
         @db.ro_transact
         def get_ifaces_job():
             host_compute = self.context.__parent__
