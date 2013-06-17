@@ -78,6 +78,8 @@ def handle_compute_state_change_request(compute, event):
     owner = (yield db.get(compute, '__owner__'))
     ulog = UserLogger()
     ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
+    log.msg('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified),
+            system='state-change')
 
     yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
 
