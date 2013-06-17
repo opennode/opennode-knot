@@ -745,6 +745,7 @@ class StartComputeAction(VComputeAction):
 
         self._action_log(cmd, '%s %s' % (action_name, name))
 
+        @db.transact
         def set_compute_active():
             self.context.state = u'active'
 
@@ -769,6 +770,7 @@ class ShutdownComputeAction(VComputeAction):
 
         self._action_log(cmd, '%s %s' % (action_name, name))
 
+        @db.transact
         def set_compute_inactive():
             self.context.state = u'inactive'
 
