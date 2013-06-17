@@ -49,7 +49,7 @@ class UserComputeStatisticsAggregator(GlobalUtility):
             p = auth.getPrincipal(username)
             username = p.id
 
-        if username not in (str, unicode):
+        if type(username) not in (str, unicode):
             username = username.id
 
         user_computes = self.get_computes(username)
