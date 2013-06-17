@@ -219,8 +219,9 @@ class SyncAction(ComputeAction):
 
             d.addCallbacks(handle_success, handle_error)
 
-        compute.state = unicode(vm['state'])
-        compute.effective_state = compute.state
+        if self.context.state != vm['state']:
+            compute.state = unicode(vm['state'])
+            compute.effective_state = compute.state
 
         # Ensure IDeployed marker is set, unless not in another state
         if not IDeployed.providedBy(compute):
