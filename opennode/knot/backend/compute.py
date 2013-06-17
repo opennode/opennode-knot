@@ -38,6 +38,7 @@ from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
+from opennode.oms.model.form import TmpObj
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.symlink import follow_symlinks
@@ -746,11 +747,13 @@ class StartComputeAction(VComputeAction):
         self._action_log(cmd, '%s %s' % (action_name, name))
 
         @db.transact
-        def set_compute_active():
-            self.context.state = u'active'
+        def set_compute_state(state):
+            compute = TmpObj(self.context)
+            compute.state = state
+            compute.apply()
 
         try:
-            yield set_compute_active()
+            yield set_compute_state(u'active')
         except Exception as e:
             self._action_log(cmd, '%s' % (format_error(e)))
             raise
@@ -771,11 +774,13 @@ class ShutdownComputeAction(VComputeAction):
         self._action_log(cmd, '%s %s' % (action_name, name))
 
         @db.transact
-        def set_compute_inactive():
-            self.context.state = u'inactive'
+        def set_compute_state(state):
+            compute = TmpObj(self.context)
+            compute.state = state
+            compute.apply()
 
         try:
-            yield set_compute_inactive()
+            yield set_compute_state(u'inactive')
         except Exception as e:
             self._action_log(cmd, '%s' % (format_error(e)))
             raise
