@@ -267,13 +267,13 @@ class VComputeAction(ComputeAction):
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
 
-        cmd.write("%s %s\n" % (action_name, name))
+        self._action_log(cmd, '%s %s' % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
 
         try:
             yield submitter.submit(self.job, name)
         except Exception as e:
-            cmd.write("%s\n" % format_error(e))
+            self._action_log(cmd, '%s' % (format_error(e)))
             raise
 
 
@@ -737,12 +737,47 @@ class StartComputeAction(VComputeAction):
 
     job = IStartVM
 
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        action_name = getattr(self, 'action_name', self._name + "ing")
+
+        name = yield db.get(self.context, '__name__')
+
+        self._action_log(cmd, '%s %s' % (action_name, name))
+
+        def set_compute_active():
+            self.context.state = u'active'
+
+        try:
+            yield set_compute_active()
+        except Exception as e:
+            self._action_log(cmd, '%s' % (format_error(e)))
+            raise
+
 
 class ShutdownComputeAction(VComputeAction):
     action('shutdown')
 
     action_name = "shutting down"
     job = IShutdownVM
+
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        action_name = getattr(self, 'action_name', self._name + "ing")
+
+        name = yield db.get(self.context, '__name__')
+
+        self._action_log(cmd, '%s %s' % (action_name, name))
+
+        def set_compute_inactive():
+            self.context.state = u'inactive'
+
+        try:
+            yield set_compute_inactive()
+        except Exception as e:
+            self._action_log(cmd, '%s' % (format_error(e)))
+            raise
+
 
 
 class DestroyComputeAction(VComputeAction):
