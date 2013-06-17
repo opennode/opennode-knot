@@ -779,7 +779,6 @@ class ShutdownComputeAction(VComputeAction):
             raise
 
 
-
 class DestroyComputeAction(VComputeAction):
     action('destroy')
 
