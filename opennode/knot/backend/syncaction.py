@@ -8,6 +8,7 @@ from zope.component import getUtility
 
 from opennode.knot.backend.compute import any_stack_installed
 from opennode.knot.backend.compute import ComputeAction
+from opennode.knot.backend.compute import SyncVmsAction
 from opennode.knot.backend.operation import IAgentVersion
 from opennode.knot.backend.operation import IListVMS
 from opennode.knot.backend.operation import IGetComputeInfo
@@ -19,7 +20,6 @@ from opennode.knot.backend.operation import IGetDiskUsage
 from opennode.knot.backend.operation import ISetOwner
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
-from opennode.knot.backend.v12ncontainer import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import backends
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IVirtualCompute
