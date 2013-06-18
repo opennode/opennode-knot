@@ -28,7 +28,6 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
-from opennode.oms.model.form import TmpObj
 from opennode.oms.model.model.events import IModelModifiedEvent
 from opennode.oms.model.model.events import IModelDeletedEvent
 from opennode.oms.model.model.events import IModelCreatedEvent
@@ -66,9 +65,7 @@ def handle_compute_state_change_request(compute, event):
 
     @db.transact
     def set_compute_effective_state(compute, state):
-        ctmp = TmpObj(compute)
-        ctmp.effective_state = state
-        ctmp.apply()
+        compute.effective_state = state
 
     log.msg('Changing state of %s (%s): %s -> %s' % (compute, owner, original, modified),
             system='state-change')
