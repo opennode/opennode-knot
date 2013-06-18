@@ -18,8 +18,8 @@ from opennode.knot.backend.operation import IGetHWUptime
 from opennode.knot.backend.operation import IGetDiskUsage
 from opennode.knot.backend.operation import ISetOwner
 from opennode.knot.backend.operation import OperationRemoteError
+from opennode.knot.backend.syncvmsaction import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
-from opennode.knot.backend.v12ncontainer import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import backends
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IVirtualCompute
@@ -79,6 +79,15 @@ class SyncAction(ComputeAction):
             yield self._sync_virtual()
 
         yield self._create_default_console(default)
+
+        @db.transact
+        def set_additional_keys():
+            vms = follow_symlinks(self.context['vms'])
+            if vms:
+                self._additional_keys = [canonical_path(vms)]
+
+        yield set_additional_keys()
+        yield self.reacquire_until_clear()
 
         yield self.sync_vms()
 
@@ -210,8 +219,9 @@ class SyncAction(ComputeAction):
 
             d.addCallbacks(handle_success, handle_error)
 
-        compute.state = unicode(vm['state'])
-        compute.effective_state = compute.state
+        if self.context.state != vm['state']:
+            compute.state = unicode(vm['state'])
+            compute.effective_state = compute.state
 
         # Ensure IDeployed marker is set, unless not in another state
         if not IDeployed.providedBy(compute):
@@ -366,7 +376,7 @@ class SyncAction(ComputeAction):
     def sync_vms(self):
         vms = follow_symlinks(self.context['vms'])
         if vms:
-            return SyncVmsAction(vms).execute(DetachedProtocol(), object())
+            return SyncVmsAction(vms)._execute(DetachedProtocol(), object())
 
 
 class SyncTemplatesAction(ComputeAction):
@@ -380,14 +390,14 @@ class SyncTemplatesAction(ComputeAction):
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         if not any_stack_installed(self.context) or not follow_symlinks(self.context['vms']):
-            defer.returnValue(None)
+            return
 
         submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:
             log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
-            defer.returnValue(None)
+            return
 
         @db.transact
         def update_templates():

@@ -61,22 +61,30 @@ def handle_compute_state_change_request(compute, event):
     if not action:
         return
 
-    submitter = IVirtualizationContainerSubmitter(compute.__parent__)
+    owner = (yield db.get(compute, '__owner__'))
+
+    @db.transact
+    def set_compute_effective_state(compute, state):
+        compute.effective_state = state
+
+    log.msg('Changing state of %s (%s): %s -> %s' % (compute, owner, original, modified),
+            system='state-change')
+
+    submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:
         yield submitter.submit(action, compute.__name__)
-    except Exception:
-        compute.effective_state = event.original['state']
-        raise
-    else:
-        compute.effective_state = event.modified['state']
+    except Exception as e:
+        log.err(system='state-change')
+        yield set_compute_effective_state(compute, original)
+        raise e
 
-    owner = (yield db.get(compute, '__owner__'))
+    yield set_compute_effective_state(compute, modified)
+
     ulog = UserLogger()
-    ulog.log('Changed state of %s (%s): %s -> %s' %
-             (compute, (yield db.get(compute, '__owner__')), original, modified))
+    ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
     yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
 
-    handle(compute, ModelModifiedEvent({'effective_state': event.original['state']},
+    handle(compute, ModelModifiedEvent({'effective_state': original},
                                        {'effective_state': compute.effective_state}))
 
 
