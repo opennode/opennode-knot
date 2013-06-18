@@ -64,7 +64,7 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         for compute in user_computes:
             try:
                 # only account for cores and RAM of the running VMs
-                if compute.effective_state == 'active':
+                if compute.state == u'active':
                     user_stats['num_cores_total'] += compute.num_cores
                     user_stats['memory_total'] += compute.memory or 0
                 user_stats['diskspace_total'] += compute.diskspace.get(u'total') or 0
