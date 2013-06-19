@@ -280,18 +280,14 @@ class Compute(Container):
         """
         return [self.hostname, ]
 
-    def get_effective_state(self):
+    @property
+    def effective_state(self):
         """Since we lack schema/data upgrade scripts I have to
         resort on this tricks to cope with the fact that I have
         existing objects around in the several test dbs, and branches.
 
         """
         return getattr(self, '_effective_state', unicode(self.state))
-
-    def set_effective_state(self, value):
-        self._effective_state = value
-
-    effective_state = property(get_effective_state, set_effective_state)
 
     def get_ctid(self):
         return getattr(self, '_ctid', None)

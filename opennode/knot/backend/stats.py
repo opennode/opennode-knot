@@ -21,9 +21,7 @@ log = logging.getLogger(__name__)
 class UserComputeStatisticsAggregator(GlobalUtility):
     implements(IUserStatisticsProvider)
 
-    def __init__(self):
-        self._statistics = {}
-
+    @db.assert_transact
     def get_computes(self, username):
         computes = db.get_root()['oms_root']['computes']
         user_computes = []
@@ -34,6 +32,7 @@ class UserComputeStatisticsAggregator(GlobalUtility):
                 user_computes.append(compute)
         return user_computes
 
+    @db.assert_transact
     def get_credit(self, username):
         profile = db.get_root()['oms_root']['home'][username]
         if profile:
@@ -42,7 +41,13 @@ class UserComputeStatisticsAggregator(GlobalUtility):
             log.warning('%s is not found among user profiles under /home!', username)
             return 0
 
-    @db.ro_transact
+    @db.assert_transact
+    def save_vm_stats(self, username, stats):
+        profile = db.get_root()['oms_root']['home'][username]
+        if profile:
+            profile.vm_stats = stats
+
+    @db.transact
     def update(self, username):
         if username is None:
             auth = getUtility(IAuthentication)
@@ -59,12 +64,10 @@ class UserComputeStatisticsAggregator(GlobalUtility):
                       'memory_total': 0,
                       'vm_count': len(user_computes)}
 
-        log.debug('%s computes of user %s', len(user_computes), username)
-
         for compute in user_computes:
             try:
                 # only account for cores and RAM of the running VMs
-                if compute.effective_state == 'active':
+                if compute.state == u'active':
                     user_stats['num_cores_total'] += compute.num_cores
                     user_stats['memory_total'] += compute.memory or 0
                 user_stats['diskspace_total'] += compute.diskspace.get(u'total') or 0
@@ -73,13 +76,11 @@ class UserComputeStatisticsAggregator(GlobalUtility):
 
         user_stats['timestamp'] = datetime.now()
         user_stats['credit'] = self.get_credit(username)
-        self._statistics[username] = user_stats
+
+        self.save_vm_stats(username, user_stats)
 
         loggers = getAllUtilitiesRegisteredFor(IUserStatisticsLogger)
         for logger in loggers:
             logger.log(username, user_stats)
 
         return user_stats
-
-    def get_user_statistics(self, username):
-        return self._statistics[username]
