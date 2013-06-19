@@ -26,7 +26,6 @@ from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template
-from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol

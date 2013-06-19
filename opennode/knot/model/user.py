@@ -31,27 +31,36 @@ class IUserStatisticsLogger(Interface):
 class IUserProfile(Interface):
     uid = schema.Int(title=u'ID', description=u'Application-specific numerical ID', required=False)
     name = schema.TextLine(title=u"Name", min_length=1)
-    groups = schema.List(title=u"Groups", min_length=1)
+    groups = schema.List(title=u"Groups", min_length=1, required=False)
     credit = schema.Int(title=u'Resource usage credit', required=False)
     balance_limit = schema.Int(title=u'Limit of the negative credit', required=False, default=0)
     credit_timestamp = schema.TextLine(title=u'Last credit update',
                                        description=u'Timestamp of last credit recording',
                                        required=False)
+    vm_stats = schema.Dict(title=u'Owned VM statistics', required=False)
+    vm_stats_timestamp = schema.TextLine(title=u'Last statistics update',
+                                         description=u'Timestamp of last VM statistics recording',
+                                         required=False)
 
 
 class UserProfile(Model):
     implements(IUserProfile, IDisplayName, IMarkable)
     permissions({'name': ('read', 'modify'),
-                 'group': ('read', 'modify'),
+                 'groups': ('read', 'modify'),
                  'credit': ('read', 'modify'),
                  'balance_limit': ('read', 'modify'),
-                 'userid': ('read', 'modify')})
+                 'credit_timestamp': 'read',
+                 'uid': ('read', 'modify'),
+                 'vm_stats': ('read', 'modify'),
+                 'vm_stats_timestamp': 'read'})
 
     __name__ = None
     groups = []
     _credit = 0
     _balance_limit = 0
     _credit_timestamp = None
+    _vm_stats_timestamp = None
+    _vm_stats = {}
     uid = None
 
     def __init__(self, name, groups, credit=0, credit_timestamp='', uid=None, balance_limit=0):
@@ -61,6 +70,8 @@ class UserProfile(Model):
         self.balance_limit = balance_limit
         self._credit_timestamp = credit_timestamp if credit_timestamp else self._credit_timestamp
         self.uid = uid
+        self._vm_stats = {}
+        self._vm_stats_timestamp = None
 
     def get_name(self):
         return self.__name__
@@ -81,12 +92,26 @@ class UserProfile(Model):
             self._credit = int(value * 100)
         else:
             raise ValueError('credit must be integer or float!')
+
         self._credit_timestamp = datetime.now().isoformat()
 
     def get_credit(self):
         return self._credit
 
     credit = property(get_credit, set_credit)
+
+    def set_vm_stats(self, stats):
+        self._vm_stats = stats
+        self._vm_stats_timestamp = datetime.now().isoformat()
+
+    def get_vm_stats(self):
+        return self._vm_stats
+
+    vm_stats = property(get_vm_stats, set_vm_stats)
+
+    @property
+    def vm_stats_timestamp(self):
+        return self._vm_stats_timestamp
 
     def set_balance_limit(self, value):
         if type(value) in (int, long):

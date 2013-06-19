@@ -30,7 +30,7 @@ class UserStatsLogger(GlobalUtility):
 
     def log(self, user, stats_data):
         data = {'username': user, 'stats': stats_data}
-        self.slog.info('', extra=data)
+        self.slog.info('%s' % data, extra=data)
 
 
 class SqlDBUserStatsLogger(GlobalUtility):

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging import ERROR
 from twisted.internet import defer
 from twisted.python import log
@@ -14,6 +14,7 @@ from opennode.knot.backend.operation import IPing
 from opennode.knot.model.backend import IKeyManager
 from opennode.knot.model.compute import ICompute, IManageable
 from opennode.knot.model.user import UserProfile
+from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.proc import IProcess, Proc, DaemonProcess
@@ -104,6 +105,8 @@ class SyncDaemonProcess(DaemonProcess):
         yield self.execute_ping_tests()
         log.msg('Synchronizing IP pools', system='sync')
         yield self.gather_ippools()
+        log.msg('Synchronizing user VM statistics', system='sync')
+        yield self.gather_user_vm_stats()
 
     @defer.inlineCallbacks
     def cleanup_machines(self, accepted):
@@ -133,6 +136,26 @@ class SyncDaemonProcess(DaemonProcess):
                         if pobj.groups != home[pobj.id].groups:
                             home[pobj.id].groups = pobj.groups
         yield get_users()
+
+    @defer.inlineCallbacks
+    def gather_user_vm_stats(self):
+        credit_check_cooldown = get_config().getstring('auth', 'billing_timeout', 60)
+
+        @db.ro_transact
+        def get_users_with_vms_to_update():
+            home = db.get_root()['oms_root']['home']
+            update_list = []
+            for profile in home.listcontent():
+                timeout = (datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
+                           timedelta(seconds=credit_check_cooldown))
+                if timeout < datetime.now():
+                    update_list.append(profile.name)
+            return update_list
+
+        update_list = yield get_users_with_vms_to_update()
+
+        for name in update_list:
+            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, name)
 
     @defer.inlineCallbacks
     def gather_machines(self):
