@@ -68,7 +68,7 @@ def handle_compute_state_change_request(compute, event):
             system='state-change')
 
     curtransaction = transaction.get()
-    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner],))
 
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
@@ -104,7 +104,7 @@ def delete_virtual_compute(model, event):
 def delete_virtual_compute_update_stats(model, event):
     owner = model.__owner__
     curtransaction = transaction.get()
-    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner],))
 
 
 def virtual_compute_action(action, path, event):
@@ -210,7 +210,7 @@ def handle_config_change_update_stats(compute, event):
 
     owner = compute.__owner__
     curtransaction = transaction.get()
-    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner],))
 
 
 @subscribe(IVirtualCompute, IOwnerChangedEvent)
@@ -233,4 +233,4 @@ def handle_ownership_change(model, event):
         raise
 
     curtransaction = transaction.get()
-    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([event.oldowner, event.nextowner]))
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([event.oldowner, event.nextowner],))
