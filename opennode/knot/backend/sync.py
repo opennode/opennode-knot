@@ -146,9 +146,10 @@ class SyncDaemonProcess(DaemonProcess):
             home = db.get_root()['oms_root']['home']
             update_list = []
             for profile in home.listcontent():
-                timeout = (datetime.strptime(profile.vm_stats_timestamp or datetime.now(),
-                                             '%Y-%m-%dT%H:%M:%S.%f') +
-                           timedelta(seconds=credit_check_cooldown))
+                timeout = ((datetime.strptime(profile.vm_stats_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
+                            timedelta(seconds=credit_check_cooldown)) if profile.vm_stats_timestamp else
+                           datetime.min)
+
                 if timeout < datetime.now():
                     update_list.append(profile.name)
             return update_list
