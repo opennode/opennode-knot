@@ -39,17 +39,19 @@ def handle_compute_state_change_request(compute, event):
     if not event.modified.get('state', None):
         return
 
+    owner = (yield db.get(compute, '__owner__'))
+    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
     original = event.original['state']
     modified = event.modified['state']
 
-    if not original == modified:
+    if original == modified:
         return
-
-    owner = (yield db.get(compute, '__owner__'))
 
     ulog = UserLogger()
     ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
-    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+    log.msg('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified),
+            system='state-change')
 
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
