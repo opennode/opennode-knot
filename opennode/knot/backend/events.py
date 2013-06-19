@@ -32,6 +32,23 @@ from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
+@defer.inlineCallbacks
+def update_statistics_after_commit(model, owners):
+    log.msg('%s: statistics event handler for %s: updating user statistics' %
+            (model, owners), system='event')
+    try:
+        for owner in owners:
+            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+    except Exception:
+        log.err(system='event')
+        raise
+
+
+def update_statistics_dbhook(success, *args):
+    if success:
+        blocking_yield(update_statistics_after_commit(*args))
+
+
 @subscribe(ICompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
@@ -47,12 +64,13 @@ def handle_compute_state_change_request(compute, event):
 
     owner = (yield db.get(compute, '__owner__'))
 
-    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
-
     ulog = UserLogger()
     ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
     log.msg('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified),
             system='state-change')
+
+    curtransaction = transaction.get()
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
 
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)
@@ -73,7 +91,9 @@ def delete_virtual_compute(model, event):
     owner = (yield db.get(model, '__owner__'))
     ulog = UserLogger(subject=model, owner=owner)
     ulog.log('Deleted %s' % model)
-    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
+    curtransaction = transaction.get()
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
 
     @db.transact
     def deallocate_ip():
@@ -172,27 +192,13 @@ def handle_virtual_compute_config_change_request(compute, event):
     else:
         owner = (yield db.get(compute, '__owner__'))
         UserLogger(subject=compute, owner=owner).log('Compute "%s" configuration changed' % compute)
-        yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
+        curtransaction = transaction.get()
+        curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
 
 
 @subscribe(IVirtualCompute, IOwnerChangedEvent)
 def handle_ownership_change(model, event):
-
-    @defer.inlineCallbacks
-    def update_statistics_after_commit(oldowner, newowner):
-        log.msg('%s owner changed from %s to %s: updating user statistics' %
-                (model, oldowner, newowner), system='ownership-change-event')
-        try:
-            for owner in (newowner, oldowner):
-                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
-        except Exception:
-            log.err(system='ownership-change-event')
-            raise
-
-    def update_statistics_dbhook(success, *args):
-        if success:
-            blocking_yield(update_statistics_after_commit(*args))
-
     msg = 'Compute "%s" owner changed from "%s" to "%s"' % (model, event.oldowner, event.nextoner)
 
     oldowner = getUtility(IAuthentication).getPrincipal(event.oldowner)
@@ -211,4 +217,4 @@ def handle_ownership_change(model, event):
         raise
 
     curtransaction = transaction.get()
-    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=(event.oldowner, event.nextowner))
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([event.oldowner, event.nextowner]))
