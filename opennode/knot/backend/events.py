@@ -33,9 +33,8 @@ from opennode.oms.zodb import db
 
 
 @defer.inlineCallbacks
-def update_statistics_after_commit(model, owners):
-    log.msg('%s: statistics event handler for %s: updating user statistics' %
-            (model, owners), system='event')
+def update_statistics_after_commit(owners):
+    log.msg('Statistics event handler for %s: updating user statistics' % (owners), system='event')
     try:
         for owner in owners:
             yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
