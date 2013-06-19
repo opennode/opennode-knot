@@ -272,7 +272,7 @@ class SyncAction(ComputeAction):
 
         compute.diskspace = diskspace
 
-        if compute.effective_state == 'active':
+        if compute.state == 'active':
             compute.uptime = get_f(vm, 'uptime')
         else:
             compute.uptime = None

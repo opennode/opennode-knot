@@ -32,6 +32,26 @@ from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
 
+@subscribe(ICompute, IModelModifiedEvent)
+@defer.inlineCallbacks
+def handle_compute_state_change_request(compute, event):
+
+    if not event.modified.get('state', None):
+        return
+
+    original = event.original['state']
+    modified = event.modified['state']
+
+    if not original == modified:
+        return
+
+    owner = (yield db.get(compute, '__owner__'))
+
+    ulog = UserLogger()
+    ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
+    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
+
 @subscribe(IVirtualCompute, IModelDeletedEvent)
 @defer.inlineCallbacks
 def delete_virtual_compute(model, event):
