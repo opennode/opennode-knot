@@ -49,7 +49,6 @@ def update_statistics_dbhook(success, *args):
 
 
 @subscribe(ICompute, IModelModifiedEvent)
-@defer.inlineCallbacks
 def handle_compute_state_change_request(compute, event):
 
     if not event.modified.get('state', None):
@@ -61,7 +60,7 @@ def handle_compute_state_change_request(compute, event):
     if original == modified:
         return
 
-    owner = (yield db.get(compute, '__owner__'))
+    owner = compute.__owner__
 
     ulog = UserLogger()
     ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
@@ -91,9 +90,6 @@ def delete_virtual_compute(model, event):
     ulog = UserLogger(subject=model, owner=owner)
     ulog.log('Deleted %s' % model)
 
-    curtransaction = transaction.get()
-    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
-
     @db.transact
     def deallocate_ip():
         ippools = db.get_root()['oms_root']['ippools']
@@ -102,6 +98,13 @@ def delete_virtual_compute(model, event):
             ulog.log('Deallocated IP: %s', ip)
 
     yield deallocate_ip()
+
+
+@subscribe(IVirtualCompute, IModelDeletedEvent)
+def delete_virtual_compute_update_stats(model, event):
+    owner = model.__owner__
+    curtransaction = transaction.get()
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
 
 
 def virtual_compute_action(action, path, event):
@@ -192,8 +195,22 @@ def handle_virtual_compute_config_change_request(compute, event):
         owner = (yield db.get(compute, '__owner__'))
         UserLogger(subject=compute, owner=owner).log('Compute "%s" configuration changed' % compute)
 
-        curtransaction = transaction.get()
-        curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
+
+@subscribe(IVirtualCompute, IModelModifiedEvent)
+def handle_config_change_update_stats(compute, event):
+    update_param_whitelist = ['cpu_limit',
+                              'memory',
+                              'num_cores',
+                              'swap_size']
+
+    params_to_update = filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems())
+
+    if len(params_to_update) == 0:
+        return
+
+    owner = compute.__owner__
+    curtransaction = transaction.get()
+    curtransaction.addAfterCommitHook(update_statistics_dbhook, args=([owner]))
 
 
 @subscribe(IVirtualCompute, IOwnerChangedEvent)
