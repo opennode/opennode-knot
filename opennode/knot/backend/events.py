@@ -4,7 +4,6 @@ from twisted.internet import task
 from twisted.internet import reactor
 from twisted.python import log
 from zope.authentication.interfaces import IAuthentication
-from zope.component import handle
 from zope.component import getUtility
 
 import logging
@@ -12,10 +11,6 @@ import netaddr
 import transaction
 
 from opennode.knot.backend.compute import DeployAction, UndeployAction, DestroyComputeAction, AllocateAction
-from opennode.knot.backend.operation import IResumeVM
-from opennode.knot.backend.operation import IShutdownVM
-from opennode.knot.backend.operation import IStartVM
-from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUpdateVM
 from opennode.knot.backend.operation import ISetOwner
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
@@ -32,60 +27,9 @@ from opennode.oms.model.model.events import IModelModifiedEvent
 from opennode.oms.model.model.events import IModelDeletedEvent
 from opennode.oms.model.model.events import IModelCreatedEvent
 from opennode.oms.model.model.events import IOwnerChangedEvent
-from opennode.oms.model.model.events import ModelModifiedEvent
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
-
-
-@subscribe(ICompute, IModelModifiedEvent)
-@defer.inlineCallbacks
-def handle_compute_state_change_request(compute, event):
-
-    if not event.modified.get('state', None):
-        return
-
-    def get_action(original, modified):
-        action_mapping = {'inactive': {'active': IStartVM},
-                          'suspended': {'active': IResumeVM},
-                          'active': {'inactive': IShutdownVM,
-                                     'suspended': ISuspendVM}}
-
-        action = action_mapping.get(original, {}).get(modified, None)
-        return action
-
-    original = event.original['state']
-    modified = event.modified['state']
-    action = get_action(original, modified)
-
-    if not action:
-        return
-
-    owner = (yield db.get(compute, '__owner__'))
-
-    @db.transact
-    def set_compute_effective_state(compute, state):
-        compute.effective_state = state
-
-    log.msg('Changing state of %s (%s): %s -> %s' % (compute, owner, original, modified),
-            system='state-change')
-
-    submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
-    try:
-        yield submitter.submit(action, compute.__name__)
-    except Exception as e:
-        log.err(system='state-change')
-        yield set_compute_effective_state(compute, original)
-        raise e
-
-    yield set_compute_effective_state(compute, modified)
-
-    ulog = UserLogger()
-    ulog.log('Changed state of %s (%s): %s -> %s' % (compute, owner, original, modified))
-    yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
-
-    handle(compute, ModelModifiedEvent({'effective_state': original},
-                                       {'effective_state': compute.effective_state}))
 
 
 @subscribe(IVirtualCompute, IModelDeletedEvent)

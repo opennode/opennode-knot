@@ -199,12 +199,13 @@ class SyncAction(ComputeAction):
         return self.sync_vm(vm)
 
     @db.assert_transact
-    def sync_vm(self, vm):
-        compute = TmpObj(self.context)
-
-        if vm.get('owner') and self.context.__owner__ != vm['owner']:
-            newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-            compute.__owner__ = newowner
+    def sync_owner(self, vm):
+        if vm.get('owner'):
+            if self.context.__owner__ != vm['owner']:
+                compute = TmpObj(self.context)
+                newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+                compute.__owner__ = newowner
+                compute.apply()
         elif self.context.__owner__ is not None:
             log.msg('Attempting to push owner (%s) of %s to VM config' % (self.context.__owner__,
                                                                           self.context), system='sync')
@@ -218,6 +219,12 @@ class SyncAction(ComputeAction):
                 log.err(f, system='sync')
 
             d.addCallbacks(handle_success, handle_error)
+
+    @db.assert_transact
+    def sync_vm(self, vm):
+        self.sync_owner(vm)
+
+        compute = TmpObj(self.context)
 
         if self.context.state != vm['state']:
             log.msg('%s sync compute state update: %s' %
