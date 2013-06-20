@@ -411,8 +411,6 @@ class VirtualComputeLocation(Adapter):
     context(IVirtualCompute)
 
     def get_url(self):
-        if not self.context.__parent__:
-            return
         return '/computes/%s/' % (self.context.__name__)
 
 
