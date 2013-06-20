@@ -30,7 +30,7 @@ class UserStatsLogger(GlobalUtility):
 
     def log(self, user, stats_data):
         data = {'username': user, 'stats': stats_data}
-        self.slog.info('', extra=data)
+        self.slog.info('%s' % data, extra=data)
 
 
 class SqlDBUserStatsLogger(GlobalUtility):
@@ -64,7 +64,7 @@ class SqlDBUserStatsLogger(GlobalUtility):
             if not hasattr(self, '_db'):
                 yield self.config()
 
-            logdata = {'user': user if type(user) is str else user.id}
+            logdata = {'user': user if type(user) in (str, unicode) else user.id}
             logdata.update(stats_data)
 
             log.debug('writing stats: %(user)s numcores: %(num_cores_total)s disk: %(diskspace_total)s '

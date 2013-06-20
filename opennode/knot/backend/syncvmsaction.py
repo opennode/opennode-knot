@@ -139,7 +139,7 @@ class SyncVmsAction(ComputeAction):
 
             action = SyncAction(compute)
 
-            matching = [rvm for rvm in remote_vms if rvm['uuid'] == action.context.__name__]
+            matching = [rvm for rvm in remote_vms if rvm['uuid'] == compute.__name__]
 
             if not matching:
                 continue
@@ -149,6 +149,7 @@ class SyncVmsAction(ComputeAction):
             # todo delegate all this into the action itself
             default_console = action._default_console()
             action._sync_consoles()
+            action.sync_owner_transact(remote_vm)
             action.sync_vm(remote_vm)
             action.create_default_console(default_console)
 

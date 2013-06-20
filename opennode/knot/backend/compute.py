@@ -38,7 +38,6 @@ from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
-from opennode.oms.model.form import TmpObj
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.symlink import follow_symlinks
@@ -738,52 +737,12 @@ class StartComputeAction(VComputeAction):
 
     job = IStartVM
 
-    @defer.inlineCallbacks
-    def _execute(self, cmd, args):
-        action_name = getattr(self, 'action_name', self._name + "ing")
-
-        name = yield db.get(self.context, '__name__')
-
-        self._action_log(cmd, '%s %s' % (action_name, name))
-
-        @db.transact
-        def set_compute_state(state):
-            compute = TmpObj(self.context)
-            compute.state = state
-            compute.apply()
-
-        try:
-            yield set_compute_state(u'active')
-        except Exception as e:
-            self._action_log(cmd, '%s' % (format_error(e)))
-            raise
-
 
 class ShutdownComputeAction(VComputeAction):
     action('shutdown')
 
     action_name = "shutting down"
     job = IShutdownVM
-
-    @defer.inlineCallbacks
-    def _execute(self, cmd, args):
-        action_name = getattr(self, 'action_name', self._name + "ing")
-
-        name = yield db.get(self.context, '__name__')
-
-        self._action_log(cmd, '%s %s' % (action_name, name))
-
-        @db.transact
-        def set_compute_state(state):
-            compute = TmpObj(self.context)
-            compute.state = state
-            compute.apply()
-
-        try:
-            yield set_compute_state(u'inactive')
-        except Exception as e:
-            self._action_log(cmd, '%s' % (format_error(e)))
-            raise
 
 
 class DestroyComputeAction(VComputeAction):
