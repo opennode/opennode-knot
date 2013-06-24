@@ -415,7 +415,7 @@ class DeployAction(VComputeAction):
                 'owner': self.context.__owner__,
                 'disk': self.context.diskspace.get('root', 10.0),
                 'vcpu': self.context.num_cores,
-                'swap_size': self.context.swap_size}
+                'swap': self.context.swap_size}
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
