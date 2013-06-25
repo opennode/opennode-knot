@@ -503,6 +503,8 @@ class DeployAction(VComputeAction):
 
                 cpath = canonical_path(c)
                 c = traverse1(cpath)
+                if c is None:
+                    raise Exception('Compute not found: "%s"' % cpath)
 
                 new_compute = Compute(unicode(hostname), u'inactive')
                 new_compute.__name__ = name
@@ -519,7 +521,8 @@ class DeployAction(VComputeAction):
                 del container[name]
 
                 timestamp = int(time.time() * 1000)
-                IStream(new_compute).add((timestamp, {'event': 'change', 'name': 'features',
+                IStream(new_compute).add((timestamp, {'event': 'change',
+                                                      'name': 'features',
                                                       'value': new_compute.features,
                                                       'old_value': self.context.features}))
 

@@ -118,15 +118,7 @@ def virtual_compute_action(action, path, event):
         d = action(model).execute(DetachedProtocol(), object())
         d.addErrback(log.err)
 
-    @db.data_integrity_validator
-    def validate_db_event(r, path):
-        compute = traverse1(path)
-        dblog = logging.getLogger('opennode.oms.zodb.db')
-        dblog.debug('integrity: %s => %s', path, compute)
-        assert compute is not None
-
     d = run()
-    d.addCallback(validate_db_event, path)
     d.addErrback(log.err)
 
 
