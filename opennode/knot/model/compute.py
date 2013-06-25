@@ -23,7 +23,7 @@ from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.schema import Path
 from opennode.oms.security.directives import permissions
 from opennode.oms.util import adapter_value
-from opennode.oms.zodb import db
+
 
 M = 10 ** 6
 
