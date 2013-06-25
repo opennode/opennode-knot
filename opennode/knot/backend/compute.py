@@ -505,15 +505,22 @@ class DeployAction(VComputeAction):
                 new_compute.__name__ = name
                 new_compute.__owner__ = owner_obj
                 new_compute.template = unicode(template)
-                alsoProvides(new_compute, IVirtualCompute)
-                alsoProvides(new_compute, IDeployed)
+
                 noLongerProvides(new_compute, IManageable)
                 target.add(new_compute)
 
                 container = c.__parent__
-                del container[c.__name__]
+                del container[name]
+
+            @db.transact
+            def add_deployed_marker():
+                new_compute = follow_symlinks(db.get_root()['oms_root']['computes'][name])
+                alsoProvides(new_compute, IVirtualCompute)
+                alsoProvides(new_compute, IDeployed)
 
             yield add_deployed_model_remove_from_hangar(self.context, target)
+
+            yield add_deployed_marker()
 
             self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
                              % (vm_parameters['hostname'], self.context.__name__), system='deploy')
