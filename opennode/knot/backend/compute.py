@@ -463,6 +463,7 @@ class DeployAction(VComputeAction):
 
             vm_parameters = yield self.get_parameters()
 
+            ipaddr = netaddr.IPAddress(vm_parameters['ip_address'])
             if vm_parameters['ip_address'] in (None, u'0.0.0.0/32', u'0.0.0.0', '0.0.0.0/32', '0.0.0.0'):
                 ipaddr = yield allocate_ip_address()
                 vm_parameters.update({'ip_address': str(ipaddr)})
@@ -507,6 +508,7 @@ class DeployAction(VComputeAction):
                 new_compute.__name__ = name
                 new_compute.__owner__ = owner_obj
                 new_compute.template = unicode(template)
+                new_compute._ipv4_address = unicode(ipaddr)
 
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
