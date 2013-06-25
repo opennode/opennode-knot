@@ -6,6 +6,7 @@ from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
+from zope.component import handle
 
 import netaddr
 
@@ -39,6 +40,7 @@ from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
+from opennode.oms.model.model.events import ModelMovedEvent
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
@@ -506,21 +508,19 @@ class DeployAction(VComputeAction):
                 new_compute.__owner__ = owner_obj
                 new_compute.template = unicode(template)
 
+                alsoProvides(new_compute, IVirtualCompute)
+                alsoProvides(new_compute, IDeployed)
                 noLongerProvides(new_compute, IManageable)
                 target.add(new_compute)
 
                 container = c.__parent__
                 del container[name]
-
-            @db.transact
-            def add_deployed_marker():
-                new_compute = follow_symlinks(db.get_root()['oms_root']['computes'][name])
-                alsoProvides(new_compute, IVirtualCompute)
-                alsoProvides(new_compute, IDeployed)
+                # XXX: fake event to let REST clients like ONC know what's happening
+                # XXX: need to be careful with ModelCreatedEvent and ModelDeletedEvent that are being raised
+                # in the code above
+                handle(new_compute, ModelMovedEvent(new_compute.__parent__, c.__parent__))
 
             yield add_deployed_model_remove_from_hangar(self.context, target)
-
-            yield add_deployed_marker()
 
             self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
                              % (vm_parameters['hostname'], self.context.__name__), system='deploy')
