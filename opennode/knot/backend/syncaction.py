@@ -291,6 +291,7 @@ class SyncAction(ComputeAction):
             compute.uptime = None
 
         compute.num_cores = vm['vcpu']
+        compute.swap_size = vm['swap']
 
         compute.apply()
 
