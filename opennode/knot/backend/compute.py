@@ -525,6 +525,10 @@ class DeployAction(VComputeAction):
                                                       'name': 'features',
                                                       'value': new_compute.features,
                                                       'old_value': self.context.features}))
+                IStream(new_compute).add((timestamp, {'event': 'change',
+                                                      'name': 'ipv4_address',
+                                                      'value': new_compute._ipv4_address,
+                                                      'old_value': self.context._ipv4_address}))
 
             yield add_deployed_model_remove_from_hangar(self.context, target)
 
