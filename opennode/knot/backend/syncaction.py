@@ -402,10 +402,12 @@ class SyncAction(ComputeAction):
 
             yield add_container(backend_type)
 
+    @defer.inlineCallbacks
     def sync_vms(self):
-        vms = follow_symlinks(self.context['vms'])
-        if vms:
-            return SyncVmsAction(vms)._execute(DetachedProtocol(), object())
+        for vms in self.context.listcontent():
+            if not IVirtualizationContainer.providedBy(vms):
+                continue
+            yield SyncVmsAction(vms)._execute(DetachedProtocol(), object())
 
 
 class SyncTemplatesAction(ComputeAction):
@@ -422,8 +424,8 @@ class SyncTemplatesAction(ComputeAction):
             return
 
         @db.transact
-        def update_templates(templates):
-            template_container = self.context.templates
+        def update_templates(container, templates):
+            template_container = container['templates']
             for template in templates:
                 name = template['template_name']
 
@@ -472,4 +474,4 @@ class SyncTemplatesAction(ComputeAction):
             log.msg('Synced templates on %s (%s). Updating %s templates' %
                     (self.context, container, len(templates)), system='sync-templates')
 
-            yield update_templates(templates)
+            yield update_templates(container, templates)
