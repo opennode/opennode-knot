@@ -11,6 +11,7 @@ from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.user import IUserStatisticsLogger
 from opennode.knot.model.compute import IVirtualCompute
 
+from opennode.oms.config import get_config
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.zodb import db
 
@@ -49,10 +50,15 @@ class UserComputeStatisticsAggregator(GlobalUtility):
 
     @db.transact
     def update(self, username):
+        auth = getUtility(IAuthentication)
+        p = auth.getPrincipal(username)
+
         if username is None:
-            auth = getUtility(IAuthentication)
-            p = auth.getPrincipal(username)
             username = p.id
+
+        billable_group = get_config().getstring('auth', 'billable_group', 'users')
+        if billable_group not in p.groups:
+            return
 
         if type(username) not in (str, unicode):
             username = username.id
