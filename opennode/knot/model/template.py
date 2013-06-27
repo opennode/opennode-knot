@@ -49,7 +49,7 @@ class ITemplate(Interface):
 
 
 class Template(Model):
-    implements(ITemplate, IDisplayName, IInVirtualizationContainer)
+    implements(ITemplate, IDisplayName)
 
     def __init__(self, name, base_type):
         self.name = name
@@ -71,6 +71,7 @@ class TemplateTags(ModelTags):
 
 
 class Templates(Container):
+    implements(IInVirtualizationContainer)
     __contains__ = Template
     __name__ = 'templates'
 
@@ -93,17 +94,23 @@ class GlobalTemplates(ReadonlyContainer):
 
         templates = {}
 
-        def collect(container):
-            from opennode.knot.model.machines import Machines
+        def allowed_classes_gen(item):
             from opennode.knot.model.compute import ICompute, IVirtualCompute
+            from opennode.knot.model.machines import Machines
+            from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+            yield isinstance(item, Machines)
+            yield isinstance(item, Templates)
+            yield IVirtualizationContainer.providedBy(item)
+            yield ICompute.providedBy(item)
+            yield IVirtualCompute.providedBy(item)
 
+        def collect(container):
             seen = set()
             for item in container.listcontent():
                 if ITemplate.providedBy(item) and item.__name__ not in templates:
                     templates[item.__name__] = Symlink(item.__name__, item)
 
-                if ((isinstance(item, Machines) or isinstance(item, Templates) or ICompute.providedBy(item))
-                    and not IVirtualCompute.providedBy(item)):
+                if any(allowed_classes_gen(item)):
                     if item.__name__ not in seen:
                         seen.add(item.__name__)
                         collect(item)
