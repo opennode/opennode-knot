@@ -465,10 +465,11 @@ class SyncTemplatesAction(ComputeAction):
             templates = yield submitter.submit(IGetLocalTemplates)
 
             if not templates:
-                log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
-                return
+                log.msg('Did not find any templates on %s/%s' % (self.context, container),
+                        system='sync-templates')
+                continue
 
-            log.msg('Synced templates on %s. Updating %s templates' % (self.context, len(templates)),
-                    system='sync-templates')
+            log.msg('Synced templates on %s (%s). Updating %s templates' %
+                    (self.context, container, len(templates)), system='sync-templates')
 
             yield update_templates(templates)
