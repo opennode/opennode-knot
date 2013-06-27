@@ -418,48 +418,57 @@ class SyncTemplatesAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
-        if not any_stack_installed(self.context) or not follow_symlinks(self.context['vms']):
-            return
-
-        submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
-        templates = yield submitter.submit(IGetLocalTemplates)
-
-        if not templates:
-            log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
+        if not any_stack_installed(self.context):
             return
 
         @db.transact
-        def update_templates():
+        def update_templates(templates):
             template_container = self.context.templates
-            for i in templates:
-                name = i['template_name']
+            for template in templates:
+                name = template['template_name']
+
                 if not template_container['by-name'][name]:
-                    template_container.add(Template(unicode(name), get_u(i, 'domain_type')))
+                    template_container.add(Template(unicode(name), get_u(template, 'domain_type')))
 
                 template = template_container['by-name'][name].target
-                template.cores = (get_i(i, 'vcpu_min'),
-                                  get_i(i, 'vcpu'),
-                                  max(-1, get_i(i, 'vcpu_max')))
-                template.memory = (get_f(i, 'memory_min'),
-                                   get_f(i, 'memory'),
-                                   max(-1.0, get_f(i, 'memory_max')))
-                template.swap = (get_f(i, 'swap_min'),
-                                 get_f(i, 'swap'),
-                                 max(-1.0, get_f(i, 'swap_max')))
-                template.disk = (get_f(i, 'disk_min'),
-                                 get_f(i, 'disk'),
-                                 max(-1.0, get_f(i, 'disk_max')))
-                template.nameserver = get_u(i, 'nameserver')
-                template.password = get_u(i, 'passwd')
-                template.cpu_limit = (get_i(i, 'vcpulimit_min'),
-                                      get_i(i, 'vcpulimit'))
-                template.ip = get_u(i, 'ip_address')
+                template.cores = (get_i(template, 'vcpu_min'),
+                                  get_i(template, 'vcpu'),
+                                  max(-1, get_i(template, 'vcpu_max')))
+                template.memory = (get_f(template, 'memory_min'),
+                                   get_f(template, 'memory'),
+                                   max(-1.0, get_f(template, 'memory_max')))
+                template.swap = (get_f(template, 'swap_min'),
+                                 get_f(template, 'swap'),
+                                 max(-1.0, get_f(template, 'swap_max')))
+                template.disk = (get_f(template, 'disk_min'),
+                                 get_f(template, 'disk'),
+                                 max(-1.0, get_f(template, 'disk_max')))
+                template.nameserver = get_u(template, 'nameserver')
+                template.password = get_u(template, 'passwd')
+                template.cpu_limit = (get_i(template, 'vcpulimit_min'),
+                                      get_i(template, 'vcpulimit'))
+                template.ip = get_u(template, 'ip_address')
 
             # delete templates no more offered upstream
             template_names = template_container['by-name'].listnames()
-            for i in set(template_names).difference(i['template_name'] for i in templates):
-                template_container.remove(follow_symlinks(template_container['by-name'][i]))
+            vanished_template_names = set(template_names).difference(
+                template['template_name'] for template in templates)
 
-        log.msg('Synced templates on %s. Updating %s templates' % (self.context, len(templates)),
-                system='sync-templates')
-        yield update_templates()
+            for template in vanished_template_names:
+                template_container.remove(follow_symlinks(template_container['by-name'][template]))
+
+        for container in self.context.listcontent():
+            if not IVirtualizationContainer.providedBy(container):
+                continue
+
+            submitter = IVirtualizationContainerSubmitter(container)
+            templates = yield submitter.submit(IGetLocalTemplates)
+
+            if not templates:
+                log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
+                return
+
+            log.msg('Synced templates on %s. Updating %s templates' % (self.context, len(templates)),
+                    system='sync-templates')
+
+            yield update_templates(templates)
