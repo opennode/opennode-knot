@@ -5,7 +5,7 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from opennode.knot.model.virtualizationcontainer import IInVirtualizationContainer
+from opennode.knot.model.common import IInVirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import ContainerInjector

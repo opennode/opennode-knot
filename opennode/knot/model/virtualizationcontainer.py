@@ -7,6 +7,7 @@ from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
 
+from opennode.knot.model.common import IInVirtualizationContainer
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IInCompute
 from opennode.knot.model.computes import Computes
 from opennode.knot.model.hangar import IInHangar
@@ -23,9 +24,6 @@ from opennode.oms.security.directives import permissions
 class IVirtualizationContainer(Interface):
     backend = schema.Choice(title=u"Backend", values=(u'xen', u'kvm', u'openvz', u'lxc'))
 
-
-class IInVirtualizationContainer(Interface):
-    pass
 
 
 class VirtualizationContainer(Container):

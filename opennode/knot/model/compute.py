@@ -8,6 +8,7 @@ from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface
 
 
+from opennode.knot.model.common import IInVirtualizationContainer
 from opennode.knot.model.console import Consoles
 from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
 from opennode.knot.model.template import Templates
@@ -163,7 +164,7 @@ class Compute(Container):
     """A compute node."""
 
     from opennode.knot.model.hangar import IInHangar
-    implements(ICompute, IDisplayName, IMarkable, IInHangar)
+    implements(ICompute, IDisplayName, IMarkable, IInHangar, IInVirtualizationContainer)
     permissions(dict(hostname=('read', 'modify'),
                      ipv4_address=('read', 'modify'),
                      ipv6_address=('read', 'modify'),
