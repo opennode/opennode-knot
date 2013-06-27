@@ -430,24 +430,24 @@ class SyncTemplatesAction(ComputeAction):
                 if not template_container['by-name'][name]:
                     template_container.add(Template(unicode(name), get_u(template, 'domain_type')))
 
-                template = template_container['by-name'][name].target
-                template.cores = (get_i(template, 'vcpu_min'),
-                                  get_i(template, 'vcpu'),
-                                  max(-1, get_i(template, 'vcpu_max')))
-                template.memory = (get_f(template, 'memory_min'),
-                                   get_f(template, 'memory'),
-                                   max(-1.0, get_f(template, 'memory_max')))
-                template.swap = (get_f(template, 'swap_min'),
-                                 get_f(template, 'swap'),
-                                 max(-1.0, get_f(template, 'swap_max')))
-                template.disk = (get_f(template, 'disk_min'),
-                                 get_f(template, 'disk'),
-                                 max(-1.0, get_f(template, 'disk_max')))
-                template.nameserver = get_u(template, 'nameserver')
-                template.password = get_u(template, 'passwd')
-                template.cpu_limit = (get_i(template, 'vcpulimit_min'),
-                                      get_i(template, 'vcpulimit'))
-                template.ip = get_u(template, 'ip_address')
+                t = template_container['by-name'][name].target
+                t.cores = (get_i(template, 'vcpu_min'),
+                           get_i(template, 'vcpu'),
+                           max(-1, get_i(template, 'vcpu_max')))
+                t.memory = (get_f(template, 'memory_min'),
+                            get_f(template, 'memory'),
+                            max(-1.0, get_f(template, 'memory_max')))
+                t.swap = (get_f(template, 'swap_min'),
+                          get_f(template, 'swap'),
+                          max(-1.0, get_f(template, 'swap_max')))
+                t.disk = (get_f(template, 'disk_min'),
+                          get_f(template, 'disk'),
+                          max(-1.0, get_f(template, 'disk_max')))
+                t.nameserver = get_u(template, 'nameserver')
+                t.password = get_u(template, 'passwd')
+                t.cpu_limit = (get_i(template, 'vcpulimit_min'),
+                               get_i(template, 'vcpulimit'))
+                t.ip = get_u(template, 'ip_address')
 
             # delete templates no more offered upstream
             template_names = template_container['by-name'].listnames()
