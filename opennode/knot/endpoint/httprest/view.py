@@ -1,4 +1,5 @@
 import json
+import logging
 
 from grokcore.component import context
 from twisted.web.server import NOT_DONE_YET
@@ -164,6 +165,7 @@ class ComputeView(ContainerView):
     def render_recursive(self, request, *args, **kwargs):
         ret = super(ComputeView, self).render_recursive(request, *args, **kwargs)
         ret.update({'uptime': self.context.uptime})
+        ret.update({'owner': self.context.__owner__})
         return self.filter_attributes(request, ret)
 
     def blacklisted(self, item):

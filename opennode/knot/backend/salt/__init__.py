@@ -103,20 +103,20 @@ class SimpleSaltExecutor(object):
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
         if hostkey not in data:
-            raise op.OperationRemoteError(msg='Remote "%s" returned empty response to "%s"' %
-                                          (hostkey, self.action))
+            raise op.OperationRemoteError(msg='Remote "%s" returned empty response to "%s" (%s)' %
+                                          (hostkey, self.action, self.args))
 
         def error_conditions(data):
             yield data.strip().endswith('is not available.')
             yield data.strip().startswith('Missing arguments')
 
         if type(data[hostkey]) in (str, unicode) and str(data[hostkey]).startswith('Traceback'):
-            raise op.OperationRemoteError(msg="Remote error on %s:%s" % (hostkey, self.action),
+            raise op.OperationRemoteError(msg="Remote error on %s:%s(%s)" % (hostkey, self.action, self.args),
                                           remote_tb=data[hostkey])
 
         if type(data[hostkey]) in (str, unicode) and any(error_conditions(str(data[hostkey]))):
-            raise op.OperationRemoteError(msg="Remote error on %s (%s): %s" %
-                                          (hostkey, self.action, str(data[hostkey])))
+            raise op.OperationRemoteError(msg="Remote error on %s %s(%s): %s" %
+                                          (hostkey, self.action, self.args, str(data[hostkey])))
 
         return data[hostkey]
 
@@ -253,7 +253,9 @@ TIMEOUTS = {
     op.IMigrateVM: 3600,
     op.IDeployVM: 600,
     op.IGetGuestMetrics: 5,
-    op.IGetHostMetrics: 5
+    op.IGetHostMetrics: 5,
+    op.IShutdownVM: 30,
+    op.IStartVM: 30
 }
 
 

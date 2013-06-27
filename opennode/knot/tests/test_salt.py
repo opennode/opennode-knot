@@ -65,9 +65,8 @@ def test_activate_compute():
     container.__parent__ = dom0
     compute.__parent__ = container
 
-    assert compute.effective_state == 'inactive'
-    # force effective state because it's a lazy attribute
-    compute.effective_state = u'inactive'
+    assert compute.state == 'inactive'
+    compute.state = u'inactive'
 
     RawDataApplier({'state': u'active'}, compute).apply()
 

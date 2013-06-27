@@ -8,6 +8,7 @@ from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 
 import netaddr
+import time
 
 from opennode.knot.backend.operation import IDeployVM
 from opennode.knot.backend.operation import IDestroyVM
@@ -25,6 +26,7 @@ from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.template import ITemplate
+from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.config import get_config
@@ -39,6 +41,7 @@ from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.hooks import PreValidateHookMixin
+from opennode.oms.model.model.stream import IStream
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
@@ -92,6 +95,9 @@ class ComputeAction(Action, PreValidateHookMixin):
     def subject(self, *args, **kwargs):
         return tuple((self.context.__parent__.__parent__,))
 
+    def __str__(self):
+        return '%s(%s)' % (type(self).__name__, self.context)
+
     @property
     def lock_keys(self):
         """ Returns list of object-related 'hashes' to lock against. Overload in derived classes
@@ -103,7 +109,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     def acquire(self):
         d = defer.Deferred()
-        log.msg('%s acquiring locks for: %s' % (type(self).__name__, self.lock_keys),
+        log.msg('%s acquiring locks for: %s' % (self, self.lock_keys),
                 system='compute-action', logLevel=DEBUG)
         self._used_lock_keys = []
         for key in self.lock_keys:
@@ -119,7 +125,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         d = self._lock_registry[self.lock_keys[0]][0]
         deferred_list = []
 
-        log.msg('%s adding locks for: %s' % (type(self).__name__, self.lock_keys),
+        log.msg('%s adding locks for: %s' % (self, self.lock_keys),
                 system='compute-action', logLevel=DEBUG)
 
         for key in self.lock_keys:
@@ -129,7 +135,7 @@ class ComputeAction(Action, PreValidateHookMixin):
             elif self._lock_registry[key][0] is not d:
                 dother, actionother = self._lock_registry[key]
                 log.msg('Another action %s locked %s... %s will wait until it finishes'
-                    % (actionother, key, type(self).__name__), system='compute-action')
+                    % (actionother, key, self), system='compute-action')
                 deferred_list.append(dother)
 
         if len(deferred_list) > 0:
@@ -144,12 +150,12 @@ class ComputeAction(Action, PreValidateHookMixin):
                 break
 
             log.msg('%s is waiting for other actions locking additional objects (%s)...'
-                    % (type(self).__name__, self._additional_keys), system='compute-action')
+                    % (self, self._additional_keys), system='compute-action')
 
             yield dl  # wait for any actions locking our targets
 
             log.msg('%s will attempt to reacquire locks again (%s)...'
-                    % (type(self).__name__, self._additional_keys), system='compute-action')
+                    % (self, self._additional_keys), system='compute-action')
 
     def _release_and_fire_next_now(self):
         ld = None
@@ -180,13 +186,13 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     @defer.inlineCallbacks
     def handle_error(self, f, cmd):
-        msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, type(self).__name__)
+        msg = '%s: "%s" executing "%s"' % (type(f.value).__name__, f.value, self)
         yield self.add_log_event(cmd, msg)
         log.err(f, system='compute-action')
         defer.returnValue(f)
 
     def handle_action_done(self, r, cmd):
-        return self.add_log_event(cmd, '%s(%s) finished' % (type(self).__name__, self.context))
+        return self.add_log_event(cmd, '%s finished' % (self))
 
     def execute(self, cmd, args):
         if self.locked():
@@ -201,16 +207,16 @@ class ComputeAction(Action, PreValidateHookMixin):
 
             ld, lock_action = data
 
+            msg = '%s: one of %s is locked by %s.' % (self, self.lock_keys, lock_action)
+
             if self._do_not_enqueue:
-                self._action_log(cmd, '%s: %s is locked by %s. Skipping due to no-enqueue feature of '
-                                 'the action.' % (self, self.context, lock_action))
+                self._action_log(cmd, msg + ' Skipping due to no-enqueue feature')
                 return ld
 
-            self._action_log(cmd, '%s: %s is locked by %s. Scheduling to run after finish of previous action'
-                             % (self, self.context, lock_action))
+            self._action_log(cmd, msg + ' Scheduling to run after finish of previous action')
 
             def execute_on_unlock(r):
-                self._action_log(cmd, '%s: %s is unlocked. Executing now' % (self, self.context),
+                self._action_log(cmd, '%s: %s are unlocked. Executing now' % (self, self.lock_keys),
                                  logLevel=DEBUG)
                 # XXX: must be self.execute(), not self._execute(): next action must lock all its objects
                 self.execute(cmd, args)
@@ -223,7 +229,7 @@ class ComputeAction(Action, PreValidateHookMixin):
         @defer.inlineCallbacks
         def cancel_action(e, cmd):
             e.trap(Exception)
-            msg = 'Canceled executing "%s" due to validate_hook failure' % type(self).__name__
+            msg = 'Canceled executing "%s" due to validate_hook failure' % self
             yield self.add_log_event(cmd, msg)
 
         try:
@@ -263,13 +269,13 @@ class VComputeAction(ComputeAction):
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
 
-        cmd.write("%s %s\n" % (action_name, name))
+        self._action_log(cmd, '%s %s' % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
 
         try:
             yield submitter.submit(self.job, name)
         except Exception as e:
-            cmd.write("%s\n" % format_error(e))
+            self._action_log(cmd, '%s' % (format_error(e)))
             raise
 
 
@@ -292,6 +298,10 @@ class AllocateAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+
+        if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
+            log.msg('Attempt to allocate a deployed compute: %s' % (self.context), system='deploy')
+            return
 
         @db.ro_transact
         def get_matching_machines(container):
@@ -403,7 +413,11 @@ class DeployAction(VComputeAction):
                 'ip_address': self.context.ipv4_address.split('/')[0],
                 'passwd': getattr(self.context, 'root_password', None),
                 'start_vm': getattr(self.context, 'start_vm', False),
-                'memory': self.context.memory / 1024.0}
+                'memory': self.context.memory / 1024.0,
+                'owner': self.context.__owner__,
+                'disk': self.context.diskspace.get('root', 10.0),
+                'vcpu': self.context.num_cores,
+                'swap': self.context.swap_size}
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -412,6 +426,10 @@ class DeployAction(VComputeAction):
         if not template:
             self._action_log(cmd, 'Cannot deploy %s (%s) because no template was specified' %
                              (self.context.hostname, self.context), system='deploy', logLevel=ERROR)
+            return
+
+        if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
+            log.msg('Attempt to deploy a deployed compute: %s' % (self.context), system='deploy')
             return
 
         @db.transact
@@ -441,15 +459,11 @@ class DeployAction(VComputeAction):
             return max([follow_symlinks(symlink).ctid for symlink in ctidlist.listcontent()] + [100])
 
         try:
-            if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
-                log.msg('Attempt to deploy a compute that is already deployed: %s' % (self.context),
-                        system='deploy')
-                return
-
             yield db.transact(alsoProvides)(self.context, IDeploying)
 
             vm_parameters = yield self.get_parameters()
 
+            ipaddr = netaddr.IPAddress(vm_parameters['ip_address'])
             if vm_parameters['ip_address'] in (None, u'0.0.0.0/32', u'0.0.0.0', '0.0.0.0/32', '0.0.0.0'):
                 ipaddr = yield allocate_ip_address()
                 vm_parameters.update({'ip_address': str(ipaddr)})
@@ -470,39 +484,68 @@ class DeployAction(VComputeAction):
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
 
-            # TODO: refactor (eliminate duplication with MigrateAction)
             name = yield db.get(self.context, '__name__')
             hostname = yield db.get(self.context, 'hostname')
+            owner = yield db.get(self.context, '__owner__')
+            owner_obj = getUtility(IAuthentication).getPrincipal(owner)
 
             log.msg('Checking post-deploy...', system='deploy')
 
-            if (yield self._check_vm_post(cmd, name, hostname, target)):
+            if not (yield self._check_vm_post(cmd, name, hostname, target)):
+                self._action_log(cmd, 'Deployment failed. Deployment request result: %s' % res,
+                                 system='deploy')
+                return
 
-                @db.ro_transact
-                def get_canonical_paths(context, target):
-                    return (canonical_path(context), canonical_path(target))
+            @db.transact
+            def add_deployed_model_remove_from_hangar(c, target):
+                path = canonical_path(target)
+                target = traverse1(path)
 
-                canonical_paths = yield get_canonical_paths(self.context, target)
+                cpath = canonical_path(c)
+                c = traverse1(cpath)
+                if c is None:
+                    raise Exception('Compute not found: "%s"' % cpath)
 
-                @db.transact
-                def finalize_vm():
-                    vm = traverse1(canonical_paths[0])
-                    mv_compute_model(*canonical_paths)
-                    noLongerProvides(vm, IUndeployed)
-                    alsoProvides(vm, IDeployed)
+                new_compute = Compute(unicode(hostname), u'inactive')
+                new_compute.__name__ = name
+                new_compute.__owner__ = owner_obj
+                new_compute.template = unicode(template)
+                new_compute._ipv4_address = unicode(ipaddr)
 
-                    self._action_log(cmd, 'Deployment of "%s" is finished' % (vm_parameters['hostname']),
-                                     system='deploy')
+                alsoProvides(new_compute, IVirtualCompute)
+                alsoProvides(new_compute, IDeployed)
+                noLongerProvides(new_compute, IManageable)
+                target.add(new_compute)
 
-                yield finalize_vm()
-            else:
-                self._action_log(cmd, 'Deployment result: %s' % res)
+                container = c.__parent__
+                del container[name]
 
-        finally:
+                timestamp = int(time.time() * 1000)
+                IStream(new_compute).add((timestamp, {'event': 'change',
+                                                      'name': 'features',
+                                                      'value': new_compute.features,
+                                                      'old_value': self.context.features}))
+                IStream(new_compute).add((timestamp, {'event': 'change',
+                                                      'name': 'ipv4_address',
+                                                      'value': new_compute._ipv4_address,
+                                                      'old_value': self.context._ipv4_address}))
+
+            yield add_deployed_model_remove_from_hangar(self.context, target)
+
+            self._action_log(cmd, 'Deployment of "%s"(%s) is finished'
+                             % (vm_parameters['hostname'], self.context.__name__), system='deploy')
+
+            auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
+            if not auto_allocate:
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
+
+        except Exception as e:
+            log.err(system='deploy')
             @db.transact
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
             yield cleanup_deploying()
+            raise e
 
     @defer.inlineCallbacks
     def _get_vmlist(self, destination_vms):

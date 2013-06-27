@@ -1,16 +1,19 @@
 from __future__ import absolute_import
 
 from grokcore.component import context
+from grokcore.component import Adapter, implements
 import netaddr
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
-from zope.interface import Interface, implements
+from zope.interface import Interface
+
 
 from opennode.knot.model.console import Consoles
 from opennode.knot.model.network import NetworkInterfaces, NetworkRoutes
 from opennode.knot.model.template import Templates
 from opennode.knot.model.zabbix import IZabbixConfiguration
 from opennode.oms.config import get_config
+from opennode.oms.model.location import ILocation
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
@@ -20,6 +23,7 @@ from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.schema import Path
 from opennode.oms.security.directives import permissions
 from opennode.oms.util import adapter_value
+
 
 M = 10 ** 6
 
@@ -280,18 +284,14 @@ class Compute(Container):
         """
         return [self.hostname, ]
 
-    def get_effective_state(self):
+    @property
+    def effective_state(self):
         """Since we lack schema/data upgrade scripts I have to
         resort on this tricks to cope with the fact that I have
         existing objects around in the several test dbs, and branches.
 
         """
         return getattr(self, '_effective_state', unicode(self.state))
-
-    def set_effective_state(self, value):
-        self._effective_state = value
-
-    effective_state = property(get_effective_state, set_effective_state)
 
     def get_ctid(self):
         return getattr(self, '_ctid', None)
@@ -404,6 +404,14 @@ class ComputeTags(ModelTags):
                     # graceful ignoring of incorrect ips
                     pass
         return res
+
+
+class VirtualComputeLocation(Adapter):
+    implements(ILocation)
+    context(IVirtualCompute)
+
+    def get_url(self):
+        return '/computes/%s/' % (self.context.__name__)
 
 
 provideAdapter(adapter_value(['cpu_usage', 'memory_usage', 'network_usage', 'diskspace_usage']),

@@ -30,7 +30,7 @@ class UserStatsLogger(GlobalUtility):
 
     def log(self, user, stats_data):
         data = {'username': user, 'stats': stats_data}
-        self.slog.info('', extra=data)
+        self.slog.info('%s' % data, extra=data)
 
 
 class SqlDBUserStatsLogger(GlobalUtility):
@@ -51,6 +51,7 @@ class SqlDBUserStatsLogger(GlobalUtility):
                                                    'VALUES (%s, %s, %s, %s, %s, %s, %s)')
 
         self._db = adbapi.ConnectionPool(self.db_backend, *self.db_conn_param, **self.db_conn_kw)
+        self._db.noisy = get_config().getboolean('debug', 'stats_debug', False)
 
         if get_config().getstring('stats', 'db_init', None):
             return self.initdb()
@@ -59,27 +60,27 @@ class SqlDBUserStatsLogger(GlobalUtility):
 
     @defer.inlineCallbacks
     def log(self, user, stats_data):
-        fail = True
-        retries = 1
-        while fail and retries > 0:
-            retries -= 1
-            try:
-                if not hasattr(self, '_db'):
-                    yield self.config()
+        try:
+            if not hasattr(self, '_db'):
+                yield self.config()
 
-                yield self._db.runOperation(self.db_operation,
-                                            (user, stats_data['timestamp'],
-                                             stats_data['num_cores_total'],
-                                             # OMS_USAGE db assumes GBs for
-                                             # memory while as OMS internally calculates in MBs
-                                             stats_data['diskspace_total'],
-                                             stats_data['memory_total'] / 1024.0,
-                                             stats_data['vm_count'],
-                                             stats_data['credit']))
-                fail = False
-            except Exception:
-                log.error('DB error', exc_info=sys.exc_info())
-                fail = True
+            logdata = {'user': user if type(user) in (str, unicode) else user.id}
+            logdata.update(stats_data)
+
+            log.debug('writing stats: %(user)s numcores: %(num_cores_total)s disk: %(diskspace_total)s '
+                      'memory: %(memory_total)s vmcount: %(vm_count)s credit: %(credit)s', logdata)
+
+            yield self._db.runOperation(self.db_operation,
+                                        (user, stats_data['timestamp'],
+                                         stats_data['num_cores_total'],
+                                         # OMS_USAGE db assumes GBs for
+                                         # memory while as OMS internally calculates in MBs
+                                         stats_data['diskspace_total'],
+                                         stats_data['memory_total'] / 1024.0,
+                                         stats_data['vm_count'],
+                                         stats_data['credit']))
+        except Exception:
+            log.error('DB error', exc_info=sys.exc_info())
 
 
 class UserCreditChecker(GlobalUtility):

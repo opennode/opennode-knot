@@ -18,8 +18,8 @@ from opennode.knot.backend.operation import IGetHWUptime
 from opennode.knot.backend.operation import IGetDiskUsage
 from opennode.knot.backend.operation import ISetOwner
 from opennode.knot.backend.operation import OperationRemoteError
+from opennode.knot.backend.syncvmsaction import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
-from opennode.knot.backend.v12ncontainer import SyncVmsAction
 from opennode.knot.backend.v12ncontainer import backends
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IVirtualCompute
@@ -79,6 +79,15 @@ class SyncAction(ComputeAction):
             yield self._sync_virtual()
 
         yield self._create_default_console(default)
+
+        @db.transact
+        def set_additional_keys():
+            vms = follow_symlinks(self.context['vms'])
+            if vms:
+                self._additional_keys = [canonical_path(vms)]
+
+        yield set_additional_keys()
+        yield self.reacquire_until_clear()
 
         yield self.sync_vms()
 
@@ -183,35 +192,57 @@ class SyncAction(ComputeAction):
         vmlist = yield submitter.submit(IListVMS)
         for vm in vmlist:
             if vm['uuid'] == name:
+                yield self.sync_owner(vm)
                 yield self._sync_vm(vm)
 
     @db.transact
     def _sync_vm(self, vm):
         return self.sync_vm(vm)
 
+    @defer.inlineCallbacks
+    def sync_owner(self, vm):
+        owner = yield db.get(self.context, '__owner__')
+        parent = yield db.get(self.context, '__parent__')
+        uuid = yield db.get(self.context, '__name__')
+
+        if vm.get('owner'):
+            if owner != vm['owner']:
+                @db.transaft
+                def pull_owner():
+                    compute = TmpObj(self.context)
+                    newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+                    compute.__owner__ = newowner
+                    compute.apply()
+                yield pull_owner()
+        elif owner is not None:
+            log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
+            submitter = IVirtualizationContainerSubmitter(parent)
+            yield submitter.submit(ISetOwner, uuid, owner)
+            log.msg('Owner pushing for %s successful' % self.context, system='sync')
+
+    @db.assert_transact
+    def sync_owner_transact(self, vm):
+        owner = self.context.__owner__
+        parent = self.context.__parent__
+        uuid = self.context.__name__
+
+        if vm.get('owner'):
+            if owner != vm['owner']:
+                compute = TmpObj(self.context)
+                newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+                compute.__owner__ = newowner
+                compute.apply()
+        elif owner is not None:
+            log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
+            submitter = IVirtualizationContainerSubmitter(parent)
+            d = submitter.submit(ISetOwner, uuid, owner)
+            d.addCallback(lambda r: log.msg('Owner pushing for %s successful' % self.context, system='sync'))
+            d.addErrback(log.err, system='sync')
+
     @db.assert_transact
     def sync_vm(self, vm):
         compute = TmpObj(self.context)
-
-        if vm.get('owner') and self.context.__owner__ != vm['owner']:
-            newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-            compute.__owner__ = newowner
-        elif self.context.__owner__ is not None:
-            log.msg('Attempting to push owner (%s) of %s to VM config' % (self.context.__owner__,
-                                                                          self.context), system='sync')
-            submitter = IVirtualizationContainerSubmitter(self.context.__parent__)
-            d = submitter.submit(ISetOwner, self.context.__name__, self.context.__owner__)
-
-            def handle_success(r):
-                log.msg('Owner pushing for %s successful' % self.context, system='sync')
-
-            def handle_error(f):
-                log.err(f, system='sync')
-
-            d.addCallbacks(handle_success, handle_error)
-
         compute.state = unicode(vm['state'])
-        compute.effective_state = compute.state
 
         # Ensure IDeployed marker is set, unless not in another state
         if not IDeployed.providedBy(compute):
@@ -254,10 +285,14 @@ class SyncAction(ComputeAction):
 
         compute.diskspace = diskspace
 
-        if compute.effective_state == 'active':
+        if compute.state == 'active':
             compute.uptime = get_f(vm, 'uptime')
         else:
             compute.uptime = None
+
+        compute.num_cores = vm['vcpu']
+        compute.swap_size = vm.get('swap') or compute.swap_size
+        compute.kernel = vm.get('kernel') or compute.kernel
 
         compute.apply()
 
@@ -370,7 +405,7 @@ class SyncAction(ComputeAction):
     def sync_vms(self):
         vms = follow_symlinks(self.context['vms'])
         if vms:
-            return SyncVmsAction(vms).execute(DetachedProtocol(), object())
+            return SyncVmsAction(vms)._execute(DetachedProtocol(), object())
 
 
 class SyncTemplatesAction(ComputeAction):
@@ -384,14 +419,14 @@ class SyncTemplatesAction(ComputeAction):
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         if not any_stack_installed(self.context) or not follow_symlinks(self.context['vms']):
-            defer.returnValue(None)
+            return
 
         submitter = IVirtualizationContainerSubmitter(follow_symlinks(self.context['vms']))
         templates = yield submitter.submit(IGetLocalTemplates)
 
         if not templates:
             log.msg('Did not find any templates on %s' % self.context, system='sync-templates')
-            defer.returnValue(None)
+            return
 
         @db.transact
         def update_templates():
