@@ -376,7 +376,7 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def ensure_vms(self):
-        if follow_symlinks(self.context['vms']) or not any_stack_installed(self.context):
+        if not any_stack_installed(self.context):
             return
 
         vms_types = yield IGetVirtualizationContainers(self.context).run()
