@@ -252,7 +252,7 @@ class SyncAction(ComputeAction):
             alsoProvides(self.context, IDeployed)
 
         if 'ctid' in vm:
-            compute.ctid = vm['ctid']
+            compute.ctid = vm['ctid'] if vm['ctid'] != '-' else -1
 
         for idx, console in enumerate(vm['consoles']):
             if console['type'] == 'pty' and not self.context.consoles['tty%s' % idx]:
