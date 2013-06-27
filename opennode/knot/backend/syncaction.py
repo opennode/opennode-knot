@@ -62,7 +62,8 @@ class SyncAction(ComputeAction):
     def _execute(self, cmd, args):
         log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
                  system='sync-action')
-        yield self.sync_agent_version()
+        if any_stack_installed(self.context):
+            yield self.sync_agent_version()
 
         default = yield self.default_console()
 
