@@ -25,7 +25,7 @@ from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
-from opennode.knot.model.template import Template
+from opennode.knot.model.template import Template, Templates
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -390,6 +390,10 @@ class SyncAction(ComputeAction):
         def add_container(backend_type):
             log.msg('Adding backend %s' % backend_type, system='sync')
             vms = VirtualizationContainer(unicode(backend_type))
+
+            if vms.__name__ in self.context.listnames():
+                return
+
             self.context.add(vms)
             if not self.context['vms']:
                 self.context.add(Symlink('vms', self.context[vms.__name__]))
@@ -425,7 +429,11 @@ class SyncTemplatesAction(ComputeAction):
 
         @db.transact
         def update_templates(container, templates):
+            if not container['templates']:
+                container.add(Templates())
+
             template_container = container['templates']
+
             for template in templates:
                 name = template['template_name']
 

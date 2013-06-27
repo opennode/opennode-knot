@@ -24,11 +24,15 @@ class IVirtualizationContainer(Interface):
     backend = schema.Choice(title=u"Backend", values=(u'xen', u'kvm', u'openvz', u'lxc'))
 
 
+class IInVirtualizationContainer(Interface):
+    pass
+
+
 class VirtualizationContainer(Container):
     implements(IVirtualizationContainer, IInCompute, IInHangar)
     permissions(dict(backend=('read', 'modify')))
 
-    __contains__ = IVirtualCompute
+    __contains__ = IInVirtualizationContainer
 
     def __init__(self, backend):
         super(VirtualizationContainer, self).__init__()
