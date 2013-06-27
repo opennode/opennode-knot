@@ -6,7 +6,6 @@ from twisted.python import log
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 
-import logging
 import netaddr
 import transaction
 
