@@ -318,10 +318,11 @@ class AllocateAction(ComputeAction):
                               filter(lambda (pk, pv): pk != 'total',
                                      self.context.diskspace.iteritems()))) < m.diskspace.get(param, 0)
                 yield self.context.num_cores <= m.num_cores
+
+                templates = m['vms-%s' % container]['templates']
                 yield self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
-                                                          m[container.__name__]['templates'].listcontent()
-                                                          if m[container.__name__]['templates'] else []))
+                                                          templates.listcontent() if templates else []))
 
             def unwind_until_false(generator):
                 fail_description = ['Not a compute',
