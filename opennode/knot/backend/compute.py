@@ -320,8 +320,8 @@ class AllocateAction(ComputeAction):
                 yield self.context.num_cores <= m.num_cores
                 yield self.context.template in map(lambda t: t.name,
                                                    filter(lambda t: ITemplate.providedBy(t),
-                                                          m['templates'].listcontent()
-                                                          if m['templates'] else []))
+                                                          m[container.__name__]['templates'].listcontent()
+                                                          if m[container.__name__]['templates'] else []))
 
             def unwind_until_false(generator):
                 fail_description = ['Not a compute',
