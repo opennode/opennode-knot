@@ -2,11 +2,11 @@ from __future__ import absolute_import
 
 from grokcore.component import context
 from grokcore.component import Adapter, implements
-import netaddr
 from zope import schema
 from zope.component import provideSubscriptionAdapter, provideAdapter
 from zope.interface import Interface
 
+import netaddr
 
 from opennode.knot.model.common import IInVirtualizationContainer
 from opennode.knot.model.console import Consoles
@@ -163,8 +163,8 @@ class IDeploying(Interface):
 class Compute(Container):
     """A compute node."""
 
-    from opennode.knot.model.hangar import IInHangar
-    implements(ICompute, IDisplayName, IMarkable, IInHangar, IInVirtualizationContainer)
+    implements(ICompute, IDisplayName, IMarkable, IInVirtualizationContainer)
+
     permissions(dict(hostname=('read', 'modify'),
                      ipv4_address=('read', 'modify'),
                      ipv6_address=('read', 'modify'),
