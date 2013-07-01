@@ -2,6 +2,7 @@ from grokcore.component import context, name
 
 from opennode.oms.endpoint.webterm.root import ConsoleView, SSHClientTerminalProtocol
 from opennode.oms.endpoint.webterm.ssh import ssh_connect_interactive_shell
+from opennode.oms.security.authentication import Sudo
 
 from opennode.knot.model.computes import Computes
 from opennode.knot.model.console import ISshConsole, ITtyConsole, IOpenVzConsole
@@ -12,12 +13,15 @@ class HypervisorSshTerminalProtocol(SSHClientTerminalProtocol):
 
     def __init__(self, console):
         phy = console.__parent__.__parent__.__parent__.__parent__
-        super(HypervisorSshTerminalProtocol, self).__init__('root', phy.hostname, port=22)
+        with Sudo(phy):
+            hostname = phy.hostname
+        super(HypervisorSshTerminalProtocol, self).__init__('root', hostname, port=22)
         self.console = console
 
     def connection_made(self, terminal, size):
         self.transport = terminal.transport
-        ssh_connect_interactive_shell(self.user, self.host, self.port, self.transport, self.set_channel, size, self.command)
+        ssh_connect_interactive_shell(self.user, self.host, self.port, self.transport,
+                                      self.set_channel, size, self.command)
 
 
 class TtyTerminalProtocol(HypervisorSshTerminalProtocol):
@@ -42,7 +46,9 @@ class SshConsoleView(ConsoleView):
 
     @property
     def terminal_protocol(self):
-        return SSHClientTerminalProtocol(self.context.user, self.context.hostname)
+        with Sudo(self.context):
+            hostname = self.context.hostname
+        return SSHClientTerminalProtocol(self.context.user, hostname)
 
 
 class ArbitraryHostConsoleView(ConsoleView):
