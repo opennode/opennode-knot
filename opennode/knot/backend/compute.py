@@ -599,9 +599,13 @@ class PreDeployHookOpenVZ(GlobalUtility):
     implements(IPreDeployHook)
     name('pre-deploy-openvz')
 
-    @db.transact
+    @defer.inlineCallbacks
     def execute(self, context, *args, **kw):
-        if context.__parent__.backend != 'openvz':
+        @db.ro_transact
+        def check_backend(context):
+            return context.__parent__.backend != 'openvz'
+
+        if (yield check_backend(context)):
             return
 
         cmd, vm_parameters = args[1:]
