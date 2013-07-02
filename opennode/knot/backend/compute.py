@@ -2,7 +2,7 @@ from grokcore.component import context, baseclass
 from grokcore.component import implements, name
 from grokcore.component import GlobalUtility
 from logging import DEBUG, WARNING, ERROR
-from twisted.internet import defer
+from twisted.internet import defer, error
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
 from zope.authentication.interfaces import IAuthentication
@@ -579,6 +579,7 @@ class PreDeployHookKVM(GlobalUtility):
         if (yield check_backend(context)):
             return
 
+        cmd = ['undefined']
         try:
             vm_parameters = args[1]
 
@@ -588,11 +589,16 @@ class PreDeployHookKVM(GlobalUtility):
 
             mac_addr = mac_addr_kvm_generator()
 
-            yield subprocess.async_check_output(['./scripts/allocate_dhcp_ip.sh', secret, server,
-                                                 server_port, mac_addr, str(vm_parameters['ip_address']),
-                                                 vm_parameters['hostname']])
+            cmd = ['./scripts/allocate_dhcp_ip.sh', secret, server,
+                   server_port, mac_addr, str(vm_parameters['ip_address']),
+                   vm_parameters['hostname']]
+
+            yield subprocess.async_check_output(cmd)
+        except error.ProcessTerminated:
+            log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
+            log.err(system='deploy-hook-kvm')
         except Exception:
-            log.err(system='deploy')
+            log.err(system='deploy-hook-kvm')
 
 
 class PreDeployHookOpenVZ(GlobalUtility):
@@ -615,11 +621,11 @@ class PreDeployHookOpenVZ(GlobalUtility):
 
         if ctid is not None:
             log.msg('Deploying %s to %s: hinting CTID (%s)' % (context, context.__parent__, ctid),
-                    system='deploy')
+                    system='deploy-hook-openvz')
             vm_parameters.update({'ctid': ctid + 1})
         else:
             self._action_log(cmd, 'Information about current global CTID is unavailable yet, '
-                             'will let it use HN-local value instead')
+                             'will let it use HN-local value instead', system='deploy-hook-openvz')
 
 
 class UndeployAction(VComputeAction):
