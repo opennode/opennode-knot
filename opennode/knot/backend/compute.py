@@ -580,7 +580,7 @@ class PreDeployHookKVM(GlobalUtility):
             return
 
         try:
-            vm_parameters = args[3]
+            vm_parameters = args[2]
 
             secret = get_config().getstring('deploy', 'dhcp_key')
             server = get_config().getstring('deploy', 'dhcp_server')
@@ -608,8 +608,8 @@ class PreDeployHookOpenVZ(GlobalUtility):
         if (yield check_backend(context)):
             return
 
-        cmd = args[1]
-        vm_parameters = args[2]
+        cmd = args[0]
+        vm_parameters = args[1]
 
         ctid = yield get_current_ctid()
 
