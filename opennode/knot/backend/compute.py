@@ -583,9 +583,9 @@ class PreDeployHookKVM(GlobalUtility):
         try:
             vm_parameters = args[1]
 
-            secret = get_config().getstring('deploy', 'dhcp_key')
-            server = get_config().getstring('deploy', 'dhcp_server')
-            server_port = get_config().getstring('deploy', 'dhcp_server_port')
+            secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
+            server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
+            server_port = get_config().getstring('deploy', 'dhcp_server_port', '7911')
 
             mac_addr = mac_addr_kvm_generator()
 
