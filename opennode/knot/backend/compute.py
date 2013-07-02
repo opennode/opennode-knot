@@ -1,5 +1,5 @@
 from grokcore.component import context, baseclass
-from grokcore.component import implements
+from grokcore.component import implements, name
 from grokcore.component import GlobalUtility
 from logging import DEBUG, WARNING, ERROR
 from twisted.internet import defer
@@ -568,8 +568,9 @@ class DeployAction(VComputeAction):
 
 class PreDeployHookKVM(GlobalUtility):
     implements(IPreDeployHook)
+    name('pre-deploy-kvm')
 
-    @defer.inlineCallback
+    @defer.inlineCallbacks
     def execute(self, context, *args, **kw):
         @db.ro_transact
         def check_backend(context):
@@ -596,6 +597,7 @@ class PreDeployHookKVM(GlobalUtility):
 
 class PreDeployHookOpenVZ(GlobalUtility):
     implements(IPreDeployHook)
+    name('pre-deploy-openvz')
 
     @db.transact
     def execute(self, context, *args, **kw):
@@ -660,6 +662,7 @@ class UndeployAction(VComputeAction):
 
 class PostUndeployHookKVM(GlobalUtility):
     implements(IPostUndeployHook)
+    name('post-undeploy-kvm')
 
     @defer.inlineCallbacks
     def execute(self, context, *args, **kw):
