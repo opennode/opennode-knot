@@ -580,7 +580,7 @@ class PreDeployHookKVM(GlobalUtility):
             return
 
         try:
-            vm_parameters = args[2]
+            vm_parameters = args[1]
 
             secret = get_config().getstring('deploy', 'dhcp_key')
             server = get_config().getstring('deploy', 'dhcp_server')
