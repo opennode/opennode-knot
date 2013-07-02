@@ -589,7 +589,7 @@ class PreDeployHookKVM(GlobalUtility):
             mac_addr = mac_addr_kvm_generator()
 
             yield subprocess.async_check_output(['./scripts/allocate_dhcp_ip.sh', secret, server,
-                                                 server_port, mac_addr, vm_parameters['ip_address'],
+                                                 server_port, mac_addr, str(vm_parameters['ip_address']),
                                                  vm_parameters['hostname']])
         except Exception:
             log.err(system='deploy')

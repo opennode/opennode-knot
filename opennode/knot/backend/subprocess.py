@@ -35,14 +35,14 @@ def async_check_output(args, ireactorprocess=None, killhook=None):
     :type ireactorprocess: :class: twisted.internet.interfaces.IReactorProcess
     :rtype: Deferred
     """
-    log.debug('%s (killhook=%s)', ' '.join(args), killhook is not None)
+    log.debug('%s (killhook=%s)', ' '.join(map(str, args)), killhook is not None)
 
     if ireactorprocess is None:
         from twisted.internet import reactor
         ireactorprocess = reactor
 
     pprotocol = SubprocessProtocol()
-    ireactorprocess.spawnProcess(pprotocol, args[0], args, env=None)
+    ireactorprocess.spawnProcess(pprotocol, args[0], map(str, args), env=None)
     if killhook and type(killhook) is Deferred:
         killhook.addCallback(lambda r: pprotocol.transport.signalProcess('KILL'))
     return pprotocol.d
