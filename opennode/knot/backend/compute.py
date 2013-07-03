@@ -476,7 +476,6 @@ class DeployAction(VComputeAction):
                 ipaddr = yield allocate_ip_address()
                 vm_parameters.update({'ip_address': str(ipaddr)})
 
-
             utils = getAllUtilitiesRegisteredFor(IPreDeployHook)
             for util in utils:
                 yield defer.maybeDeferred(util.execute, self.context, cmd, vm_parameters)
@@ -586,11 +585,12 @@ class PreDeployHookKVM(GlobalUtility):
             secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
             server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
             server_port = get_config().getstring('deploy', 'dhcp_server_port', '7911')
+            hook_script = get_config().getstring('deploy', 'hook_script_allocate',
+                                                 'scripts/allocate_dhcp_ip.sh')
 
             mac_addr = mac_addr_kvm_generator()
 
-            cmd = ['./scripts/allocate_dhcp_ip.sh', secret, server,
-                   server_port, mac_addr, str(vm_parameters['ip_address']),
+            cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
                    vm_parameters['hostname']]
 
             yield subprocess.async_check_output(cmd)
@@ -684,18 +684,25 @@ class PostUndeployHookKVM(GlobalUtility):
         if (yield check_backend(context)):
             return
 
+        cmd = []
         try:
             _, vm_parameters = args[1:]
 
             secret = get_config().getstring('deploy', 'dhcp_key')
             server = get_config().getstring('deploy', 'dhcp_server')
             server_port = get_config().getstring('deploy', 'dhcp_server_port')
+            hook_script = get_config().getstring('deploy', 'hook_script_deallocate',
+                                                 'scripts/deallocate_dhcp_ip.sh')
 
             mac_addr = mac_addr_kvm_generator()
 
-            yield subprocess.async_check_output(['./scripts/allocate_dhcp_ip.sh', secret, server,
-                                                 server_port, mac_addr, vm_parameters['ip_address'],
-                                                 vm_parameters['hostname']])
+            cmd = [hook_script, secret, server, server_port, mac_addr, vm_parameters['ip_address'],
+                   vm_parameters['hostname']]
+            yield subprocess.async_check_output(cmd)
+        except error.ProcessTerminated:
+            log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
+            log.err(system='deploy-hook-kvm')
+
         except Exception:
             log.err(system='undeploy')
 
