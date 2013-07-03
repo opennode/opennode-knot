@@ -130,7 +130,7 @@ class SyncAction(ComputeAction):
     @db.assert_transact
     def _default_console(self):
         if self.context['consoles']:
-            return None
+            return
 
         default = self.context.consoles['default']
         if default:
