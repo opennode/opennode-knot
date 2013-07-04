@@ -6,7 +6,6 @@ from zope import schema
 from zope.component import provideSubscriptionAdapter
 from zope.interface import Interface, implements
 
-from opennode.knot.model.common import IInVirtualizationContainer
 from opennode.knot.model.compute import ICompute, IVirtualCompute, IInCompute
 from opennode.knot.model.computes import Computes
 from opennode.knot.model.hangar import IInHangar
@@ -29,7 +28,6 @@ class VirtualizationContainer(Container):
     permissions(dict(backend=('read', 'modify')))
 
     __contains__ = IVirtualCompute
-    __markers__ = [IInVirtualizationContainer]
 
     def __init__(self, backend):
         super(VirtualizationContainer, self).__init__()
