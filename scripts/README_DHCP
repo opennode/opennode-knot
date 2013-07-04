@@ -1,0 +1,47 @@
+IP Allocation/deallocation
+==========================
+The two provided helper scripts - allocate_dhcp_ip.sh/deallocate_dhcp_ip.sh -
+offer shortcut for updating OMAPI DHCP servers (e.g. ISC DHCP) with IP leases
+for the specified MAC address.
+
+The scripts rely on the presence of omshell (dhcp package in rhel/fedora/brew/...).
+
+DHCP server configuration
+-------------------------
+First of all, a random key is required to be used as a shared secret between
+the client and the server. One way of generating it, is to run the following
+on the DHCP server machine:
+
+# cd /etc/dhcp3
+# dnssec-keygen -r /dev/urandom  -a HMAC-MD5 -b 512 -n HOST omapi_key
+# KEY=cat Komapi_key*.private|grep ^Key|cut -d ' ' -f2-
+# echo $KEY
+# e.g. JaHI1mIAWR3RhiaT0Azau+cc1Bv+iD+L+8QgdPpVJW6vD0BTZHuvEpB2vDP5rj33fScqoFb/HAWCzgwd8Udeag==
+
+The key is required to be put into the server
+configuration -/etc/dhcp3/dchpd.conf:
+
+omapi-port 7911;
+    key omapi_key {
+        algorithm HMAC-MD5;
+        secret "JaHI1mIAWR3RhiaT0Azau+cc1Bv+iD+L+8QgdPpVJW6vD0BTZHuvEpB2vDP5rj33fScqoFb/HAWCzgwd8Udeag==";
+    };
+omapi-key omapi_key;
+
+Once the configuration is done, you need to restart the DHCP server.
+
+Script usage
+------------
+The usage for allocation and deallocation is symmetrical:
+
+./(de)allocate_dhcp_ip.sh DHCP_KEY DHCP_SERVER DHCP_SERVER_PORT VM_MAC VM_IP VM_NAME
+
+For example:
+./allocate_dhcp_ip.sh Vs3700nHBD0P6VYwx6HdYKSzVk2xUXiKneroaBUSh+FsjkQFTkYjjCZFOT8tu+04JhtphZ4eUEDtVFhYuJ+sSw== 10.211.55.2 9991 00:80:c7:84:b1:95 1.1.1.1 myvm
+
+REFERENCES
+==========
+
+1. http://linux.die.net/man/1/omshell
+2. http://www.jedi.be/blog/2010/12/08/automating-dhcp-management-with-omapi/
+3. http://linux.die.net/man/5/dhcpd.leases

@@ -1,15 +1,18 @@
 from grokcore.component import context, baseclass
-from grokcore.component import implements
+from grokcore.component import implements, name
+from grokcore.component import GlobalUtility
 from logging import DEBUG, WARNING, ERROR
-from twisted.internet import defer
+from twisted.internet import defer, error
 from twisted.python import log
 from uuid import uuid5, NAMESPACE_DNS
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
+from zope.component import getAllUtilitiesRegisteredFor
 
 import netaddr
 import time
 
+from opennode.knot.backend import subprocess
 from opennode.knot.backend.operation import IDeployVM
 from opennode.knot.backend.operation import IDestroyVM
 from opennode.knot.backend.operation import IListVMS
@@ -22,12 +25,15 @@ from opennode.knot.backend.operation import ISuspendVM
 from opennode.knot.backend.operation import IUndeployVM
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
+from opennode.knot.model.common import IPreDeployHook
+from opennode.knot.model.common import IPostUndeployHook
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IManageable
 from opennode.knot.model.template import ITemplate
 from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+from opennode.knot.utils import mac_addr_kvm_generator
 
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.cmd.base import Cmd
@@ -278,6 +284,23 @@ class VComputeAction(ComputeAction):
             self._action_log(cmd, '%s' % (format_error(e)))
             raise
 
+    @db.ro_transact(proxy=False)
+    def get_parameters(self):
+        return {'template_name': self.context.template,
+                'hostname': self.context.hostname,
+                'vm_type': self.context.__parent__.backend,
+                'uuid': self.context.__name__,
+                'nameservers': db.remove_persistent_proxy(self.context.nameservers),
+                'autostart': self.context.autostart,
+                'ip_address': self.context.ipv4_address.split('/')[0],
+                'passwd': getattr(self.context, 'root_password', None),
+                'start_vm': getattr(self.context, 'start_vm', False),
+                'memory': self.context.memory / 1024.0,
+                'owner': self.context.__owner__,
+                'disk': self.context.diskspace.get('root', 10.0),
+                'vcpu': self.context.num_cores,
+                'swap': self.context.swap_size}
+
 
 class DiskspaceInvalidConfigError(KeyError):
     def __init__(self, msg):
@@ -398,27 +421,16 @@ def mv_compute_model(context_path, target_path):
         log.msg('Model NOT moved: already moved by sync?', system='deploy')
 
 
+@db.ro_transact(proxy=False)
+def get_current_ctid():
+    ctidlist = db.get_root()['oms_root']['computes']['openvz']
+    return max([follow_symlinks(symlink).ctid for symlink in ctidlist.listcontent()] + [100])
+
+
 class DeployAction(VComputeAction):
     context(IUndeployed)
 
     action('deploy')
-
-    @db.ro_transact(proxy=False)
-    def get_parameters(self):
-        return {'template_name': self.context.template,
-                'hostname': self.context.hostname,
-                'vm_type': self.context.__parent__.backend,
-                'uuid': self.context.__name__,
-                'nameservers': db.remove_persistent_proxy(self.context.nameservers),
-                'autostart': self.context.autostart,
-                'ip_address': self.context.ipv4_address.split('/')[0],
-                'passwd': getattr(self.context, 'root_password', None),
-                'start_vm': getattr(self.context, 'start_vm', False),
-                'memory': self.context.memory / 1024.0,
-                'owner': self.context.__owner__,
-                'disk': self.context.diskspace.get('root', 10.0),
-                'vcpu': self.context.num_cores,
-                'swap': self.context.swap_size}
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -454,11 +466,6 @@ class DeployAction(VComputeAction):
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
 
-        @db.ro_transact(proxy=False)
-        def get_current_ctid():
-            ctidlist = db.get_root()['oms_root']['computes']['openvz']
-            return max([follow_symlinks(symlink).ctid for symlink in ctidlist.listcontent()] + [100])
-
         try:
             yield db.transact(alsoProvides)(self.context, IDeploying)
 
@@ -468,18 +475,10 @@ class DeployAction(VComputeAction):
             if vm_parameters['ip_address'] in (None, u'0.0.0.0/32', u'0.0.0.0', '0.0.0.0/32', '0.0.0.0'):
                 ipaddr = yield allocate_ip_address()
                 vm_parameters.update({'ip_address': str(ipaddr)})
-                # TODO: set IP to the model
 
-            vms_backend = yield db.get(target, 'backend')
-            if vms_backend == 'openvz':
-                ctid = yield get_current_ctid()
-                if ctid is not None:
-                    log.msg('Deploying %s to %s: hinting CTID (%s)' % (self.context, target, ctid),
-                            system='deploy')
-                    vm_parameters.update({'ctid': ctid + 1})
-                else:
-                    self._action_log(cmd, 'Information about current global CTID is unavailable yet, '
-                                     'will let it use HN-local value instead')
+            utils = getAllUtilitiesRegisteredFor(IPreDeployHook)
+            for util in utils:
+                yield defer.maybeDeferred(util.execute, self.context, cmd, vm_parameters)
 
             log.msg('Deploying %s to %s: issuing agent command' % (self.context, target), system='deploy')
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
@@ -566,6 +565,69 @@ class DeployAction(VComputeAction):
         defer.returnValue(True)
 
 
+class PreDeployHookKVM(GlobalUtility):
+    implements(IPreDeployHook)
+    name('pre-deploy-kvm')
+
+    @defer.inlineCallbacks
+    def execute(self, context, *args, **kw):
+        @db.ro_transact
+        def check_backend(context):
+            return context.__parent__.backend != 'kvm'
+
+        if (yield check_backend(context)):
+            return
+
+        cmd = ['undefined']
+        try:
+            vm_parameters = args[1]
+
+            secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
+            server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
+            server_port = get_config().getstring('deploy', 'dhcp_server_port', '7911')
+            hook_script = get_config().getstring('deploy', 'hook_script_allocate',
+                                                 'scripts/allocate_dhcp_ip.sh')
+
+            mac_addr = mac_addr_kvm_generator()
+
+            cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
+                   vm_parameters['uuid']]
+
+            yield subprocess.async_check_output(cmd)
+        except error.ProcessTerminated:
+            log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
+            log.err(system='deploy-hook-kvm')
+        except Exception:
+            log.err(system='deploy-hook-kvm')
+
+
+class PreDeployHookOpenVZ(GlobalUtility):
+    implements(IPreDeployHook)
+    name('pre-deploy-openvz')
+
+    @defer.inlineCallbacks
+    def execute(self, context, *args, **kw):
+        @db.ro_transact
+        def check_backend(context):
+            return context.__parent__.backend != 'openvz'
+
+        if (yield check_backend(context)):
+            return
+
+        cmd = args[0]
+        vm_parameters = args[1]
+
+        ctid = yield get_current_ctid()
+
+        if ctid is not None:
+            log.msg('Deploying %s to %s: hinting CTID (%s)' % (context, context.__parent__, ctid),
+                    system='deploy-hook-openvz')
+            vm_parameters.update({'ctid': ctid + 1})
+        else:
+            self._action_log(cmd, 'Information about current global CTID is unavailable yet, '
+                             'will let it use HN-local value instead', system='deploy-hook-openvz')
+
+
 class UndeployAction(VComputeAction):
     context(IDeployed)
 
@@ -600,6 +662,49 @@ class UndeployAction(VComputeAction):
                 alsoProvides(vm, IUndeployed)
 
         yield finalize_vm()
+
+        vm_parameters = yield self.get_parameters()
+
+        utils = getAllUtilitiesRegisteredFor(IPostUndeployHook)
+
+        for util in utils:
+            yield defer.maybeDeferred(util.execute, self.context, cmd, vm_parameters)
+
+
+class PostUndeployHookKVM(GlobalUtility):
+    implements(IPostUndeployHook)
+    name('post-undeploy-kvm')
+
+    @defer.inlineCallbacks
+    def execute(self, context, *args, **kw):
+        @db.ro_transact
+        def check_backend(context):
+            return context.__parent__.backend != 'kvm'
+
+        if (yield check_backend(context)):
+            return
+
+        cmd = []
+        try:
+            _, vm_parameters = args[1:]
+
+            secret = get_config().getstring('deploy', 'dhcp_key')
+            server = get_config().getstring('deploy', 'dhcp_server')
+            server_port = get_config().getstring('deploy', 'dhcp_server_port')
+            hook_script = get_config().getstring('deploy', 'hook_script_deallocate',
+                                                 'scripts/deallocate_dhcp_ip.sh')
+
+            mac_addr = mac_addr_kvm_generator()
+
+            cmd = [hook_script, secret, server, server_port, mac_addr, vm_parameters['ip_address'],
+                   vm_parameters['uuid']]
+            yield subprocess.async_check_output(cmd)
+        except error.ProcessTerminated:
+            log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
+            log.err(system='deploy-hook-kvm')
+
+        except Exception:
+            log.err(system='undeploy')
 
 
 class MigrateAction(VComputeAction):
