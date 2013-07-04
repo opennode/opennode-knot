@@ -1,11 +1,10 @@
 from __future__ import absolute_import
 
-from grokcore.component import context
+from grokcore.component import context, implements
 from zope import schema
 from zope.component import provideSubscriptionAdapter
-from zope.interface import Interface, implements
+from zope.interface import Interface
 
-from opennode.knot.model.common import IInVirtualizationContainer
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import ContainerInjector
@@ -71,9 +70,13 @@ class TemplateTags(ModelTags):
 
 
 class Templates(Container):
-    implements(IInVirtualizationContainer)
     __contains__ = Template
     __name__ = 'templates'
+
+    def __init__(self, *args, **kw):
+        super(Templates, self).__init__(*args, **kw)
+        from opennode.knot.model.compute import IVirtualCompute
+        self.__markers__ = [IVirtualCompute]
 
     def __str__(self):
         return 'Template list'
