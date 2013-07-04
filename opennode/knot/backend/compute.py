@@ -591,7 +591,7 @@ class PreDeployHookKVM(GlobalUtility):
             mac_addr = mac_addr_kvm_generator()
 
             cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
-                   vm_parameters['hostname']]
+                   vm_parameters['uuid']]
 
             yield subprocess.async_check_output(cmd)
         except error.ProcessTerminated:
@@ -697,7 +697,7 @@ class PostUndeployHookKVM(GlobalUtility):
             mac_addr = mac_addr_kvm_generator()
 
             cmd = [hook_script, secret, server, server_port, mac_addr, vm_parameters['ip_address'],
-                   vm_parameters['hostname']]
+                   vm_parameters['uuid']]
             yield subprocess.async_check_output(cmd)
         except error.ProcessTerminated:
             log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
