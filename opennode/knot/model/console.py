@@ -58,6 +58,7 @@ class TtyConsole(ReadonlyContainer):
     permissions(dict(pty=('read', 'modify')))
 
     def __init__(self, name, pty):
+        self.inherit_permissions = True
         self.__name__ = name
         self.pty = pty
 
@@ -70,6 +71,7 @@ class SshConsole(ReadonlyContainer):
                      ))
 
     def __init__(self, name, user, hostname, port):
+        self.inherit_permissions = True
         self.__name__ = name
         self.user = user
         self.hostname = hostname
@@ -81,6 +83,7 @@ class OpenVzConsole(ReadonlyContainer):
     permissions(dict(cid=('read', 'modify')))
 
     def __init__(self, name, cid):
+        self.inherit_permissions = True
         self.__name__ = name
         self.cid = cid
 
@@ -94,6 +97,7 @@ class VncConsole(ReadonlyContainer):
     proxy_processes = {}
 
     def __init__(self, hostname, port):
+        self.inherit_permissions = True
         self.__name__ = 'vnc'
         self.hostname = hostname
         self.port = port
@@ -134,6 +138,7 @@ class VncProxyProcess(object):
 class Consoles(Container):
     __name__ = 'consoles'
     __contains__ = IConsole
+    inherit_permissions = True
 
 
 class AttachAction(Action):
