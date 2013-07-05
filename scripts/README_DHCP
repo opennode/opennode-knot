@@ -6,7 +6,7 @@ for the specified MAC address.
 
 The scripts rely on the presence of omshell (dhcp package in rhel/fedora/brew/...).
 
-DHCP server configuration
+DHCP server configuration (Ubuntu/Debian example)
 -------------------------
 First of all, a random key is required to be used as a shared secret between
 the client and the server. One way of generating it, is to run the following
@@ -14,7 +14,7 @@ on the DHCP server machine:
 
 # cd /etc/dhcp3
 # dnssec-keygen -r /dev/urandom  -a HMAC-MD5 -b 512 -n HOST omapi_key
-# KEY=cat Komapi_key*.private|grep ^Key|cut -d ' ' -f2-
+# KEY=`cat Komapi_key*.private|grep ^Key|cut -d ' ' -f2-`
 # echo $KEY
 # e.g. JaHI1mIAWR3RhiaT0Azau+cc1Bv+iD+L+8QgdPpVJW6vD0BTZHuvEpB2vDP5rj33fScqoFb/HAWCzgwd8Udeag==
 
