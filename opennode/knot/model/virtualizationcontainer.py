@@ -37,6 +37,10 @@ class VirtualizationContainer(Container):
     def __str__(self):
         return 'virtualizationcontainer-%s' % self.__name__
 
+    def __repr__(self):
+        return '<VirtualizationContainer backend=%s parent=%s id=0x%X>' % (self.__name__, self.__parent__,
+                                                                           id(self))
+
 
 class VirtualizationContainerTags(ModelTags):
     context(VirtualizationContainer)
