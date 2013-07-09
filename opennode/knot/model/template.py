@@ -42,9 +42,10 @@ class ITemplate(Interface):
         value_type=schema.Int(),
         required=False)
 
+    username = schema.TextLine(title=u"Default username", required=False)
     password = schema.TextLine(title=u"Default password", required=False)
-    ip = schema.TextLine(title=u"Default password", required=False)
-    nameserver = schema.TextLine(title=u"Default password", required=False)
+    ip = schema.TextLine(title=u"Default IP", required=False)
+    nameserver = schema.TextLine(title=u"Default nameserver", required=False)
 
 
 class Template(Model):
