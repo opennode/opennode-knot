@@ -455,7 +455,10 @@ class SyncTemplatesAction(ComputeAction):
                           get_f(template, 'disk'),
                           max(-1.0, get_f(template, 'disk_max')))
                 t.nameserver = get_u(template, 'nameserver')
+
+                t.username = get_u(template, 'username')
                 t.password = get_u(template, 'passwd')
+
                 t.cpu_limit = (get_i(template, 'vcpulimit_min'),
                                get_i(template, 'vcpulimit'))
                 t.ip = get_u(template, 'ip_address')
