@@ -51,7 +51,7 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 
 
 def dict_to_kwargs(arg):
-    return ['%s=%s' % (k, str(v)) for k, v in arg.iteritems()]
+    return ['%s="%s"' % (k, str(v)) for k, v in arg.iteritems()]
 
 
 class SimpleSaltExecutor(object):
