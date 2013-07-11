@@ -78,12 +78,10 @@ class SimpleSaltExecutor(object):
 
         timeout = ('--timeout=%s' % self.timeout) if self.timeout is not None else None
 
-        if args:
-            args = list(reduce(lambda a, b: a + b,
-                               map(lambda a:
-                                   (dict_to_kwargs(a) if type(a) is dict else ['"%s"' % str(a)]), args)))
-        else:
-            args = []
+        args = (list(reduce(lambda a, b: a + b,
+                            map(lambda a: (dict_to_kwargs(a) if type(a) is dict else ['"%s"' % str(a)]),
+                                args)))
+                if args else [])
 
         output = yield subprocess.async_check_output(
             filter(None, (cmd.split(' ') +
