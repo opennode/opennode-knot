@@ -595,6 +595,7 @@ class PreDeployHookKVM(GlobalUtility):
                 if not mac_address:
                     mac_address = mac_addr_kvm_generator()
                     context.mac_address = unicode(mac_address)
+                    vm_parameters.update({'mac_address': mac_address})
                 return mac_address
 
             mac_address = yield ensure_compute_mac_address(context)
