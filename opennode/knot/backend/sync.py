@@ -152,6 +152,7 @@ class SyncDaemonProcess(DaemonProcess):
 
                 if timeout < datetime.now():
                     update_list.append(profile.name)
+
             return update_list
 
         update_list = yield get_users_with_vms_to_update()
