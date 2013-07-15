@@ -581,7 +581,7 @@ class PreDeployHookKVM(GlobalUtility):
 
         cmd = ['undefined']
         try:
-            vm_parameters = args[1:]
+            vm_parameters = args[1]
 
             secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
             server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
@@ -698,7 +698,7 @@ class PostUndeployHookKVM(GlobalUtility):
 
         cmd = ['undefined']
         try:
-            vm_parameters = args[1:]
+            vm_parameters = args[1]
 
             secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
             server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
