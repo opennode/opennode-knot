@@ -594,14 +594,13 @@ class PreDeployHookKVM(GlobalUtility):
                 mac_address = getattr(context, 'mac_address', None)
                 if not mac_address:
                     mac_address = mac_addr_kvm_generator()
-                    context.mac_address = mac_address
+                    context.mac_address = unicode(mac_address)
                 return mac_address
 
             mac_address = yield ensure_compute_mac_address(context)
 
             cmd = [hook_script, secret, server, server_port, mac_address,
-                   str(vm_parameters['ip_address']),
-                   vm_parameters['uuid']]
+                   str(vm_parameters['ip_address']), vm_parameters['uuid']]
 
             yield subprocess.async_check_output(cmd)
         except error.ProcessTerminated:
