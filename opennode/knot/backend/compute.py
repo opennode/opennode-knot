@@ -705,10 +705,7 @@ class PostUndeployHookKVM(GlobalUtility):
             hook_script = get_config().getstring('deploy', 'hook_script_deallocate',
                                                  'scripts/deallocate_dhcp_ip.sh')
 
-            mac_addr = getattr(context, 'mac_address', None)
-
-            if not mac_addr:
-                return
+            mac_addr = getattr(context, 'mac_address')
 
             cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
                    vm_parameters['uuid']]
