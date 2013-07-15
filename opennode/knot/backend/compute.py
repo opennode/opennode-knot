@@ -581,7 +581,7 @@ class PreDeployHookKVM(GlobalUtility):
 
         cmd = ['undefined']
         try:
-            _, vm_parameters = args[1:]
+            vm_parameters = args[1:]
 
             secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
             server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
@@ -599,7 +599,8 @@ class PreDeployHookKVM(GlobalUtility):
 
             mac_address = yield ensure_compute_mac_address(context)
 
-            cmd = [hook_script, secret, server, server_port, mac_address, str(vm_parameters['ip_address']),
+            cmd = [hook_script, secret, server, server_port, mac_address,
+                   str(vm_parameters['ip_address']),
                    vm_parameters['uuid']]
 
             yield subprocess.async_check_output(cmd)
@@ -697,7 +698,7 @@ class PostUndeployHookKVM(GlobalUtility):
 
         cmd = ['undefined']
         try:
-            _, vm_parameters = args[1:]
+            vm_parameters = args[1:]
 
             secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
             server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
@@ -707,7 +708,8 @@ class PostUndeployHookKVM(GlobalUtility):
 
             mac_addr = getattr(context, 'mac_address')
 
-            cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
+            cmd = [hook_script, secret, server, server_port, mac_addr,
+                   str(vm_parameters['ip_address']),
                    vm_parameters['uuid']]
 
             yield subprocess.async_check_output(cmd)
