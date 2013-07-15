@@ -44,6 +44,9 @@ class ISaltInstalled(IManageable):
 class ICompute(Interface):
     # Network parameters
     hostname = schema.TextLine(title=u"Host name", min_length=1)
+    mac_address = schema.TextLine(title=u'MAC address', min_length=17, max_length=23, required=False,
+                                  description=u'MAC address, formatted as a set of colon-separated '
+                                  'hexadecimal octet values')
     ipv4_address = schema.TextLine(title=u"IPv4 address", min_length=7, required=False)
     ipv6_address = schema.TextLine(title=u"IPv6 address", min_length=6, required=False)
     nameservers = schema.List(title=u"Nameservers", description=u"IPs of DNS servers",
@@ -166,6 +169,7 @@ class Compute(Container):
     implements(ICompute, IDisplayName, IMarkable, IInVirtualizationContainer)
 
     permissions(dict(hostname=('read', 'modify'),
+                     mac_addr=('read', 'modify'),
                      ipv4_address=('read', 'modify'),
                      ipv6_address=('read', 'modify'),
                      nameservers=('read', 'modify'),
@@ -200,6 +204,7 @@ class Compute(Container):
 
     hostname = u''
 
+    mac_address = None
     _ipv4_address = u'0.0.0.0/32'
     ipv6_address = u'::/128'
     nameservers = [u'8.8.8.8']

@@ -299,7 +299,8 @@ class VComputeAction(ComputeAction):
                 'owner': self.context.__owner__,
                 'disk': self.context.diskspace.get('root', 10.0),
                 'vcpu': self.context.num_cores,
-                'swap': self.context.swap_size}
+                'swap': self.context.swap_size,
+                'mac_address': getattr(self.context, 'mac_address', None)}
 
 
 class DiskspaceInvalidConfigError(KeyError):
@@ -580,7 +581,7 @@ class PreDeployHookKVM(GlobalUtility):
 
         cmd = ['undefined']
         try:
-            vm_parameters = args[1]
+            _, vm_parameters = args[1:]
 
             secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
             server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
@@ -588,17 +589,27 @@ class PreDeployHookKVM(GlobalUtility):
             hook_script = get_config().getstring('deploy', 'hook_script_allocate',
                                                  'scripts/allocate_dhcp_ip.sh')
 
-            mac_addr = mac_addr_kvm_generator()
+            @db.transact
+            def ensure_compute_mac_address(context):
+                mac_address = getattr(context, 'mac_address', None)
+                if not mac_address:
+                    mac_address = mac_addr_kvm_generator()
+                    context.mac_address = mac_address
+                return mac_address
 
-            cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
+            mac_address = yield ensure_compute_mac_address(context)
+
+            cmd = [hook_script, secret, server, server_port, mac_address, str(vm_parameters['ip_address']),
                    vm_parameters['uuid']]
 
             yield subprocess.async_check_output(cmd)
         except error.ProcessTerminated:
             log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
             log.err(system='deploy-hook-kvm')
+            raise
         except Exception:
             log.err(system='deploy-hook-kvm')
+            raise
 
 
 class PreDeployHookOpenVZ(GlobalUtility):
@@ -684,27 +695,32 @@ class PostUndeployHookKVM(GlobalUtility):
         if (yield check_backend(context)):
             return
 
-        cmd = []
+        cmd = ['undefined']
         try:
             _, vm_parameters = args[1:]
 
-            secret = get_config().getstring('deploy', 'dhcp_key')
-            server = get_config().getstring('deploy', 'dhcp_server')
-            server_port = get_config().getstring('deploy', 'dhcp_server_port')
+            secret = get_config().getstring('deploy', 'dhcp_key', 'secret')
+            server = get_config().getstring('deploy', 'dhcp_server', 'localhost')
+            server_port = get_config().getstring('deploy', 'dhcp_server_port', '7911')
             hook_script = get_config().getstring('deploy', 'hook_script_deallocate',
                                                  'scripts/deallocate_dhcp_ip.sh')
 
-            mac_addr = mac_addr_kvm_generator()
+            mac_addr = getattr(context, 'mac_address', None)
 
-            cmd = [hook_script, secret, server, server_port, mac_addr, vm_parameters['ip_address'],
+            if not mac_addr:
+                return
+
+            cmd = [hook_script, secret, server, server_port, mac_addr, str(vm_parameters['ip_address']),
                    vm_parameters['uuid']]
+
             yield subprocess.async_check_output(cmd)
         except error.ProcessTerminated:
             log.msg('Executing allocate_dhcp_ip.sh hook script failed: %s' % (cmd))
             log.err(system='deploy-hook-kvm')
-
+            raise
         except Exception:
             log.err(system='undeploy')
+            raise
 
 
 class MigrateAction(VComputeAction):
