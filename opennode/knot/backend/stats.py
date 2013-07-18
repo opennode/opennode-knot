@@ -54,6 +54,10 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         auth = getUtility(IAuthentication)
         p = auth.getPrincipal(username)
 
+        if p is None:
+            log.warning('User not found in authentication: %s. Possibly a stale user record.', username)
+            return
+
         if username is None:
             username = p.id
 

@@ -147,8 +147,9 @@ class SyncDaemonProcess(DaemonProcess):
             update_list = []
             for profile in home.listcontent():
                 timeout = ((datetime.strptime(profile.vm_stats_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
-                            timedelta(seconds=credit_check_cooldown)) if profile.vm_stats_timestamp else
-                           datetime.min)
+                            timedelta(seconds=credit_check_cooldown))
+                           if profile.vm_stats_timestamp
+                           else datetime.min)
 
                 if timeout < datetime.now():
                     update_list.append(profile.name)
@@ -158,7 +159,11 @@ class SyncDaemonProcess(DaemonProcess):
         update_list = yield get_users_with_vms_to_update()
 
         for name in update_list:
-            yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, name)
+            try:
+                yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, name)
+            except Exception:
+                log.msg('Non-fatal error during user stats syncing', system='sync')
+                log.err(system='sync')
 
     @defer.inlineCallbacks
     def gather_machines(self):
