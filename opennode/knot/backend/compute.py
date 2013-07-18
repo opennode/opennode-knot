@@ -512,6 +512,7 @@ class DeployAction(VComputeAction):
                 new_compute.__owner__ = owner_obj
                 new_compute.template = unicode(template)
                 new_compute._ipv4_address = unicode(ipaddr)
+                new_compute.mac_address = getattr(c, 'mac_address', None)
 
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
