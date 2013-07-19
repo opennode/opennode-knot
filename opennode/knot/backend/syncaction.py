@@ -231,8 +231,12 @@ class SyncAction(ComputeAction):
             if owner != vm['owner']:
                 compute = TmpObj(self.context)
                 newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-                compute.__owner__ = newowner
-                compute.apply()
+                if newowner is not None:
+                    compute.__owner__ = newowner
+                    compute.apply()
+                else:
+                    log.msg('User not found: "%s" while restoring owner for %s. '
+                            'Leaving as-is' % (vm['owner'], compute), system='sync')
         elif owner is not None:
             log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
             submitter = IVirtualizationContainerSubmitter(parent)
