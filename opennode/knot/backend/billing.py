@@ -112,7 +112,7 @@ class UserCreditChecker(GlobalUtility):
     def apply(self, principal):
         billable_group = get_config().getstring('auth', 'billable_group', 'users')
         if billable_group in map(str, principal.groups):
-            profile, uid, need_update = yield self._get_profile_and_need_update(self, principal)
+            profile, uid, need_update = yield self._get_profile_and_need_update(principal)
             log.debug('Need update %s uid=%s : %s', profile, uid, need_update)
 
             if need_update:
