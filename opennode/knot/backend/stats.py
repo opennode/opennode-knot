@@ -50,12 +50,11 @@ class UserComputeStatisticsAggregator(GlobalUtility):
 
     @db.transact
     def update(self, username):
-        log.debug('User statistics update: %s', username)
         auth = getUtility(IAuthentication)
         p = auth.getPrincipal(username)
 
         if p is None:
-            log.warning('User not found in authentication: %s. Possibly a stale user record.', username)
+            log.warning('User not found in authentication: %s. Possibly a stale profile record.', username)
             return
 
         if username is None:
