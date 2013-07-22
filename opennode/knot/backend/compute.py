@@ -207,8 +207,8 @@ class ComputeAction(Action, PreValidateHookMixin):
                 if data is not None:
                     break
             else:
-                self._action_log(cmd,
-                                 'CONCURRENCY BUG: locked() returned True, but now it is False! %s' % (self))
+                self._action_log(cmd, 'CONCURRENCY BUG: locked() returned True, '
+                                 'but now it is False! %s' % (self))
                 raise KeyError(self.lock_keys)
 
             ld, lock_action = data
@@ -237,11 +237,13 @@ class ComputeAction(Action, PreValidateHookMixin):
             e.trap(Exception)
             msg = 'Canceled executing "%s" due to validate_hook failure' % self
             yield self.add_log_event(cmd, msg)
+            defer.returnValue(e)
 
         try:
             principal = cmd.protocol.interaction.participations[0].principal
             owner = getUtility(IAuthentication).getPrincipal(self.context.__owner__)
             d = defer.maybeDeferred(self.validate_hook, principal if principal.id != 'root' else owner)
+            d.addErrback(cancel_action, cmd)
         except Exception:
             ld.addErrback(cancel_action, cmd)
             self._release_and_fire_next_now()
@@ -322,7 +324,6 @@ class AllocateAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
-
         if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
             log.msg('Attempt to allocate a deployed compute: %s' % (self.context), system='deploy')
             return
