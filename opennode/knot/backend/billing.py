@@ -87,56 +87,56 @@ class UserCreditChecker(GlobalUtility):
     implements(IPreValidateHook)
     name('user-credit-check')
 
+    @db.ro_transact
+    def _get_profile_and_need_update(self, principal):
+        credit_check_cooldown = get_config().getstring('auth', 'billing_timeout', 60)
+        try:
+            profile = traverse1('/home/%s' % principal.id)
+            timeout = (datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
+                       timedelta(seconds=credit_check_cooldown))
+            log.debug('Next update for "%s": %s', principal.id, timeout)
+            return (profile, profile.uid, timeout < datetime.now())
+        except Exception as e:
+            log.error('%s', e)
+            raise
+
+    @db.transact
+    def _update_credit(self, principal, credit, balance_limit):
+        profile = traverse1('/home/%s' % principal.id)
+        profile.credit = credit
+        profile.balance_limit = balance_limit
+        log.debug('Updated credit of %s: %s, %s', profile, profile.credit, profile.balance_limit)
+        return profile
+
     @defer.inlineCallbacks
     def apply(self, principal):
         billable_group = get_config().getstring('auth', 'billable_group', 'users')
-        credit_check_cooldown = get_config().getstring('auth', 'billing_timeout', 60)
-
-        @db.ro_transact
-        def get_profile_and_need_update():
-            try:
-                profile = traverse1('/home/%s' % principal.id)
-                timeout = (datetime.strptime(profile.credit_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
-                           timedelta(seconds=credit_check_cooldown))
-                log.debug('Next update for "%s": %s', principal.id, timeout)
-                return (profile, profile.uid, timeout < datetime.now())
-            except Exception as e:
-                log.error('%s', e)
-                raise
-
-        @db.transact
-        def update_credit(credit, balance_limit):
-            profile = traverse1('/home/%s' % principal.id)
-            profile.credit = credit
-            profile.balance_limit = balance_limit
-            log.debug('Updated credit of %s: %s, %s', profile, profile.credit, profile.balance_limit)
-            return profile
-
         if billable_group in map(str, principal.groups):
-            profile, uid, need_update = yield get_profile_and_need_update()
-            log.debug('%s (uid=%s) need_update: %s', profile, uid, need_update)
+            profile, uid, need_update = yield self._get_profile_and_need_update(principal)
+            log.debug('Need update %s uid=%s : %s', profile, uid, need_update)
 
             if need_update:
                 try:
                     check_call = getUtility(ICreditCheckCall)
                     credit, balance_limit = yield defer.maybeDeferred(check_call.get_credit, uid)
-                    profile = yield update_credit(credit, balance_limit)
+                    profile = yield self._update_credit(principal, credit, balance_limit)
                 except Exception as e:
                     log.error('Error updating credit: %s', e, exc_info=sys.exc_info())
 
             @db.ro_transact()
             def check_credit(profile):
-                log.debug('Checking if user %s has credit (%s): %s (%s)',
-                          profile, profile.credit, profile.has_credit(), profile.credit > 0 - profile.balance_limit)
-                assert profile.has_credit(), ('User %s does not have enough credit' % principal.id)
+                log.debug('Checking if user %s has credit (%s): %s',
+                          profile, profile.credit, profile.has_credit())
+                assert profile.has_credit(), 'User %s does not have enough credit' % principal.id
 
             yield check_credit(profile)
         else:
-            log.info('User "%s" is not a member of a billable group "%s": %s. Not updating credit.',
+            log.info('User "%s" is not a member of a billable group "%s": %s. Not updating credit',
                      principal.id, billable_group, map(str, principal.groups))
 
     def applicable(self, context):
-        return IVirtualCompute.providedBy(context) or IVirtualizationContainer.providedBy(context)
+        return any(map(lambda subj: subj.providedBy(context),
+                       (IVirtualCompute, IVirtualizationContainer)))
 
 
 class ICreditCheckCall(Interface):
