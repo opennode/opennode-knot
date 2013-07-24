@@ -164,13 +164,20 @@ class ComputeAction(Action, PreValidateHookMixin):
                     % (self, self._additional_keys), system='compute-action')
 
     def _release_and_fire_next_now(self):
+        if not hasattr(self, '_used_lock_keys'):
+            return
+
         ld = None
         for key in self._used_lock_keys:
             if not ld:
                 ld, _ = self._lock_registry[key]
             del self._lock_registry[key]
+
         del self._used_lock_keys
+
         ld.callback(None)
+
+        return ld
 
     def release(self, d):
         d.addBoth(lambda r: self._release_and_fire_next_now())
@@ -207,8 +214,8 @@ class ComputeAction(Action, PreValidateHookMixin):
                 if data is not None:
                     break
             else:
-                self._action_log(cmd,
-                                 'CONCURRENCY BUG: locked() returned True, but now it is False! %s' % (self))
+                self._action_log(cmd, 'CONCURRENCY BUG: locked() returned True, '
+                                 'but now it is False! %s' % (self))
                 raise KeyError(self.lock_keys)
 
             ld, lock_action = data
@@ -230,27 +237,20 @@ class ComputeAction(Action, PreValidateHookMixin):
             ld.addBoth(execute_on_unlock)
             return ld
 
-        ld = self.acquire()
-
-        @defer.inlineCallbacks
-        def cancel_action(e, cmd):
-            e.trap(Exception)
-            msg = 'Canceled executing "%s" due to validate_hook failure' % self
-            yield self.add_log_event(cmd, msg)
+        self.acquire()
 
         try:
             principal = cmd.protocol.interaction.participations[0].principal
             owner = getUtility(IAuthentication).getPrincipal(self.context.__owner__)
             d = defer.maybeDeferred(self.validate_hook, principal if principal.id != 'root' else owner)
         except Exception:
-            ld.addErrback(cancel_action, cmd)
-            self._release_and_fire_next_now()
-            return ld
-
-        d.addCallback(lambda r: self._execute(cmd, args))
-        d.addErrback(self.handle_error, cmd)
-        d.addCallback(self.handle_action_done, cmd)
-        return self.release(d)
+            log.err(system='compute-action-validate-hook')
+            return self._release_and_fire_next_now()
+        else:
+            d.addCallback(lambda r: self._execute(cmd, args))
+            d.addErrback(self.handle_error, cmd)
+            d.addCallback(self.handle_action_done, cmd)
+            return self.release(d)
 
     def _execute(self, cmd, args):
         """ Must be overloaded by child classes """
@@ -322,7 +322,6 @@ class AllocateAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
-
         if (yield db.ro_transact(IDeployed.providedBy)(self.context)):
             log.msg('Attempt to allocate a deployed compute: %s' % (self.context), system='deploy')
             return

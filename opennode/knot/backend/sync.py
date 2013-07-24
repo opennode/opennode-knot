@@ -214,9 +214,9 @@ class SyncDaemonProcess(DaemonProcess):
     @db.transact
     def handle_error(self, e, action, c, compute, status_name):
         e.trap(Exception)
-        log.msg("Got exception on %s of '%s': %s" % (action, c, e), system='sync')
+        log.msg("Got exception on %s of '%s'" % (action, c), system='sync')
         if get_config().getboolean('debug', 'print_exceptions'):
-            log.err(system='sync')
+            log.err(e, system='sync')
         self.delete_outstanding_request(compute)
         set_compute_status(compute.__name__, status_name, True)
 
@@ -230,7 +230,7 @@ class SyncDaemonProcess(DaemonProcess):
     def handle_remote_error(self, ore, c, compute, status_name):
         ore.trap(OperationRemoteError)
         if ore.value.remote_tb and get_config().getboolean('debug', 'print_exceptions'):
-            log.err(system='sync')
+            log.err(ore, system='sync')
         else:
             log.msg(str(ore.value), system='sync', logLevel=ERROR)
         self.delete_outstanding_request(compute)
