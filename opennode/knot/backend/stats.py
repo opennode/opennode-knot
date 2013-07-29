@@ -9,7 +9,7 @@ import sys
 
 from opennode.knot.model.user import IUserStatisticsProvider
 from opennode.knot.model.user import IUserStatisticsLogger
-from opennode.knot.model.compute import IVirtualCompute
+from opennode.knot.model.compute import IVirtualCompute, IDeployed
 
 from opennode.oms.config import get_config
 from opennode.oms.model.model.symlink import follow_symlinks
@@ -29,7 +29,7 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         for compute in map(follow_symlinks, computes.listcontent()):
             if not IVirtualCompute.providedBy(compute):
                 continue
-            if compute.__owner__ == username:
+            if compute.__owner__ == username and IDeployed.providedBy(compute):
                 user_computes.append(compute)
         return user_computes
 

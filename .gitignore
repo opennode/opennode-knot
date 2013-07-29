@@ -1,3 +1,8 @@
+.pydevproject
+.settings
+.coverage
+nosetests.xml
+.project
 *.pyc
 RELEASE-VERSION
 *.egg-info
