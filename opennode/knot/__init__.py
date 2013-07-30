@@ -16,7 +16,9 @@ from opennode.knot.model.storage import Storage
 from opennode.knot.model.network import Network, NetworkInterface, IPv4Pool
 from opennode.knot.model.console import VncConsole
 
+
 log = logging.getLogger(__name__)
+
 
 class KnotRequiredConfigurationFiles(Subscription):
     implements(IRequiredConfigurationFiles)
