@@ -43,7 +43,7 @@ def update_statistics_after_commit(owners):
 
 
 def update_statistics_dbhook(success, *args):
-    if success:
+    if success and not get_config().getboolean('stats', 'only_report_on_sync', True):
         blocking_yield(update_statistics_after_commit(*args))
 
 
