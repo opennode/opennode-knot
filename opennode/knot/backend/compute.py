@@ -336,12 +336,15 @@ class AllocateAction(ComputeAction):
                 yield ICompute.providedBy(m)
                 yield find_compute_v12n_container(m, container)
                 yield not getattr(m, 'exclude_from_allocation', None)
-                yield self.context.memory_usage < m.memory
-                yield sum(map(lambda (pk, pv): pv,
+                if get_config().getboolean('overcommit', 'memory', False):
+                    yield self.context.memory_usage < m.memory
+                if get_config().getboolean('overcommit', 'disk', False):
+                    yield sum(map(lambda (pk, pv): pv,
                               filter(lambda (pk, pv): pk != 'total',
                                      self.context.diskspace.iteritems()))) < (m.diskspace.get(param, 0) -
                                                                               m.diskspace_usage.get(param, 0))
-                yield self.context.num_cores <= m.num_cores
+                if get_config().getboolean('overcommit', 'cores', False):
+                    yield self.context.num_cores <= m.num_cores
 
                 templates = m['vms-%s' % container]['templates']
                 yield self.context.template in map(lambda t: t.name,
