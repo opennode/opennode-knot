@@ -547,7 +547,7 @@ class DeployAction(VComputeAction):
                              % (vm_parameters['hostname'], self.context.__name__), system='deploy')
 
             auto_allocate = get_config().getboolean('vms', 'auto_allocate', True)
-            if not auto_allocate and not get_config().getboolean('stats', 'only_report_on_sync'. True):
+            if not auto_allocate and not get_config().getboolean('stats', 'only_report_on_sync', True):
                 yield defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner)
 
         except Exception as e:
