@@ -297,7 +297,7 @@ class VComputeAction(ComputeAction):
                 'start_vm': getattr(self.context, 'start_vm', False),
                 'memory': self.context.memory / 1024.0,
                 'owner': self.context.__owner__,
-                'disk': self.context.diskspace.get('root', 10.0),
+                'disk': self.context.diskspace.get('root', 10000.0) / 1024.0,
                 'vcpu': self.context.num_cores,
                 'swap': self.context.swap_size,
                 'mac_address': getattr(self.context, 'mac_address', None)}
@@ -338,13 +338,19 @@ class AllocateAction(ComputeAction):
                 yield not getattr(m, 'exclude_from_allocation', None)
                 if not get_config().getboolean('overcommit', 'memory', False):
                     yield self.context.memory_usage < m.memory
+                else:
+                    log.msg('Memory filtering is disabled.', system='action-allocate')
                 if not get_config().getboolean('overcommit', 'disk', False):
                     yield sum(map(lambda (pk, pv): pv,
                               filter(lambda (pk, pv): pk != 'total',
                                      self.context.diskspace.iteritems()))) < (m.diskspace.get(param, 0) -
                                                                               m.diskspace_usage.get(param, 0))
+                else:
+                    log.msg('Diskspace filtering is disabled.', system='action-allocate')
                 if not get_config().getboolean('overcommit', 'cores', False):
                     yield self.context.num_cores <= m.num_cores
+                else:
+                    log.msg('\'Total # of cores\' filtering is disabled.', system='action-allocate')
 
                 templates = m['vms-%s' % container]['templates']
                 yield self.context.template in map(lambda t: t.name,

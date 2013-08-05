@@ -84,17 +84,17 @@ class ICompute(Interface):
         title=u"Num. Cores", description=u"Total number of cores across all CPUs",
         required=False)
     memory = schema.Int(
-        title=u"RAM Size", description=u"RAM size in MB",
+        title=u"RAM Size in MB", description=u"RAM size in MB",
         required=False)
     diskspace = schema.Dict(
-        title=u"Disk size", description=u"List of disk partition sizes",
+        title=u"Disk size in MB", description=u"List of disk partition sizes",
         key_type=schema.TextLine(), value_type=schema.Float(),
         required=False, readonly=True)
     network = schema.Float(
         title=u"Network", description=u"Network bandwidth in Bps",
         required=False, readonly=True)
     swap_size = schema.Int(
-        title=u"Swap Size", description=u"Swap size",
+        title=u"Swap Size in MB", description=u"Swap size",
         required=False)
 
     # Resource utilization/load:
