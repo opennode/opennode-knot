@@ -13,3 +13,6 @@ eggs
 parts
 .*.swp
 *.orig
+.ropeproject
+.coverage
+build

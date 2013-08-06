@@ -70,7 +70,7 @@ class SaltKeyAdapter(Key, ConfigDirMixIn, BaseSaltKeyAdapter):
 
     def _getKeyNames(self, ktype):
         try:
-            return self.list_keys()[ktype]
+            return self.list_keys().get(ktype)
         except SystemExit:
             logging.error('Salt terminated trying to retrieve unaccepted keys.')
 
@@ -81,11 +81,8 @@ class RemoteSaltKeyAdapter(BaseSaltKeyAdapter):
     def _getKeyNames(self, ktype):
         remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
         output = subprocess.check_output(remote_salt_key_cmd.split(' ') + ['--no-color', '--out=raw'])
-        if output:
-            data = eval(output)
-        else:
-            data = {}
-        return data[ktype]
+        data = eval(output) if output else {}
+        return data.get(ktype)
 
 def getKeyAdapter():
     remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
