@@ -1,5 +1,4 @@
 import json
-import logging
 
 from grokcore.component import context
 from twisted.web.server import NOT_DONE_YET
@@ -7,17 +6,18 @@ from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 
 from opennode.knot.model.compute import Compute, IVirtualCompute
-from opennode.knot.model.machines import Machines
 from opennode.knot.model.hangar import Hangar
+from opennode.knot.model.machines import Machines
 from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
+from opennode.oms.endpoint.httprest.base import IHttpRestView
+from opennode.oms.endpoint.httprest.root import BadRequest
+from opennode.oms.endpoint.httprest.view import ContainerView
+from opennode.oms.log import UserLogger
+from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.stream import Metrics
-from opennode.oms.model.form import RawDataValidatingFactory
-from opennode.oms.endpoint.httprest.view import ContainerView
-from opennode.oms.endpoint.httprest.base import IHttpRestView
-from opennode.oms.endpoint.httprest.root import BadRequest
-from opennode.oms.log import UserLogger
+from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
 
 
@@ -26,13 +26,6 @@ class MachinesView(ContainerView):
 
     def blacklisted(self, item):
         return super(MachinesView, self).blacklisted(item) or isinstance(item, Hangar)
-
-
-class SetEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, set):
-            return list(obj)
-        return json.JSONEncoder.default(self, obj)
 
 
 class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
@@ -110,7 +103,7 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
 
             request.write(json.dumps({'success': True,
                                       'result': IHttpRestView(compute).render_GET(request)},
-                                     cls=SetEncoder))
+                                     cls=JsonSetEncoder))
             request.finish()
 
         def handle_pre_execute_hook_error(f, compute, principal):
