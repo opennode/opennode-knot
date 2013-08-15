@@ -295,7 +295,7 @@ class VComputeAction(ComputeAction):
                 'ip_address': self.context.ipv4_address.split('/')[0],
                 'passwd': str(getattr(self.context, 'root_password', None)),
                 'start_vm': getattr(self.context, 'start_vm', False),
-                'memory': self.context.memory / 1024.0,
+                'memory': self.context.memory / 1024.0 if self.context.memory is not None else 0.0,
                 'owner': self.context.__owner__,
                 'disk': self.context.diskspace.get('root', 10000.0) / 1024.0,
                 'vcpu': self.context.num_cores,

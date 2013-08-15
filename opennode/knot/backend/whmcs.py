@@ -62,6 +62,10 @@ class WHMCSRequestBody(object):
         pass
 
 
+class InvalidConfiguration(WHMCSAPIError):
+    pass
+
+
 class WhmcsCreditChecker(GlobalUtility):
     implements(ICreditCheckCall)
 
@@ -70,9 +74,21 @@ class WhmcsCreditChecker(GlobalUtility):
         log.info('Requesting credit update for %s', uid)
         try:
             agent = Agent(reactor)
-            whmcs_api_uri = get_config().getstring('whmcs', 'api_uri')
+            whmcs_api_uri = get_config().getstring('whmcs', 'api_uri', '')
             whmcs_user = get_config().getstring('whmcs', 'user', '')
             whmcs_password = get_config().getstring('whmcs', 'password', '')
+
+            if not isinstance(whmcs_api_uri, str) or not whmcs_api_uri.startswith('http'):
+                raise InvalidConfiguration('Invalid configuration: [whmcs]api_uri is %r, '
+                                           'must be a valid URI' % whmcs_api_uri)
+
+            if not isinstance(whmcs_user, str):
+                raise InvalidConfiguration('Invalid configuration: [whmcs]user is %r", '
+                                           'must be a non-empty string' % whmcs_user)
+
+            if not isinstance(whmcs_password, str):
+                raise InvalidConfiguration('Invalid configuration: [whmcs]user is %r, '
+                                           'must be a non-empty string' % whmcs_password)
 
             pwmd5 = hashlib.md5()
             pwmd5.update(whmcs_password)
