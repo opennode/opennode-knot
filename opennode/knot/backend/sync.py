@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 from logging import ERROR
+import re
+
 from twisted.internet import defer
 from twisted.python import log
+
 from zope.authentication.interfaces import IAuthentication
 from zope.component import provideSubscriptionAdapter, getAllUtilitiesRegisteredFor
 from zope.component import getUtility
@@ -146,7 +149,7 @@ class SyncDaemonProcess(DaemonProcess):
             home = db.get_root()['oms_root']['home']
             update_list = []
             for profile in home.listcontent():
-                timeout = ((datetime.strptime(profile.vm_stats_timestamp, '%Y-%m-%dT%H:%M:%S.%f') +
+                timeout = ((datetime(*map(int, re.split('[^\d]', profile.vm_stats_timestamp)[:-1])) +
                             timedelta(seconds=credit_check_cooldown))
                            if profile.vm_stats_timestamp
                            else datetime.min)
