@@ -252,7 +252,7 @@ TIMEOUTS = {
     op.IDeployVM: 600,
     op.IGetGuestMetrics: 5,
     op.IGetHostMetrics: 5,
-    op.IShutdownVM: 30,
+    op.IShutdownVM: 630,
     op.IStartVM: 30
 }
 
