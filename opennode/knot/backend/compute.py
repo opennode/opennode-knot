@@ -262,11 +262,22 @@ class VComputeAction(ComputeAction):
     context(IVirtualCompute)
     baseclass()
 
+    inprogress_marker = None
+    # status_vector: first element specifies active state, second element specifies assumed success state
+    status = None
+
     @property
     def lock_keys(self):
         return [canonical_path(self.context),
                 canonical_path(self.context.__parent__),
                 canonical_path(self.context.__parent__.__parent__)]
+
+    @db.transact
+    def set_inprogress(self):
+        if self.inprogress_marker is not None:
+            alsoProvides(self.context, self.inprogress_marker)
+        if self.status is not None:
+            self.context.status = self.status
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -274,6 +285,8 @@ class VComputeAction(ComputeAction):
 
         name = yield db.get(self.context, '__name__')
         parent = yield db.get(self.context, '__parent__')
+
+        yield self.set_inprogress()
 
         self._action_log(cmd, '%s %s' % (action_name, name))
         submitter = IVirtualizationContainerSubmitter(parent)
@@ -885,6 +898,7 @@ class StartComputeAction(VComputeAction):
     action('start')
 
     job = IStartVM
+    status = u'starting'
 
 
 class ShutdownComputeAction(VComputeAction):
@@ -892,6 +906,7 @@ class ShutdownComputeAction(VComputeAction):
 
     action_name = "shutting down"
     job = IShutdownVM
+    status = u'stopping'
 
 
 class DestroyComputeAction(VComputeAction):
