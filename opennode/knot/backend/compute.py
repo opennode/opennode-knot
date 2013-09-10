@@ -263,8 +263,8 @@ class VComputeAction(ComputeAction):
     baseclass()
 
     inprogress_marker = None
-    # status_vector: first element specifies active state, second element specifies assumed success state
-    status = None
+    # state_vector: first element specifies active state, second element specifies assumed success state
+    state = None
 
     @property
     def lock_keys(self):
@@ -276,8 +276,8 @@ class VComputeAction(ComputeAction):
     def set_inprogress(self):
         if self.inprogress_marker is not None:
             alsoProvides(self.context, self.inprogress_marker)
-        if self.status is not None:
-            self.context.status = self.status
+        if self.state is not None:
+            self.context.state = self.state
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -898,7 +898,7 @@ class StartComputeAction(VComputeAction):
     action('start')
 
     job = IStartVM
-    status = u'starting'
+    state = u'starting'
 
 
 class ShutdownComputeAction(VComputeAction):
@@ -906,7 +906,7 @@ class ShutdownComputeAction(VComputeAction):
 
     action_name = "shutting down"
     job = IShutdownVM
-    status = u'stopping'
+    state = u'stopping'
 
 
 class DestroyComputeAction(VComputeAction):
