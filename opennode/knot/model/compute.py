@@ -72,7 +72,7 @@ class ICompute(Interface):
 
     # State
     state = schema.Choice(
-        title=u"State", values=(u'active', u'inactive', u'suspended'),
+        title=u"State", values=(u'starting', u'active', u'stopping', u'inactive', u'suspended'),
         required=False, default=u'inactive')
     effective_state = schema.TextLine(
         title=u"Effective state", readonly=True, required=False)
