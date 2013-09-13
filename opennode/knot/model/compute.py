@@ -23,6 +23,7 @@ from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.schema import Path
 from opennode.oms.security.directives import permissions
+from opennode.oms.security.authentication import Sudo
 from opennode.oms.util import adapter_value
 
 
@@ -393,8 +394,9 @@ class ComputeTags(ModelTags):
         from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
         if (IVirtualCompute.providedBy(self.context) and
                 IVirtualizationContainer.providedBy(self.context.__parent__)):
-            res.append(u'virt_type:' + self.context.__parent__.backend)
-            res.append(u'virt:yes')
+            with Sudo(self.context):
+                res.append(u'virt_type:' + self.context.__parent__.backend)
+                res.append(u'virt:yes')
         else:
             res.append(u'virt:no')
 
