@@ -165,7 +165,14 @@ def handle_virtual_compute_config_change_request(compute, event):
                               'num_cores',
                               'swap_size']
 
+    unit_corrections_coeff = {'memory': 1024,
+                              'swap_size': 1024}
+
     params_to_update = dict(filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems()))
+
+    # correct unit coefficients (usually MB -> GB)
+    for k, v in unit_corrections_coeff.iteritems():
+        params_to_update[k] = params_to_update[k] * v
 
     if len(params_to_update) == 0:
         return
