@@ -172,7 +172,8 @@ def handle_virtual_compute_config_change_request(compute, event):
 
     # correct unit coefficients (usually MB -> GB)
     for k, v in unit_corrections_coeff.iteritems():
-        params_to_update[k] = params_to_update[k] * v
+        if k in params_to_update:
+            params_to_update[k] = params_to_update[k] * v
 
     if len(params_to_update) == 0:
         return
