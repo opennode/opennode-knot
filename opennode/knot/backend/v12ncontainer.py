@@ -6,7 +6,8 @@ from zope.interface import Interface
 from opennode.knot.backend.operation import IListVMS, OperationRemoteError
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.oms.model.model.actions import Action, action
-from opennode.oms.zodb import db
+from opennode.oms.security.authentication import sudo
+from opennode.oms.zodb import db, proxy
 
 
 backends = {'test': 'test:///tmp/salt_vm_test_state.xml',
@@ -30,8 +31,10 @@ class VirtualizationContainerSubmitter(Adapter):
         # we cannot return a deferred from a db.transact
         @db.ro_transact
         def get_job():
-            job = job_interface(self.context.__parent__)
-            backend_uri = backends.get(self.context.backend, self.context.backend)
+            p = sudo(proxy.remove_persistent_proxy(self.context))
+            job = job_interface(p.__parent__)
+            backend = p.backend
+            backend_uri = backends.get(backend, backend)
             return (job, backend_uri)
 
         job, backend_uri = yield get_job()

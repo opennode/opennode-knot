@@ -7,7 +7,7 @@ from zope.interface import implements
 from opennode.knot.model.compute import ICompute
 from opennode.knot.backend.operation import IMinion
 from opennode.oms.zodb import db
-from opennode.oms.security.authentication import Sudo
+from opennode.oms.security.authentication import sudo
 
 
 class ComputeMinion(Adapter):
@@ -16,5 +16,4 @@ class ComputeMinion(Adapter):
 
     @db.ro_transact
     def hostname(self):
-        with Sudo(self.context):
-            return self.context.hostname
+        return sudo(self.context).hostname
