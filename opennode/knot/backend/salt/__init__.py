@@ -72,7 +72,7 @@ class SimpleSaltExecutor(object):
                 system='salt-simple', logLevel=logging.DEBUG)
         cmd = get_config().getstring('salt', 'remote_command', 'salt')
 
-        killhook = kwargs.get('__killhook')
+        killhook = kwargs.pop('__killhook')
         if killhook:
             killhook.addCallback(lambda r: log.msg('"%s" to "%s" aborted' % (self.action, self.hostname)))
 
