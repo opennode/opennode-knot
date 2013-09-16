@@ -165,16 +165,22 @@ def handle_virtual_compute_config_change_request(compute, event):
                               'num_cores',
                               'swap_size']
 
-    params_to_update = filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems())
+    unit_corrections_coeff = {'memory': 1 / 1024.0,
+                              'swap_size': 1 / 1024.0}
+
+    params_to_update = dict(filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems()))
+
+    # correct unit coefficients (usually MB -> GB)
+    for k, v in unit_corrections_coeff.iteritems():
+        if k in params_to_update:
+            params_to_update[k] = params_to_update[k] * v
 
     if len(params_to_update) == 0:
         return
 
-    update_values = [v for k, v in sorted(params_to_update, key=lambda (k, v): k)]
-
     submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:
-        yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), *update_values)
+        yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), params_to_update)
     except Exception as e:
         @db.transact
         def reset_to_original_values():
