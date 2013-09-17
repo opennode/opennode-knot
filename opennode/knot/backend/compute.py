@@ -181,23 +181,19 @@ class ComputeAction(Action, PreValidateHookMixin):
                     % (self, self._additional_keys), system='compute-action')
 
     def _release_and_fire_next_now(self):
-        self._lock_registry_lock.acquire()
-        try:
-            if not hasattr(self, '_used_lock_keys'):
-                return
+        if not hasattr(self, '_used_lock_keys'):
+            return
 
-            ld = None
-            for key in self._used_lock_keys:
-                if not ld:
-                    ld, _ = self._lock_registry[key]
-                del self._lock_registry[key]
+        ld = None
+        for key in self._used_lock_keys:
+            if not ld:
+                ld, _ = self._lock_registry[key]
+            del self._lock_registry[key]
 
-            del self._used_lock_keys
+        del self._used_lock_keys
 
-            ld.callback(None)
-            return ld
-        finally:
-            self._lock_registry_lock.release()
+        ld.callback(None)
+        return ld
 
     def release(self, d):
         d.addBoth(lambda r: self._release_and_fire_next_now())
