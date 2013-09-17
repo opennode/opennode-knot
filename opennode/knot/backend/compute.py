@@ -241,7 +241,6 @@ class ComputeAction(Action, PreValidateHookMixin):
         try:
             self._lock_registry_lock.acquire()
             if self.locked():
-                self._lock_registry_lock.release()
                 ld, lock_action = self.find_first()
 
                 msg = '%s: one of %s is locked by %s.' % (self, self.lock_keys, lock_action)
