@@ -44,6 +44,7 @@ class SyncAction(ComputeAction):
     action('sync')
 
     _do_not_enqueue = True
+    _additional_keys = tuple()
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
@@ -54,9 +55,9 @@ class SyncAction(ComputeAction):
         if IVirtualCompute.providedBy(self.context):
             return (canonical_path(self.context),
                     canonical_path(self.context.__parent__),
-                    canonical_path(self.context.__parent__.__parent__))
+                    canonical_path(self.context.__parent__.__parent__)) + self._additional_keys
         else:
-            return (canonical_path(self.context),)
+            return (canonical_path(self.context),) + self._additional_keys
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
@@ -85,7 +86,7 @@ class SyncAction(ComputeAction):
         def set_additional_keys():
             vms = follow_symlinks(self.context['vms'])
             if vms:
-                self._additional_keys = [canonical_path(vms)]
+                self._additional_keys = (canonical_path(vms),)
 
         yield set_additional_keys()
         yield self.reacquire_until_clear()

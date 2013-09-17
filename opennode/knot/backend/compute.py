@@ -11,6 +11,7 @@ from zope.component import getAllUtilitiesRegisteredFor
 
 import netaddr
 import time
+import threading
 
 from opennode.knot.backend import subprocess
 from opennode.knot.backend.operation import IDeployVM
@@ -95,6 +96,7 @@ class ComputeAction(Action, PreValidateHookMixin):
     baseclass()
 
     _lock_registry = {}
+    _lock_registry_lock = threading.RLock()
     _do_not_enqueue = False
 
     @db.ro_transact(proxy=False)
@@ -114,38 +116,53 @@ class ComputeAction(Action, PreValidateHookMixin):
         return any(key in self._lock_registry for key in self.lock_keys)
 
     def acquire(self):
-        d = defer.Deferred()
-        log.msg('%s acquiring locks for: %s' % (self, self.lock_keys),
-                system='compute-action', logLevel=DEBUG)
-        self._used_lock_keys = []
-        for key in self.lock_keys:
-            self._lock_registry[key] = (d, self)
-            self._used_lock_keys.append(key)
-        return d
+        self._lock_registry_lock.acquire()
 
-    def reacquire(self):
-        """ Add more locks for the currently executed action. Meant to be called from _execute to add
-        locks for objects that are evaluated in _execute() and added to _lock_keys.
-        Returns a deferred list of all deferreds that already have locks on, or None if no other action
-        locks have been found"""
-        d = self._lock_registry[self.lock_keys[0]][0]
-        deferred_list = []
-
-        log.msg('%s adding locks for: %s' % (self, self.lock_keys),
-                system='compute-action', logLevel=DEBUG)
-
-        for key in self.lock_keys:
-            if key not in self._lock_registry:
+        try:
+            d = defer.Deferred()
+            log.msg('%s acquiring locks for: %s' % (self, self.lock_keys),
+                    system='compute-action', logLevel=DEBUG)
+            self._used_lock_keys = []
+            for key in self.lock_keys:
                 self._lock_registry[key] = (d, self)
                 self._used_lock_keys.append(key)
-            elif self._lock_registry[key][0] is not d:
-                dother, actionother = self._lock_registry[key]
-                log.msg('Another action %s locked %s... %s will wait until it finishes'
-                    % (actionother, key, self), system='compute-action')
-                deferred_list.append(dother)
+            return d
+        finally:
+            self._lock_registry_lock.release()
 
-        if len(deferred_list) > 0:
-            return defer.DeferredList(deferred_list, consumeErrors=True)
+    def reacquire(self):
+        """ Add more locks for the currently executed action.
+
+        Meant to be called from _execute to add locks for objects that are
+        evaluated in _execute() and added to _lock_keys. Returns a deferred
+        list of all lock deferreds, or None if no other action locks have been
+        found, meaning that current action is safe to proceed."""
+        self._lock_registry_lock.acquire()
+
+        try:
+            if not self.locked():
+                return
+
+            d = self._lock_registry[self.lock_keys[0]][0]
+            deferred_list = []
+
+            log.msg('%s adding locks for: %s' % (self, self.lock_keys),
+                    system='compute-action', logLevel=DEBUG)
+
+            for key in self.lock_keys:
+                if key not in self._lock_registry:
+                    self._lock_registry[key] = (d, self)
+                    self._used_lock_keys.append(key)
+                elif self._lock_registry[key][0] is not d:
+                    dother, actionother = self._lock_registry[key]
+                    log.msg('Another action %s has locked %s... %s will wait until it finishes'
+                        % (actionother, key, self), system='compute-action')
+                    deferred_list.append(dother)
+
+            if len(deferred_list) > 0:
+                return defer.DeferredList(deferred_list, consumeErrors=True)
+        finally:
+            self._lock_registry_lock.release()
 
     @defer.inlineCallbacks
     def reacquire_until_clear(self):
@@ -176,7 +193,6 @@ class ComputeAction(Action, PreValidateHookMixin):
         del self._used_lock_keys
 
         ld.callback(None)
-
         return ld
 
     def release(self, d):
@@ -207,37 +223,42 @@ class ComputeAction(Action, PreValidateHookMixin):
     def handle_action_done(self, r, cmd):
         return self.add_log_event(cmd, '%s finished' % (self))
 
-    def execute(self, cmd, args):
-        if self.locked():
+    def find_first(self):
+        try:
+            self._lock_registry_lock.acquire()
             for key in self.lock_keys:
                 data = self._lock_registry.get(key)
                 if data is not None:
-                    break
-            else:
-                self._action_log(cmd, 'CONCURRENCY BUG: locked() returned True, '
-                                 'but now it is False! %s' % (self))
-                raise KeyError(self.lock_keys)
+                    return data
+        finally:
+            self._lock_registry_lock.release()
 
-            ld, lock_action = data
+    def execute(self, cmd, args):
+        try:
+            self._lock_registry_lock.acquire()
+            if self.locked():
+                ld, lock_action = self.find_first()
 
-            msg = '%s: one of %s is locked by %s.' % (self, self.lock_keys, lock_action)
+                msg = '%s: one of %s is locked by %s.' % (self, self.lock_keys, lock_action)
 
-            if self._do_not_enqueue:
-                self._action_log(cmd, msg + ' Skipping due to no-enqueue feature')
+                if self._do_not_enqueue:
+                    self._action_log(cmd, msg + ' Skipping due to no-enqueue feature')
+                    return ld
+
+                self._action_log(cmd, msg + ' Scheduling to run after finish of previous action')
+
+                def execute_on_unlock(r):
+                    self._action_log(cmd, '%s: %s are unlocked. Executing now' % (self, self.lock_keys),
+                                     logLevel=DEBUG)
+                    # XXX: must be self.execute(), not self._execute(): next action must lock all its objects
+                    self.execute(cmd, args)
+
+                ld.addBoth(execute_on_unlock)
                 return ld
 
-            self._action_log(cmd, msg + ' Scheduling to run after finish of previous action')
-
-            def execute_on_unlock(r):
-                self._action_log(cmd, '%s: %s are unlocked. Executing now' % (self, self.lock_keys),
-                                 logLevel=DEBUG)
-                # XXX: must be self.execute(), not self._execute(): next action must lock all its objects
-                self.execute(cmd, args)
-
-            ld.addBoth(execute_on_unlock)
-            return ld
-
-        self.acquire()
+            self.acquire()
+        finally:
+            self._lock_registry_lock.release()
 
         try:
             principal = cmd.protocol.interaction.participations[0].principal
@@ -263,7 +284,6 @@ class VComputeAction(ComputeAction):
     baseclass()
 
     inprogress_marker = None
-    # state_vector: first element specifies active state, second element specifies assumed success state
     state = None
 
     @property
@@ -796,8 +816,6 @@ class MigrateAction(VComputeAction):
 
     @property
     def lock_keys(self):
-        # TODO: figure out how to best extend the list while the action is being executed with the
-        # destination HN too
         return (canonical_path(self.context),
                 canonical_path(self.context.__parent__),
                 canonical_path(self.context.__parent__.__parent__)) + self._additional_keys
