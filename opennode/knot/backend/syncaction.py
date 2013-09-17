@@ -44,6 +44,7 @@ class SyncAction(ComputeAction):
     action('sync')
 
     _do_not_enqueue = True
+    _additional_keys = tuple()
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
@@ -85,7 +86,7 @@ class SyncAction(ComputeAction):
         def set_additional_keys():
             vms = follow_symlinks(self.context['vms'])
             if vms:
-                self._additional_keys = [canonical_path(vms)]
+                self._additional_keys = (canonical_path(vms),)
 
         yield set_additional_keys()
         yield self.reacquire_until_clear()

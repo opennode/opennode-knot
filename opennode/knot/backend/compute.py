@@ -128,7 +128,7 @@ class ComputeAction(Action, PreValidateHookMixin):
                 self._used_lock_keys.append(key)
             return d
         finally:
-            self._lock_keys_lock.release()
+            self._lock_registry_lock.release()
 
     def reacquire(self):
         """ Add more locks for the currently executed action.
