@@ -165,25 +165,24 @@ def handle_virtual_compute_config_change_request(compute, event):
                               'memory',
                               'num_cores',
                               'swap_size']
-
     param_modifier = {'diskspace': lambda d: d['total']}
 
     unit_corrections_coeff = {'memory': 1 / 1024.0,
                               'swap_size': 1 / 1024.0,
                               'diskspace': 1 / 1024.0}
 
-    params_to_update = dict(filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems()))
-
-    # correct unit coefficients (usually MB -> GB)
-    params_to_update = map(lambda (k, v): unit_corrections_coeff.get(k, 1.0) * v, params_to_update)
-    params_to_update = map(lambda (k, v): param_modifier.get(k, lambda x: x)(v), params_to_update)
-
+    params_to_update = filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems())
     if len(params_to_update) == 0:
         return
 
+    # correct unit coefficients (usually MB -> GB)
+    params_to_update = map(lambda (k, v): (k, param_modifier.get(k, lambda x: x)(v)), params_to_update)
+    params_to_update = map(lambda (k, v): (k, unit_corrections_coeff.get(k) * v
+                                            if k in unit_corrections_coeff else v), params_to_update)
+
     submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:
-        yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), params_to_update)
+        yield submitter.submit(IUpdateVM, (yield db.get(compute, '__name__')), dict(params_to_update))
     except Exception as e:
         @db.transact
         def reset_to_original_values():
