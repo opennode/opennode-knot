@@ -161,19 +161,22 @@ def allocate_virtual_compute_from_hangar(model, event):
 @defer.inlineCallbacks
 def handle_virtual_compute_config_change_request(compute, event):
     update_param_whitelist = ['cpu_limit',
+                              'diskspace',
                               'memory',
                               'num_cores',
                               'swap_size']
 
+    param_modifier = {'diskspace': lambda d: d['total']}
+
     unit_corrections_coeff = {'memory': 1 / 1024.0,
-                              'swap_size': 1 / 1024.0}
+                              'swap_size': 1 / 1024.0,
+                              'diskspace': 1 / 1024.0}
 
     params_to_update = dict(filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems()))
 
     # correct unit coefficients (usually MB -> GB)
-    for k, v in unit_corrections_coeff.iteritems():
-        if k in params_to_update:
-            params_to_update[k] = params_to_update[k] * v
+    params_to_update = map(lambda (k, v): unit_corrections_coeff.get(k, 1.0) * v, params_to_update)
+    params_to_update = map(lambda (k, v): param_modifier.get(k, lambda x: x)(v), params_to_update)
 
     if len(params_to_update) == 0:
         return
