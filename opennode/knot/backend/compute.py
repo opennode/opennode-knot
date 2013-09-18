@@ -179,7 +179,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
             if self._do_not_enqueue:
                 log.msg(' Skipping reacquire due to no-enqueue feature of %s' % (self))
-                return dl
+                defer.returnValue(dl)
 
             log.msg('%s is waiting for other actions locking additional objects (%s)...'
                     % (self, self._additional_keys), system='compute-action')
