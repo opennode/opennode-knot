@@ -14,6 +14,7 @@ from opennode.oms.endpoint.httprest.root import BadRequest
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import RawDataValidatingFactory
+from opennode.oms.model.form import RawDataApplier
 from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.stream import Metrics
@@ -168,8 +169,16 @@ class ComputeView(ContainerView):
 
     def put_filter_attributes(self, request, data):
         data = super(ComputeView, self).put_filter_attributes(request, data)
+
         if 'template' in data and not IVirtualCompute.providedBy(self.context):
             del data['template']
+
         if 'owner' in data:
             del data['owner']
+
+        def filter_readonly_properties(pair):
+            k, v = pair
+            return k not in ('ipv4_address', 'ipv6_address', 'nicknames', 'effective_state', 'templates')
+
+        data = dict(filter(filter_readonly_properties, data.iteritems()))
         return data
