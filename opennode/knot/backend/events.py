@@ -151,7 +151,8 @@ def allocate_virtual_compute_from_hangar(model, event):
                 system='create-event')
         d = task.deferLater(reactor, 2.0, virtual_compute_action, action, path, event)
         d.addCallback(lambda r: ul.log(msg % path))
-        d.addCallback(lambda r: defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner))
+        if not get_config().getboolean('stats', 'only_report_on_sync', True):
+            d.addCallback(lambda r: defer.maybeDeferred(getUtility(IUserStatisticsProvider).update, owner))
         d.addErrback(log.err)
     except Exception:
         log.err(system='create-event')
