@@ -89,7 +89,9 @@ class SyncAction(ComputeAction):
                 self._additional_keys = (canonical_path(vms),)
 
         yield set_additional_keys()
-        yield self.reacquire_until_clear()
+        dl = yield self.reacquire()
+        if dl is not None:
+            return
 
         yield self.sync_vms()
 
