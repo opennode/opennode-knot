@@ -149,7 +149,7 @@ class ComputeAction(Action, PreValidateHookMixin):
             log.msg('%s adding locks: %s' % (self, self.lock_keys), system='compute-action', logLevel=DEBUG)
 
             for key in self.lock_keys:
-                if self._lock_registry[key][0] is not d:
+                if key in self._lock_registry and self._lock_registry[key][0] is not d:
                     dother, actionother = self._lock_registry[key]
                     log.msg('Another action %s has locked %s... %s will wait until it finishes'
                         % (actionother, key, self), system='compute-action')
