@@ -166,6 +166,7 @@ def handle_virtual_compute_config_change_request(compute, event):
                               'memory',
                               'num_cores',
                               'swap_size']
+
     param_modifier = {'diskspace': lambda d: d['total']}
 
     unit_corrections_coeff = {'memory': 1 / 1024.0,
@@ -173,6 +174,7 @@ def handle_virtual_compute_config_change_request(compute, event):
                               'diskspace': 1 / 1024.0}
 
     params_to_update = filter(lambda (k, v): k in update_param_whitelist, event.modified.iteritems())
+
     if len(params_to_update) == 0:
         return
 
