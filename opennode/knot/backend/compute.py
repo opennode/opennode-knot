@@ -146,21 +146,26 @@ class ComputeAction(Action, PreValidateHookMixin):
             d = self._lock_registry[self.lock_keys[0]][0]
             deferred_list = []
 
-            log.msg('%s adding locks for: %s' % (self, self.lock_keys),
-                    system='compute-action', logLevel=DEBUG)
+            log.msg('%s adding locks: %s' % (self, self.lock_keys), system='compute-action', logLevel=DEBUG)
 
             for key in self.lock_keys:
-                if key not in self._lock_registry:
-                    self._lock_registry[key] = (d, self)
-                    self._used_lock_keys.append(key)
-                elif self._lock_registry[key][0] is not d:
+                if self._lock_registry[key][0] is not d:
                     dother, actionother = self._lock_registry[key]
                     log.msg('Another action %s has locked %s... %s will wait until it finishes'
                         % (actionother, key, self), system='compute-action')
                     deferred_list.append(dother)
 
+            log.msg('%s has locks: %s' % (self, self._used_lock_keys),
+                    system='compute-action', logLevel=DEBUG)
+
             if len(deferred_list) > 0:
                 return defer.DeferredList(deferred_list, consumeErrors=True)
+
+            # Safer all-or-nothing approach to reacquire locking
+            for key in self.lock_keys:
+                if key not in self._lock_registry:
+                    self._lock_registry[key] = (d, self)
+                    self._used_lock_keys.append(key)
         finally:
             self._lock_registry_lock.release()
 
@@ -171,6 +176,10 @@ class ComputeAction(Action, PreValidateHookMixin):
 
             if dl is None:
                 break
+
+            if self._do_not_enqueue:
+                log.msg(' Skipping reacquire due to no-enqueue feature of %s' % (self))
+                return dl
 
             log.msg('%s is waiting for other actions locking additional objects (%s)...'
                     % (self, self._additional_keys), system='compute-action')
