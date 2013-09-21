@@ -338,10 +338,10 @@ class VComputeAction(ComputeAction):
                 'passwd': str(getattr(self.context, 'root_password', None)),
                 'start_vm': getattr(self.context, 'start_vm', False),
                 'memory': self.context.memory / 1024.0 if self.context.memory is not None else 0.0,
+                'swap': self.context.swap_size / 1024.0 if self.context.swap_size is not None else 0.0,
                 'owner': self.context.__owner__,
                 'disk': self.context.diskspace.get('root', 10000.0) / 1024.0,
                 'vcpu': self.context.num_cores,
-                'swap': self.context.swap_size,
                 'mac_address': getattr(self.context, 'mac_address', None)}
 
 
