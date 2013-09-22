@@ -118,6 +118,8 @@ class WhmcsCreditChecker(GlobalUtility):
             credit_balance_field = 'customfields%s' % get_config().getstring('whmcs', 'balance_limit', 2)
             credit_balance_value = (data.get(credit_balance_field) if credit_balance_field in data
                                     and data.get(credit_balance_field) != "" else 0)
+            log.debug('Received \'%s\' as a credit_balance_value. Field checked: \' %s\'. Full response: %s' % 
+                            (credit_balance_value, credit_balance_field, data))
             try:
                 credit_balance = float(credit_balance_value)
             except TypeError:
