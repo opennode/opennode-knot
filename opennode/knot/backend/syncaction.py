@@ -397,6 +397,7 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def ensure_vms(self, full):
         if (not any_stack_installed(self.context) or
+            # if not full sync and there are virtualization containers available
             (not full and len(filter(lambda n: 'vms' in n, self.context.listnames())) > 0)):
             return
 
