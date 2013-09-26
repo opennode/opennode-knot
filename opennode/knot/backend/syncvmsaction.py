@@ -7,7 +7,7 @@ import logging
 
 from opennode.knot.backend.operation import IHostInterfaces
 from opennode.knot.backend.operation import IListVMS
-from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
+from opennode.knot.backend.v12ncontainer import submit_to_virtualization_container
 from opennode.knot.backend.compute import ComputeAction
 from opennode.knot.model.compute import Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
@@ -58,8 +58,7 @@ class SyncVmsAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _sync_vms(self, cmd):
-        submitter = IVirtualizationContainerSubmitter(self.context)
-        remote_vms = yield submitter.submit(IListVMS)
+        remote_vms = yield submit_to_virtualization_container(self.context, IListVMS)
         yield self._sync_vms_transact(remote_vms)
 
     @db.transact

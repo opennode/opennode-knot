@@ -140,3 +140,7 @@ class IGetOwner(IJob):
 
 class ISetOwner(IJob):
     """ Push ownership information to the VM config """
+
+
+class ISync(IJob):
+    """ Consolidates all backend operations used in salt into one """

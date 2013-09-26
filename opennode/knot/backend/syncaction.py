@@ -19,7 +19,7 @@ from opennode.knot.backend.operation import IGetDiskUsage
 from opennode.knot.backend.operation import ISetOwner
 from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.syncvmsaction import SyncVmsAction
-from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
+from opennode.knot.backend.v12ncontainer import submit_to_virtualization_container
 from opennode.knot.backend.v12ncontainer import backends
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IVirtualCompute
@@ -61,12 +61,34 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
-        log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
+        if args.complex:
+            yield self._execute_complex(cmd, args)
+        else:
+            yield self._execute_lite(cmd, args)
+
+    @defer.inlineCallbacks
+    def _execute_lite(self, cmd, args):
+        log.msg('Executing SyncAction (lite) on %s (%s)' % (self.context, canonical_path(self.context)),
+                 system='sync-action')
+
+        if any_stack_installed(self.context):
+            # things to include into the salt request:
+            # - IAgentVersion
+            # - IGetComputeInfo
+            # - IGetHWUptime
+            # - IGetDiskUsage
+            # - IGetRoutes
+            # - IGetLocalTemplates
+            # - IGetVirtualizationContainers
+            # - IListVMS
+            pass
+
+    @defer.inlineCallbacks
+    def _execute_complex(self, cmd, args):
+        log.msg('Executing SyncAction (complex) on %s (%s)' % (self.context, canonical_path(self.context)),
                  system='sync-action')
         if any_stack_installed(self.context):
             yield self.sync_agent_version()
-
-        default = yield self.default_console()
 
         yield self.sync_consoles()
 
@@ -80,6 +102,7 @@ class SyncAction(ComputeAction):
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
 
+        default = yield self.default_console()
         yield self._create_default_console(default)
 
         @db.transact
@@ -90,6 +113,7 @@ class SyncAction(ComputeAction):
 
         yield set_additional_keys()
         dl = yield self.reacquire()
+
         if dl is not None:
             return
 
@@ -191,9 +215,16 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def _sync_virtual(self):
         parent = yield db.get(self.context, '__parent__')
+        hn = yield db.get(parent, '__parent__')
         name = yield db.get(self.context, '__name__')
-        submitter = IVirtualizationContainerSubmitter(parent)
-        vmlist = yield submitter.submit(IListVMS)
+
+        if not any_stack_installed(hn):
+            log.msg('%s is unmanageable! HN does not have an agent installed!' % (self.context),
+                    system='sync-action')
+            return
+
+        vmlist = yield submit_to_virtualization_container(parent, IListVMS)
+
         for vm in vmlist:
             if vm['uuid'] == name:
                 yield self.sync_owner(vm)
@@ -211,7 +242,7 @@ class SyncAction(ComputeAction):
 
         if vm.get('owner'):
             if owner != vm['owner']:
-                @db.transaft
+                @db.transact
                 def pull_owner():
                     compute = TmpObj(self.context)
                     newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
@@ -220,8 +251,7 @@ class SyncAction(ComputeAction):
                 yield pull_owner()
         elif owner is not None:
             log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
-            submitter = IVirtualizationContainerSubmitter(parent)
-            yield submitter.submit(ISetOwner, uuid, owner)
+            yield submit_to_virtualization_container(parent, ISetOwner, uuid, owner)
             log.msg('Owner pushing for %s successful' % self.context, system='sync')
 
     @db.assert_transact
@@ -242,8 +272,7 @@ class SyncAction(ComputeAction):
                             'Leaving as-is' % (vm['owner'], compute), system='sync')
         elif owner is not None:
             log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
-            submitter = IVirtualizationContainerSubmitter(parent)
-            d = submitter.submit(ISetOwner, uuid, owner)
+            d = submit_to_virtualization_container(parent, ISetOwner, uuid, owner)
             d.addCallback(lambda r: log.msg('Owner pushing for %s successful' % self.context, system='sync'))
             d.addErrback(log.err, system='sync')
 
@@ -482,8 +511,7 @@ class SyncTemplatesAction(ComputeAction):
             if not IVirtualizationContainer.providedBy(container):
                 continue
 
-            submitter = IVirtualizationContainerSubmitter(container)
-            templates = yield submitter.submit(IGetLocalTemplates)
+            templates = yield submit_to_virtualization_container(container, IGetLocalTemplates)
 
             if not templates:
                 log.msg('Did not find any templates on %s/%s' % (self.context, container),

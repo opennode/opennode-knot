@@ -62,6 +62,11 @@ class VirtualizationContainerSubmitter(Adapter):
         defer.returnValue(res)
 
 
+def submit_to_virtualization_container(hn, job_interface, *args, **kwargs):
+    submitter = IVirtualizationContainer(hn)
+    return submitter.submit(job_interface, *args, **kwargs)
+
+
 class ListVirtualizationContainerAction(Action):
     """Lists the content of a virtualizationcontaineraction.
     Usually the zodb will be in sync, but it can be useful to see real time info (perhaps just for test)."""
@@ -78,10 +83,8 @@ class ListVirtualizationContainerAction(Action):
         cmd.write("listing virtual machines\n")
         db.assert_proxy(self.context)
 
-        submitter = IVirtualizationContainerSubmitter(self.context)
-
         try:
-            vms = yield submitter.submit(IListVMS)
+            vms = yield submit_to_virtualization_container(self.context, IListVMS)
         except Exception as e:
             cmd.write("%s\n" % (": ".join(str(msg) for msg in e.args
                                 if (not isinstance(msg, str) or not msg.startswith('  File "/')))))
@@ -105,5 +108,3 @@ class ListVirtualizationContainerAction(Action):
             for console in vm['consoles']:
                 attrs = " ".join(["%s=%s" % pair for pair in console.items()])
                 cmd.write(" %s      %s\n" % (' ' * max_key_len, attrs))
-
-
