@@ -1,5 +1,6 @@
 import logging
 import netaddr
+import argparse
 
 from twisted.internet import defer
 from twisted.python import log
@@ -28,6 +29,7 @@ from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template, Templates
 from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
 
+from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import TmpObj
 from opennode.oms.model.form import alsoProvides
@@ -45,10 +47,18 @@ class SyncAction(ComputeAction):
 
     _do_not_enqueue = True
     _additional_keys = tuple()
+    _full = False
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
         return tuple((self.context,))
+
+    def arguments(self):
+        parser = VirtualConsoleArgumentParser()
+        parser.add_argument('-f', '--full', action='store_true',
+                           help='Perform full sync',
+                           default=False)
+        return parser
 
     @property
     def lock_keys(self):
@@ -61,21 +71,23 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+        # XXX for some strange reason args is object()
+        if type(args) == argparse.Namespace:
+            self._full = args.full
         log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
                  system='sync-action')
+
         if any_stack_installed(self.context):
-            yield self.sync_agent_version()
+            yield self.sync_agent_version(self._full)
+            yield self.sync_hw(self._full)
+            yield self.ensure_vms(self._full)
+            if self._full:
+                yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
+        else:
+            log.msg('No stacks installed on %s: %s' % (self.context, self.context.features))
 
         default = yield self.default_console()
-
         yield self.sync_consoles()
-
-        if any_stack_installed(self.context):
-            yield self.sync_hw()
-            yield self.ensure_vms()
-            yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
-        else:
-            log.msg('No stacks installed: %s' % self.context.features)
 
         if IVirtualCompute.providedBy(self.context):
             yield self._sync_virtual()
@@ -96,7 +108,10 @@ class SyncAction(ComputeAction):
         yield self.sync_vms()
 
     @defer.inlineCallbacks
-    def sync_agent_version(self):
+    def sync_agent_version(self, full):
+        if not full:
+            return
+
         log.msg('Syncing version on %s...' % (self.context), system='sync-action')
         minion_v = (yield IAgentVersion(self.context).run()).split('.')
         # XXX: Salt-specific
@@ -305,7 +320,7 @@ class SyncAction(ComputeAction):
         compute.apply()
 
     @defer.inlineCallbacks
-    def sync_hw(self):
+    def sync_hw(self, full):
         if not any_stack_installed(self.context):
             return
 
@@ -327,12 +342,14 @@ class SyncAction(ComputeAction):
             res[u'total'] = sum([0.0] + res.values())
             return res
 
-        routes = yield IGetRoutes(self.context).run()
+        routes = yield IGetRoutes(self.context).run() if full else []
 
         yield self._sync_hw(info, disk_info('total'), disk_info('used'), routes, uptime)
 
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
+        self.context.uptime = uptime
+
         if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
             log.msg('Nothing to update: info does not include required data', system='sync-hw')
             return
@@ -351,7 +368,6 @@ class SyncAction(ComputeAction):
         self.context.diskspace = disk_space
         self.context.diskspace_usage = disk_usage
         self.context.template = u'Hardware node'
-        self.context.uptime = uptime
 
         # XXX TODO: handle removal of routes
         for r in routes:
@@ -383,8 +399,10 @@ class SyncAction(ComputeAction):
             return 'Unknown'
 
     @defer.inlineCallbacks
-    def ensure_vms(self):
-        if not any_stack_installed(self.context):
+    def ensure_vms(self, full):
+        if (not any_stack_installed(self.context) or
+            # if not full sync and there are virtualization containers available
+            (not full and len(filter(lambda n: 'vms' in n, self.context.listnames())) > 0)):
             return
 
         vms_types = yield IGetVirtualizationContainers(self.context).run()

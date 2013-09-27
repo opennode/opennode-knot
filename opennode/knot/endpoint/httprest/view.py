@@ -14,7 +14,6 @@ from opennode.oms.endpoint.httprest.root import BadRequest
 from opennode.oms.endpoint.httprest.view import ContainerView
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import RawDataValidatingFactory
-from opennode.oms.model.form import RawDataApplier
 from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.stream import Metrics
