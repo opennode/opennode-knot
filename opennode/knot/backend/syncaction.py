@@ -1,5 +1,6 @@
 import logging
 import netaddr
+import argparse
 
 from twisted.internet import defer
 from twisted.python import log
@@ -46,6 +47,7 @@ class SyncAction(ComputeAction):
 
     _do_not_enqueue = True
     _additional_keys = tuple()
+    _full = False
 
     @db.ro_transact(proxy=False)
     def subject(self, *args, **kwargs):
@@ -69,14 +71,17 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
+        # XXX for some strange reason args is object()
+        if type(args) == argparse.Namespace:
+            self._full = args.full
         log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
                  system='sync-action')
 
         if any_stack_installed(self.context):
-            yield self.sync_agent_version(args.full)
-            yield self.sync_hw(args.full)
-            yield self.ensure_vms(args.full)
-            if args.full:
+            yield self.sync_agent_version(self._full)
+            yield self.sync_hw(self._full)
+            yield self.ensure_vms(self._full)
+            if self._full:
                 yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
         else:
             log.msg('No stacks installed on %s: %s' % (self.context, self.context.features))
@@ -320,8 +325,7 @@ class SyncAction(ComputeAction):
             return
 
         try:
-            if full:
-                info = yield IGetComputeInfo(self.context).run()
+            info = yield IGetComputeInfo(self.context).run()
             uptime = yield IGetHWUptime(self.context).run()
             disk_usage = yield IGetDiskUsage(self.context).run()
         except OperationRemoteError as e:
