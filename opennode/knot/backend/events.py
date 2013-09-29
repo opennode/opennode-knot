@@ -27,6 +27,7 @@ from opennode.oms.model.model.events import IModelDeletedEvent
 from opennode.oms.model.model.events import IModelCreatedEvent
 from opennode.oms.model.model.events import IOwnerChangedEvent
 from opennode.oms.model.traversal import canonical_path, traverse1
+from opennode.oms.security.authentication import sudo
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
@@ -161,6 +162,14 @@ def allocate_virtual_compute_from_hangar(model, event):
 @subscribe(IVirtualCompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_virtual_compute_config_change_request(compute, event):
+
+    c = sudo(compute)
+    compute_p = yield db.get(c, '__parent__')
+    compute_type = yield db.get(compute_p, 'backend')
+    # At the moment we only handle openvz backend updates (OMS-568)
+    if compute_type != 'openvz':
+        return
+
     update_param_whitelist = ['cpu_limit',
                               'diskspace',
                               'memory',
