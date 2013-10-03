@@ -152,6 +152,10 @@ class IInCompute(Interface):
     """Implementors of this interface can be contained in a `Compute` container."""
 
 
+class IAllocating(Interface):
+    """Marker interface implemented when the compute has an allocate operation in progress."""
+
+
 class IDeployed(Interface):
     """Marker interface implemented when the compute has been deployed."""
 
@@ -201,7 +205,7 @@ class Compute(Container):
     __contains__ = IInCompute
 
     __markers__ = [IVirtualCompute, IDeployed, IUndeployed, IDeploying, IZabbixConfiguration, IManageable,
-                   ISaltInstalled, IFuncInstalled]
+                   ISaltInstalled, IFuncInstalled, IAllocating]
 
     hostname = u''
 

@@ -28,6 +28,7 @@ from opennode.knot.backend.operation import OperationRemoteError
 from opennode.knot.backend.v12ncontainer import IVirtualizationContainerSubmitter
 from opennode.knot.model.common import IPreDeployHook
 from opennode.knot.model.common import IPostUndeployHook
+from opennode.knot.model.compute import IAllocating
 from opennode.knot.model.compute import ICompute, Compute, IVirtualCompute
 from opennode.knot.model.compute import IUndeployed, IDeployed, IDeploying
 from opennode.knot.model.compute import IManageable
@@ -368,6 +369,8 @@ class AllocateAction(ComputeAction):
             log.msg('Attempt to allocate a deployed compute: %s' % (self.context), system='deploy')
             return
 
+        yield db.transact(alsoProvides)(self.context, IAllocating)
+
         @db.ro_transact
         def get_matching_machines(container):
             all_machines = db.get_root()['oms_root']['machines']
@@ -422,34 +425,37 @@ class AllocateAction(ComputeAction):
 
             return filter(lambda m: all(condition_generator(m)), all_machines)
 
-        log.msg('Allocating %s: searching for targets...' % self.context, system='action-allocate')
+        try:
+            log.msg('Allocating %s: searching for targets...' % self.context, system='action-allocate')
 
-        vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
-        machines = yield get_matching_machines(vmsbackend)
+            vmsbackend = yield db.ro_transact(lambda: self.context.__parent__.backend)()
+            machines = yield get_matching_machines(vmsbackend)
 
-        if len(machines) <= 0:
-            self._action_log(cmd, 'Found no fitting machines. Action aborted.', system='action-allocate',
-                             logLevel=WARNING)
-            return
+            if len(machines) <= 0:
+                self._action_log(cmd, 'Found no fitting machines. Action aborted.', system='action-allocate',
+                                 logLevel=WARNING)
+                return
 
-        @db.ro_transact
-        def rank(machines):
-            return sorted(machines, key=lambda m: m.__name__)
+            @db.ro_transact
+            def rank(machines):
+                return sorted(machines, key=lambda m: m.__name__)
 
-        best = (yield rank(machines))[0]
-        log.msg('Found %s as the best candidate. Attempting to allocate...' % (best),
-                system='action-allocate')
+            best = (yield rank(machines))[0]
+            log.msg('Found %s as the best candidate. Attempting to allocate...' % (best),
+                    system='action-allocate')
 
-        bestvmscontainer = yield db.ro_transact(find_compute_v12n_container)(best, vmsbackend)
+            bestvmscontainer = yield db.ro_transact(find_compute_v12n_container)(best, vmsbackend)
 
-        @db.transact
-        def set_additional_keys():
-            self._additional_keys = [canonical_path(best), canonical_path(bestvmscontainer)]
-        yield set_additional_keys()
+            @db.transact
+            def set_additional_keys():
+                self._additional_keys = [canonical_path(best), canonical_path(bestvmscontainer)]
+                yield set_additional_keys()
 
-        yield self.reacquire_until_clear()
+            yield self.reacquire_until_clear()
 
-        yield DeployAction(self.context)._execute(DetachedProtocol(), bestvmscontainer)
+            yield DeployAction(self.context)._execute(DetachedProtocol(), bestvmscontainer)
+        finally:
+            yield db.transact(noLongerProvides)(self.context, IAllocating)
 
 
 def mv_compute_model(context_path, target_path):
