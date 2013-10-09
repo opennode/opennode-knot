@@ -381,6 +381,7 @@ class AllocateAction(ComputeAction):
                 yield ICompute.providedBy(m)
                 yield find_compute_v12n_container(m, container)
                 yield not getattr(m, 'exclude_from_allocation', None)
+                yield not getattr(m, 'failure', None)
                 if not get_config().getboolean('overcommit', 'memory', False):
                     yield self.context.memory_usage < m.memory
                 else:
@@ -405,6 +406,7 @@ class AllocateAction(ComputeAction):
             def unwind_until_false(generator):
                 fail_description = ['Not a compute',
                                     'No virt container %s' % container,
+                                    'In a failed state - not responding to ping',
                                     'Excluded from allocation',
                                     'Has less than %s MB memory' % self.context.memory_usage,
                                     'Not enough diskspace',
