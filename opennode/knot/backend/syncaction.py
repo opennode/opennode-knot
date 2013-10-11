@@ -250,6 +250,8 @@ class SyncAction(ComputeAction):
                 compute = TmpObj(self.context)
                 newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
                 if newowner is not None:
+                    log.msg('Modifying ownership of "%s" from %s to %s.'
+                            % (compute, owner, newowner), system='sync')
                     compute.__owner__ = newowner
                     compute.apply()
                 else:
