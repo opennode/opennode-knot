@@ -202,7 +202,7 @@ class Compute(Container):
                      autostart=('read', 'modify'),
                      ctid=('read', 'modify'),
                      exclude_from_allocation=('read', 'modify'),
-                     license_activated=('read', 'admin')
+                     license_activated=('read', 'zope.Security')
                      ))
 
     __contains__ = IInCompute
