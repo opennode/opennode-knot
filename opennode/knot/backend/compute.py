@@ -9,6 +9,7 @@ from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 from zope.component import getAllUtilitiesRegisteredFor
 
+import logging
 import netaddr
 import time
 import threading
@@ -53,6 +54,9 @@ from opennode.oms.model.model.stream import IStream
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
+
+
+admin_logger = logging.getLogger('admin_notifications')
 
 
 def any_stack_installed(context):
@@ -556,9 +560,16 @@ class DeployAction(VComputeAction):
 
             log.msg('Checking post-deploy...', system='deploy')
 
+            @db.transact
+            def set_notify_admin(self):
+                if self.context.notify_admin:
+                    self.context.license_activated = False
+                    admin_logger.warning('%s (%s) requires activation!', self.context, self.context.hostname)
+
+            yield set_notify_admin()
+
             if not (yield self._check_vm_post(cmd, name, hostname, target)):
-                self._action_log(cmd, 'Deployment failed. Deployment request result: %s' % res,
-                                 system='deploy')
+                self._action_log(cmd, 'Deployment failed. Request result: %s' % res, system='deploy')
                 return
 
             @db.transact
@@ -975,6 +986,25 @@ class RebootAction(VComputeAction):
     action('reboot')
 
     job = IRebootVM
+
+
+class ActivateAction(VComputeAction):
+    action('set_activation_status')
+
+    def arguments(self):
+        parser = VirtualConsoleArgumentParser()
+        parser.add_argument('-d', '--deactivated', action='store_true', default=False,
+                            help="Set deactivated state")
+        return parser
+
+    @require_admins_only
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        @db.transact
+        def set_active(compute, active):
+            self.context.license_activated = active
+
+        yield set_active(self.context, not args.d)
 
 
 class StopAllVmsCmd(Cmd):

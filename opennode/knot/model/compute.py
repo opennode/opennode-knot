@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+import logging
+
 from grokcore.component import context
 from grokcore.component import Adapter, implements
 from zope import schema
@@ -150,6 +152,9 @@ class IVirtualCompute(Interface):
     license_activated = schema.Bool(title=u'License activated', required=False, default=True,
                                     readonly=True)
 
+    notify_admin = schema.Bool(title=u'Notify admin on deploy', required=False, default=False,
+                               readonly=True)
+
 
 class IInCompute(Interface):
     """Implementors of this interface can be contained in a `Compute` container."""
@@ -291,6 +296,7 @@ class Compute(Container):
         return self.hostname.encode('utf-8')
 
     @property
+
     def nicknames(self):
         """Returns all the nicknames of this Compute instance.
 
