@@ -147,7 +147,8 @@ class IVirtualCompute(Interface):
     ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
                       required=False, default=101)
 
-    license_activated = schema.Bool(title=u'License activated', required=False, default=True)
+    license_activated = schema.Bool(title=u'License activated', required=False, default=True,
+                                    readonly=True)
 
 
 class IInCompute(Interface):
