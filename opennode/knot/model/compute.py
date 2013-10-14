@@ -266,6 +266,8 @@ class Compute(Container):
 
     exclude_from_allocation = False
 
+    license_activated = True
+
     def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()
 
