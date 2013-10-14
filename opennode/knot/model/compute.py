@@ -1,7 +1,5 @@
 from __future__ import absolute_import
 
-import logging
-
 from grokcore.component import context
 from grokcore.component import Adapter, implements
 from zope import schema
@@ -273,6 +271,8 @@ class Compute(Container):
 
     license_activated = True
 
+    notify_admin = False
+
     def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()
 
@@ -296,7 +296,6 @@ class Compute(Container):
         return self.hostname.encode('utf-8')
 
     @property
-
     def nicknames(self):
         """Returns all the nicknames of this Compute instance.
 
