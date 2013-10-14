@@ -564,7 +564,11 @@ class DeployAction(VComputeAction):
             def set_notify_admin(self):
                 if self.context.notify_admin:
                     self.context.license_activated = False
-                    admin_logger.warning('%s (%s) requires activation!', self.context, self.context.hostname)
+                    admin_logger.warning('%s (hostname=%s; host=%s; ipaddr=%s) requires activation!',
+                                         self.context,
+                                         self.context.hostname,
+                                         self.context.__parent__.__parent__,
+                                         vm_parameters['ipaddress'])
 
             yield set_notify_admin()
 
