@@ -147,6 +147,8 @@ class IVirtualCompute(Interface):
     ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
                       required=False, default=101)
 
+    license_activated = schema.Bool(title=u'License activated', required=False, default=True)
+
 
 class IInCompute(Interface):
     """Implementors of this interface can be contained in a `Compute` container."""
@@ -199,7 +201,8 @@ class Compute(Container):
                      template=('read', 'modify'),
                      autostart=('read', 'modify'),
                      ctid=('read', 'modify'),
-                     exclude_from_allocation=('read', 'modify')
+                     exclude_from_allocation=('read', 'modify'),
+                     license_activated=('read', 'admin')
                      ))
 
     __contains__ = IInCompute

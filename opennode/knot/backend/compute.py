@@ -314,6 +314,11 @@ class VComputeAction(ComputeAction):
         action_name = getattr(self, 'action_name', self._name + "ing")
 
         name = yield db.get(self.context, '__name__')
+
+        if not self.context.license_activated:
+            self._action_log(cmd, '%s %s failed: VM license is not activated yet' % (action_name, name))
+            return
+
         parent = yield db.get(self.context, '__parent__')
 
         yield self.set_inprogress()
