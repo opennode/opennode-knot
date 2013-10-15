@@ -570,7 +570,7 @@ class DeployAction(VComputeAction):
                                          self.context.hostname,
                                          target.__parent__,
                                          target.__parent__.hostname,
-                                         vm_parameters['ipaddress'])
+                                         vm_parameters['ip_address'])
 
             yield set_notify_admin()
 
