@@ -1009,8 +1009,16 @@ class ActivateAction(VComputeAction):
         @db.transact
         def set_active(compute, active):
             self.context.license_activated = active
+            admin_logger.warning('%s (hostname=%s, targethost=%s(%s), ipaddr=%s) is activated!',
+                                 self.context, self.context.hostname,
+                                 self.context.__parent__.__parent__,
+                                 self.context.__parent__.__parent__.hostname,
+                                 self.context.ipv4_address)
 
         yield set_active(self.context, not args.d)
+        self._action_log(cmd, '%s (%s) is activated!' %
+                         (self.context.hostname, self.context), system='activation')
+
 
 
 class StopAllVmsCmd(Cmd):
