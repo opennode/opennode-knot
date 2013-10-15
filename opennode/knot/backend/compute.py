@@ -561,7 +561,7 @@ class DeployAction(VComputeAction):
             log.msg('Checking post-deploy...', system='deploy')
 
             @db.transact
-            def set_notify_admin(self):
+            def set_notify_admin():
                 if self.context.notify_admin:
                     self.context.license_activated = False
                     admin_logger.warning('%s (hostname=%s; host=%s(%s); ipaddr=%s) requires activation!',
