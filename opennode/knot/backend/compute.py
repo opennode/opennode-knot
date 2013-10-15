@@ -43,7 +43,7 @@ from opennode.oms.endpoint.ssh.cmd.base import Cmd
 from opennode.oms.endpoint.ssh.cmd.directives import command
 from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
-from opennode.oms.endpoint.ssh.cmd.security import require_admins_only
+from opennode.oms.endpoint.ssh.cmd.security import require_admins_only, require_admins_only_action
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
@@ -1003,21 +1003,24 @@ class ActivateAction(VComputeAction):
                             help="Set deactivated state")
         return parser
 
-    @require_admins_only
+    @require_admins_only_action
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
         @db.transact
         def set_active(compute, active):
             self.context.license_activated = active
-            admin_logger.warning('%s (hostname=%s, targethost=%s(%s), ipaddr=%s) is activated!',
+            admin_logger.warning('%s (hostname=%s, targethost=%s(%s), ipaddr=%s) is %sactivated!',
                                  self.context, self.context.hostname,
                                  self.context.__parent__.__parent__,
                                  self.context.__parent__.__parent__.hostname,
-                                 self.context.ipv4_address)
+                                 self.context.ipv4_address,
+                                 'de' if not active else '')
 
-        yield set_active(self.context, not args.d)
-        self._action_log(cmd, '%s (%s) is activated!' %
-                         (self.context.hostname, self.context), system='activation')
+        yield set_active(self.context, not args.deactivated)
+
+        self._action_log(cmd, '%s (%s) is %sactivated!' %
+                         (self.context.hostname, self.context,
+                         'de' if args.deactivated else ''), system='activation')
 
 
 
