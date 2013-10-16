@@ -29,8 +29,13 @@ class UserComputeStatisticsAggregator(GlobalUtility):
         for compute in map(follow_symlinks, computes.listcontent()):
             if not IVirtualCompute.providedBy(compute):
                 continue
+
+            if not compute.license_activated:
+                continue
+
             if compute.__owner__ == username and IDeployed.providedBy(compute):
                 user_computes.append(compute)
+
         return user_computes
 
     @db.assert_transact
