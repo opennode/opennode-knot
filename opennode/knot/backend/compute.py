@@ -564,10 +564,11 @@ class DeployAction(VComputeAction):
             def set_notify_admin():
                 if self.context.notify_admin:
                     self.context.license_activated = False
-                    admin_logger.warning('%s (hostname=%s; targethost=%s(%s); ipaddr=%s) '
+                    admin_logger.warning('%s (hostname=%s; owner=%s; targethost=%s(%s); ipaddr=%s) '
                                          'requires activation!',
                                          self.context,
                                          self.context.hostname,
+                                         self.context.__owner__,
                                          target.__parent__,
                                          target.__parent__.hostname,
                                          vm_parameters['ip_address'])
@@ -1009,8 +1010,9 @@ class ActivateAction(VComputeAction):
         @db.transact
         def set_active(compute, active):
             self.context.license_activated = active
-            admin_logger.warning('%s (hostname=%s, targethost=%s(%s), ipaddr=%s) is %sactivated!',
+            admin_logger.warning('%s (hostname=%s; owner=%s; targethost=%s(%s); ipaddr=%s) is %sactivated!',
                                  self.context, self.context.hostname,
+                                 self.context.__owner__,
                                  self.context.__parent__.__parent__,
                                  self.context.__parent__.__parent__.hostname,
                                  self.context.ipv4_address,
