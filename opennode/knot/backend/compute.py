@@ -9,6 +9,7 @@ from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
 from zope.component import getAllUtilitiesRegisteredFor
 
+import logging
 import netaddr
 import time
 import threading
@@ -42,7 +43,7 @@ from opennode.oms.endpoint.ssh.cmd.base import Cmd
 from opennode.oms.endpoint.ssh.cmd.directives import command
 from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
-from opennode.oms.endpoint.ssh.cmd.security import require_admins_only
+from opennode.oms.endpoint.ssh.cmd.security import require_admins_only, require_admins_only_action
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
@@ -53,6 +54,9 @@ from opennode.oms.model.model.stream import IStream
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.zodb import db
+
+
+admin_logger = logging.getLogger('admin_notifications')
 
 
 def any_stack_installed(context):
@@ -314,6 +318,11 @@ class VComputeAction(ComputeAction):
         action_name = getattr(self, 'action_name', self._name + "ing")
 
         name = yield db.get(self.context, '__name__')
+
+        if not self.context.license_activated:
+            self._action_log(cmd, '%s %s failed: VM license is not activated yet' % (action_name, name))
+            return
+
         parent = yield db.get(self.context, '__parent__')
 
         yield self.set_inprogress()
@@ -551,9 +560,23 @@ class DeployAction(VComputeAction):
 
             log.msg('Checking post-deploy...', system='deploy')
 
+            @db.transact
+            def set_notify_admin():
+                if self.context.notify_admin:
+                    self.context.license_activated = False
+                    admin_logger.warning('%s (hostname=%s; owner=%s; targethost=%s(%s); ipaddr=%s) '
+                                         'requires activation!',
+                                         self.context,
+                                         self.context.hostname,
+                                         self.context.__owner__,
+                                         target.__parent__,
+                                         target.__parent__.hostname,
+                                         vm_parameters['ip_address'])
+
+            yield set_notify_admin()
+
             if not (yield self._check_vm_post(cmd, name, hostname, target)):
-                self._action_log(cmd, 'Deployment failed. Deployment request result: %s' % res,
-                                 system='deploy')
+                self._action_log(cmd, 'Deployment failed. Request result: %s' % res, system='deploy')
                 return
 
             @db.transact
@@ -970,6 +993,37 @@ class RebootAction(VComputeAction):
     action('reboot')
 
     job = IRebootVM
+
+
+class ActivateAction(VComputeAction):
+    action('set_activation_status')
+
+    def arguments(self):
+        parser = VirtualConsoleArgumentParser()
+        parser.add_argument('-d', '--deactivated', action='store_true', default=False,
+                            help="Set deactivated state")
+        return parser
+
+    @require_admins_only_action
+    @defer.inlineCallbacks
+    def _execute(self, cmd, args):
+        @db.transact
+        def set_active(compute, active):
+            self.context.license_activated = active
+            admin_logger.warning('%s (hostname=%s; owner=%s; targethost=%s(%s); ipaddr=%s) is %sactivated!',
+                                 self.context, self.context.hostname,
+                                 self.context.__owner__,
+                                 self.context.__parent__.__parent__,
+                                 self.context.__parent__.__parent__.hostname,
+                                 self.context.ipv4_address,
+                                 'de' if not active else '')
+
+        yield set_active(self.context, not args.deactivated)
+
+        self._action_log(cmd, '%s (%s) is %sactivated!' %
+                         (self.context.hostname, self.context,
+                         'de' if args.deactivated else ''), system='activation')
+
 
 
 class StopAllVmsCmd(Cmd):

@@ -147,6 +147,12 @@ class IVirtualCompute(Interface):
     ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
                       required=False, default=101)
 
+    license_activated = schema.Bool(title=u'License activated', required=False, default=True,
+                                    readonly=True)
+
+    notify_admin = schema.Bool(title=u'Notify admin on deploy', required=False, default=False,
+                               readonly=True)
+
 
 class IInCompute(Interface):
     """Implementors of this interface can be contained in a `Compute` container."""
@@ -199,7 +205,8 @@ class Compute(Container):
                      template=('read', 'modify'),
                      autostart=('read', 'modify'),
                      ctid=('read', 'modify'),
-                     exclude_from_allocation=('read', 'modify')
+                     exclude_from_allocation=('read', 'modify'),
+                     license_activated=('read', 'zope.Security')
                      ))
 
     __contains__ = IInCompute
@@ -261,6 +268,10 @@ class Compute(Container):
     agent_version = u''
 
     exclude_from_allocation = False
+
+    license_activated = True
+
+    notify_admin = False
 
     def __init__(self, hostname, state=None, memory=None, template=None, ipv4_address=None, mgt_stack=None):
         super(Compute, self).__init__()
