@@ -598,7 +598,7 @@ class DeployAction(VComputeAction):
                 new_compute.memory = getattr(c, 'memory', 0)
                 new_compute.diskspace = getattr(c, 'diskspace', {u'total': 0})
                 new_compute.num_cores = getattr(c, 'num_cores', 0)
-                new_compute.lisense_activated = getattr(c, 'license_activated', True)
+                new_compute.license_activated = getattr(c, 'license_activated', True)
 
                 alsoProvides(new_compute, IVirtualCompute)
                 alsoProvides(new_compute, IDeployed)
