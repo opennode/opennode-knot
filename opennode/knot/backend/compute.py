@@ -39,11 +39,8 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 from opennode.knot.utils import mac_addr_kvm_generator
 
 from opennode.oms.config import get_config
-from opennode.oms.endpoint.ssh.cmd.base import Cmd
-from opennode.oms.endpoint.ssh.cmd.directives import command
-from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
+from opennode.oms.endpoint.ssh.cmd.security import require_admins_only_action
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
-from opennode.oms.endpoint.ssh.cmd.security import require_admins_only, require_admins_only_action
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.log import UserLogger
 from opennode.oms.model.form import alsoProvides
@@ -157,7 +154,7 @@ class ComputeAction(Action, PreValidateHookMixin):
                 if key in self._lock_registry and self._lock_registry[key][0] is not d:
                     dother, actionother = self._lock_registry[key]
                     log.msg('Another action %s has locked %s... %s will wait until it finishes'
-                        % (actionother, key, self), system='compute-action')
+                            % (actionother, key, self), system='compute-action')
                     deferred_list.append(dother)
 
             log.msg('%s has locks: %s' % (self, self._used_lock_keys),
@@ -215,7 +212,7 @@ class ComputeAction(Action, PreValidateHookMixin):
 
     def _action_log(self, cmd, msg, **kwargs):
         if not kwargs.get('system'):
-            kwargs['system'] ='compute-action'
+            kwargs['system'] = 'compute-action'
         log.msg(msg, **kwargs)
         cmd.write('%s\n' % msg)
 
@@ -629,9 +626,11 @@ class DeployAction(VComputeAction):
 
         except Exception as e:
             log.err(system='deploy')
+
             @db.transact
             def cleanup_deploying():
                 noLongerProvides(self.context, IDeploying)
+
             yield cleanup_deploying()
             raise e
 
@@ -1024,38 +1023,3 @@ class ActivateAction(VComputeAction):
         self._action_log(cmd, '%s (%s) is %sactivated!' %
                          (self.context.hostname, self.context,
                          'de' if args.deactivated else ''), system='activation')
-
-
-
-class StopAllVmsCmd(Cmd):
-    implements(ICmdArgumentsSyntax)
-    command('stopvms')
-
-    def arguments(self):
-        parser = VirtualConsoleArgumentParser()
-        parser.add_argument('-u', help="Stop all VMs belonging to the user")
-        return parser
-
-    @db.ro_transact
-    def get_computes(self, args):
-        computes = db.get_root()['oms_root']['computes']
-        user_vms = []
-        for c in map(follow_symlinks, computes.listcontent()):
-            if not IVirtualCompute.providedBy(c):
-                continue
-            if c.__owner__ == args.u:
-                user_vms.append(c)
-        return user_vms
-
-    @require_admins_only
-    @defer.inlineCallbacks
-    def execute(self, args):
-        log.msg('Stopping all VMs of "%s"...' % args.u, system='stopallvms')
-
-        computes = yield self.get_computes(args)
-        for c in computes:
-            self.write("Stopping %s...\n" % c)
-            yield ShutdownComputeAction(c).execute(DetachedProtocol(), object())
-
-        self.write("Stopping done. %s VMs stopped\n" % (len(computes)))
-        log.msg('Stopping done. %s VMs of "%s" stopped' % (len(computes), args.u), system='stopallvms')
