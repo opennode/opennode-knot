@@ -749,11 +749,12 @@ class UndeployAction(VComputeAction):
         def finalize_vm():
             ippools = db.get_root()['oms_root']['ippools']
             ip = netaddr.IPAddress(self.context.ipv4_address.split('/')[0])
+            log.msg('Attempting to deallocate IP %s from the pools' % ip, system='undeploy-action')
             if ippools.free(ip):
                 ulog = UserLogger(principal=cmd.protocol.interaction.participations[0].principal,
                                   subject=self.context, owner=self.context.__owner__)
                 ulog.log('Deallocated IP: %s', ip)
-
+                log.msg('Deallocated IP %s' % ip, system='ippool')
             vm = traverse1(canonical_path(self.context))
             if vm is not None:
                 noLongerProvides(vm, IDeployed)

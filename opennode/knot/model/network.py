@@ -10,6 +10,8 @@ from zope.component import provideSubscriptionAdapter
 from zope.schema.interfaces import IFromUnicode, IInt
 from zope.interface import Interface, implements, implementer
 
+from twisted.python import log
+
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import ReadonlyContainer, Container, Model
 from opennode.oms.model.model.base import ContainerInjector
@@ -248,6 +250,7 @@ class IPv4Pool(Container):
         for ip in xrange(int(self.minimum), int(self.maximum)):
             ip = netaddr.IPAddress(ip)
             if int(ip) not in self._items:
+                log.msg('Allocating IP %s from the pool %s' % (ip, self), system='ippool')
                 self.use(ip)
                 return ip
 
@@ -258,6 +261,7 @@ class IPv4Pool(Container):
         self._items[int(ip)] = IPAddressStorable(self, int(ip))
 
     def free(self, ip):
+        log.msg('Deallocating IP %s from the pool %s' % (ip, self), system='ippool')
         del self._items[int(ip)]
 
     def validate(self):
