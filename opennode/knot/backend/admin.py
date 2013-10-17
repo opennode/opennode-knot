@@ -1,12 +1,15 @@
+import collections
+import json
+import yaml
+
 from grokcore.component import implements
 from twisted.internet import defer
 from twisted.python import log
+from zope.authentication.interfaces import IAuthentication
+from zope.component import getUtility
 from zope.security.proxy import removeSecurityProxy
-
-import datetime
-import logging
-import json
-import yaml
+from zope.securitypolicy.interfaces import IPrincipalRoleManager
+from zope.securitypolicy.rolepermission import rolePermissionManager
 
 from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.cmd.base import Cmd
@@ -15,6 +18,7 @@ from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.cmd.security import effective_perms
 from opennode.oms.endpoint.ssh.cmd.security import require_admins_only
+from opennode.oms.endpoint.ssh.cmd.security import SetAclMixin
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import RawDataApplier
 from opennode.oms.model.model.base import IContainer, IIncomplete
@@ -22,6 +26,8 @@ from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.schema import model_to_dict
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.security.checker import get_interaction
+from opennode.oms.security.principals import Group
+from opennode.oms.security.permissions import Role
 from opennode.oms.zodb import db
 
 from opennode.knot.model.compute import IVirtualCompute
@@ -64,7 +70,7 @@ class StopAllVmsCmd(Cmd):
 
 
 
-class ExportMetadataCmd(Cmd):
+class ExportMetadataCmd(Cmd, SetAclMixin):
     implements(ICmdArgumentsSyntax)
     command('importexport')
 
@@ -87,14 +93,15 @@ class ExportMetadataCmd(Cmd):
         return parser
 
     @require_admins_only
-    @db.ro_transact
+    @defer.inlineCallbacks
     def execute(self, args):
         log.msg('Exporting all object ownership data...')
         if args.import_data:
-            self.import_data(args)
+            yield self.import_data(args)
         else:
-            self.export_data(args)
+            yield self.export_data(args)
 
+    @db.transact
     def import_data(self, args):
 
         with open(args.filename, 'r') as f:
@@ -136,13 +143,17 @@ class ExportMetadataCmd(Cmd):
             form.apply()
         else:
             self.write('WARNING: %s while importing data for %s' % (form.errors, obj))
-        #if 'permissions' in attrs or not attrs:
-        #    interaction = get_interaction(obj)
-        #    data['permissions'] = effective_perms(interaction, obj) if interaction else []
 
-        #if 'tags' in data:
-        #    data['tags'] = list(data['tags'])
+        for item in data.get('permissions', []):
+            # TODO: implement clearing ACL items only found in current object
+            # Current implementation just adds missing allow/deny items, clears nothing
+            #cur_acl = self._do_cat_acl(obj)
+            #clear = list(set(cur_acl['allow']).difference(item['allow']))
+            #clear.expand(list(set(cur_acl['deny']).difference(item['deny'])))
+            clear = []
+            self.set_acl(obj, False, item['allow'], item['deny'], clear)
 
+    @db.ro_transact
     def export_data(self, args):
         data = {}
         for path, recursive in self.traverse_paths:
@@ -167,10 +178,10 @@ class ExportMetadataCmd(Cmd):
             if IContainer.providedBy(element):
                 if recursive and level < maxlevel:
                     children = self.traverse_level_get(element, attrs,
-                                                   recursive=recursive,
-                                                   maxlevel=maxlevel,
-                                                   level=level + 1,
-                                                   add_full_paths=add_full_paths)
+                                                       recursive=recursive,
+                                                       maxlevel=maxlevel,
+                                                       level=level + 1,
+                                                       add_full_paths=add_full_paths)
                     if children:
                         data.update({'children': children})
 
@@ -180,6 +191,40 @@ class ExportMetadataCmd(Cmd):
                 container_data[data['name']] = data
 
         return container_data
+
+    def _do_cat_acl(self, obj):
+        prinrole = IPrincipalRoleManager(obj)
+        auth = getUtility(IAuthentication, context=None)
+
+        user_allow = collections.defaultdict(list)
+        user_deny = collections.defaultdict(list)
+        users = set()
+        for role, principal, setting in prinrole.getPrincipalsAndRoles():
+            users.add(principal)
+            if setting.getName() == 'Allow':
+                user_allow[principal].append(role)
+            else:
+                user_deny[principal].append(role)
+
+        acl = {'allow': [], 'deny': []}
+
+        for principal in users:
+            def formatted_perms(perms):
+                prin = auth.getPrincipal(principal)
+                typ = 'group' if isinstance(prin, Group) else 'user'
+                def grants(i):
+                    return ','.join('@%s' % i[0] for i in rolePermissionManager.getPermissionsForRole(i)
+                                    if i[0] != 'oms.nothing')
+                return (typ, principal, ''.join('%s{%s}' %
+                                                (Role.role_to_nick.get(i, '(%s)' % i), grants(i))
+                                                for i in sorted(perms)))
+
+            if principal in user_allow:
+                acl['allow'].append('%s:%s:%s' % formatted_perms(user_allow[principal]))
+
+            if principal in user_deny:
+                acl['deny'].append('%s:%s:%s' % formatted_perms(user_deny[principal]))
+        return acl
 
     @db.assert_transact
     def _do_cat(self, obj, attrs=[], add_full_paths=False):
@@ -196,8 +241,7 @@ class ExportMetadataCmd(Cmd):
             data['type'] = type(removeSecurityProxy(obj)).__name__
 
         if 'permissions' in attrs or not attrs:
-            interaction = get_interaction(obj)
-            data['permissions'] = effective_perms(interaction, obj) if interaction else []
+            data['permissions'] = self._do_cat_acl(obj)
 
         if 'tags' in data:
             data['tags'] = list(data['tags'])
