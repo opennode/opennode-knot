@@ -31,11 +31,11 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
-from opennode.oms.model.base import SuppressEvents
 from opennode.oms.model.form import TmpObj
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
 from opennode.oms.model.model.actions import action
+from opennode.oms.model.model.base import SuppressEvents
 from opennode.oms.model.model.symlink import Symlink, follow_symlinks
 from opennode.oms.model.traversal import canonical_path
 from opennode.oms.util import get_u, get_i, get_f
