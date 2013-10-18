@@ -219,27 +219,9 @@ class SyncAction(ComputeAction):
     def _sync_vm(self, vm):
         return self.sync_vm(vm)
 
-    @defer.inlineCallbacks
+    @db.transact
     def sync_owner(self, vm):
-        owner = yield db.get(self.context, '__owner__')
-        parent = yield db.get(self.context, '__parent__')
-        uuid = yield db.get(self.context, '__name__')
-
-        # PUSH if owner is set, PULL only when OMS owner is not set
-        if owner is not None:
-            log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
-            submitter = IVirtualizationContainerSubmitter(parent)
-            yield submitter.submit(ISetOwner, uuid, owner)
-            log.msg('Owner pushing for %s successful' % self.context, system='sync')
-        elif vm.get('owner'):
-            @db.transact
-            def pull_owner():
-                with SuppressEvents(self.context):
-                    compute = TmpObj(self.context)
-                    newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-                    compute.__owner__ = newowner
-                    compute.apply()
-            yield pull_owner()
+        self.sync_owner_transact(vm)
 
     @db.assert_transact
     def sync_owner_transact(self, vm):
@@ -247,20 +229,24 @@ class SyncAction(ComputeAction):
         parent = self.context.__parent__
         uuid = self.context.__name__
 
+        # PUSH if owner is set and is modified, PULL only when OMS owner is not set
         if owner is not None:
-            log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
-            submitter = IVirtualizationContainerSubmitter(parent)
-            d = submitter.submit(ISetOwner, uuid, owner)
-            d.addCallback(lambda r: log.msg('Owner pushing for %s successful' % self.context, system='sync'))
-            d.addErrback(log.err, system='sync')
+            if vm.get('owner') != owner:
+                log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context),
+                        system='sync')
+                submitter = IVirtualizationContainerSubmitter(parent)
+                d = submitter.submit(ISetOwner, uuid, owner)
+                d.addCallback(lambda r: log.msg('Owner pushing for %s successful' % self.context,
+                                                system='sync'))
+                d.addErrback(log.err, system='sync')
         elif vm.get('owner'):
             compute = TmpObj(self.context)
             newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
             if newowner is not None:
                 log.msg('Modifying ownership of "%s" from %s to %s.'
                         % (compute, owner, newowner), system='sync')
+                compute.__owner__ = newowner
                 with SuppressEvents(self.context):
-                    compute.__owner__ = newowner
                     compute.apply()
             else:
                 log.msg('User not found: "%s" while restoring owner for %s. '
