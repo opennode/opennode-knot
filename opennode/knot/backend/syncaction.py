@@ -224,20 +224,21 @@ class SyncAction(ComputeAction):
         parent = yield db.get(self.context, '__parent__')
         uuid = yield db.get(self.context, '__name__')
 
-        if vm.get('owner'):
-            if owner != vm['owner']:
-                @db.transaft
-                def pull_owner():
-                    compute = TmpObj(self.context)
-                    newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-                    compute.__owner__ = newowner
-                    compute.apply()
-                yield pull_owner()
-        elif owner is not None:
+        # PUSH if owner is set, PULL only when OMS owner is not set
+        if owner is not None:
             log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
             submitter = IVirtualizationContainerSubmitter(parent)
             yield submitter.submit(ISetOwner, uuid, owner)
             log.msg('Owner pushing for %s successful' % self.context, system='sync')
+        elif vm.get('owner'):
+            @db.transaft
+            def pull_owner():
+                compute = TmpObj(self.context)
+                newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+                compute.__owner__ = newowner
+                compute.apply()
+            yield pull_owner()
+
 
     @db.assert_transact
     def sync_owner_transact(self, vm):
