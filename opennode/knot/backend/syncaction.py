@@ -31,6 +31,7 @@ from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
 
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
+from opennode.oms.model.base import SuppressEvents
 from opennode.oms.model.form import TmpObj
 from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.form import noLongerProvides
@@ -231,14 +232,14 @@ class SyncAction(ComputeAction):
             yield submitter.submit(ISetOwner, uuid, owner)
             log.msg('Owner pushing for %s successful' % self.context, system='sync')
         elif vm.get('owner'):
-            @db.transaft
+            @db.transact
             def pull_owner():
-                compute = TmpObj(self.context)
-                newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-                compute.__owner__ = newowner
-                compute.apply()
+                with SuppressEvents(self.context):
+                    compute = TmpObj(self.context)
+                    newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+                    compute.__owner__ = newowner
+                    compute.apply()
             yield pull_owner()
-
 
     @db.assert_transact
     def sync_owner_transact(self, vm):
@@ -246,24 +247,24 @@ class SyncAction(ComputeAction):
         parent = self.context.__parent__
         uuid = self.context.__name__
 
-        if vm.get('owner'):
-            if owner != vm['owner']:
-                compute = TmpObj(self.context)
-                newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
-                if newowner is not None:
-                    log.msg('Modifying ownership of "%s" from %s to %s.'
-                            % (compute, owner, newowner), system='sync')
-                    compute.__owner__ = newowner
-                    compute.apply()
-                else:
-                    log.msg('User not found: "%s" while restoring owner for %s. '
-                            'Leaving as-is' % (vm['owner'], compute), system='sync')
-        elif owner is not None:
+        if owner is not None:
             log.msg('Attempting to push owner (%s) of %s to agent' % (owner, self.context), system='sync')
             submitter = IVirtualizationContainerSubmitter(parent)
             d = submitter.submit(ISetOwner, uuid, owner)
             d.addCallback(lambda r: log.msg('Owner pushing for %s successful' % self.context, system='sync'))
             d.addErrback(log.err, system='sync')
+        elif vm.get('owner'):
+            compute = TmpObj(self.context)
+            newowner = getUtility(IAuthentication).getPrincipal(vm['owner'])
+            if newowner is not None:
+                log.msg('Modifying ownership of "%s" from %s to %s.'
+                        % (compute, owner, newowner), system='sync')
+                with SuppressEvents(self.context):
+                    compute.__owner__ = newowner
+                    compute.apply()
+            else:
+                log.msg('User not found: "%s" while restoring owner for %s. '
+                            'Leaving as-is' % (vm['owner'], compute), system='sync')
 
     @db.assert_transact
     def sync_vm(self, vm):
@@ -320,7 +321,8 @@ class SyncAction(ComputeAction):
         compute.swap_size = vm.get('swap') or compute.swap_size
         compute.kernel = vm.get('kernel') or compute.kernel
 
-        compute.apply()
+        with SuppressEvents(self.context):
+            compute.apply()
 
     @defer.inlineCallbacks
     def sync_hw(self, full):
@@ -351,49 +353,50 @@ class SyncAction(ComputeAction):
 
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
-        self.context.uptime = uptime
+        with SuppressEvents(self.context):
+            self.context.uptime = float(uptime)
 
-        if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
-            log.msg('Nothing to update: info does not include required data', system='sync-hw')
-            return
+            if any((not info, 'cpuModel' not in info, 'kernelVersion' not in info)):
+                log.msg('Nothing to update: info does not include required data', system='sync-hw')
+                return
 
-        if IVirtualCompute.providedBy(self.context):
-            self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
-        else:
-            self.context.cpu_info = unicode(info['cpuModel'])
+            if IVirtualCompute.providedBy(self.context):
+                self.context.cpu_info = self.context.__parent__.__parent__.cpu_info
+            else:
+                self.context.cpu_info = unicode(info['cpuModel'])
 
-        self.context.architecture = (unicode(info['platform']), u'linux', self.distro(info))
-        self.context.kernel = unicode(info['kernelVersion'])
-        self.context.memory = info['systemMemory']
-        self.context.num_cores = info['numCpus']
-        self.context.os_release = unicode(info['os'])
-        self.context.swap_size = info['systemSwap']
-        self.context.diskspace = disk_space
-        self.context.diskspace_usage = disk_usage
-        self.context.template = u'Hardware node'
+            self.context.architecture = (unicode(info['platform']), u'linux', self.distro(info))
+            self.context.kernel = unicode(info['kernelVersion'])
+            self.context.memory = int(info['systemMemory'])
+            self.context.num_cores = int(info['numCpus'])
+            self.context.os_release = unicode(info['os'])
+            self.context.swap_size = int(info['systemSwap'])
+            self.context.diskspace = disk_space
+            self.context.diskspace_usage = disk_usage
+            self.context.template = u'Hardware node'
 
-        # XXX TODO: handle removal of routes
-        for r in routes:
-            destination = netaddr.IPNetwork('%s/%s' % (r['destination'], r['netmask']))
-            route_name = str(destination.cidr).replace('/', '_')
+            # XXX TODO: handle removal of routes
+            for r in routes:
+                destination = netaddr.IPNetwork('%s/%s' % (r['destination'], r['netmask']))
+                route_name = str(destination.cidr).replace('/', '_')
 
-            if self.context.routes[route_name]:
-                continue
+                if self.context.routes[route_name]:
+                    continue
 
-            gateway = netaddr.IPAddress(r['router'])
+                gateway = netaddr.IPAddress(r['router'])
 
-            route = NetworkRoute()
-            route.destination = str(destination.cidr)
-            route.gateway = str(gateway)
-            route.flags = r['flags']
-            route.metrics = int(r['metrics'])
-            route.__name__ = route_name
+                route = NetworkRoute()
+                route.destination = str(destination.cidr)
+                route.gateway = str(gateway)
+                route.flags = r['flags']
+                route.metrics = int(r['metrics'])
+                route.__name__ = route_name
 
-            interface = self.context.interfaces[r['interface']]
-            if interface:
-                route.add(Symlink('interface', interface))
+                interface = self.context.interfaces[r['interface']]
+                if interface:
+                    route.add(Symlink('interface', interface))
 
-            self.context.routes.add(route)
+                self.context.routes.add(route)
 
     def distro(self, info):
         if 'os' in info:

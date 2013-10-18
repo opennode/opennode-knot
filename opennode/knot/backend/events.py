@@ -162,7 +162,6 @@ def allocate_virtual_compute_from_hangar(model, event):
 @subscribe(IVirtualCompute, IModelModifiedEvent)
 @defer.inlineCallbacks
 def handle_virtual_compute_config_change_request(compute, event):
-
     c = sudo(compute)
     compute_p = yield db.get(c, '__parent__')
     compute_type = yield db.get(compute_p, 'backend')
