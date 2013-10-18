@@ -226,7 +226,7 @@ def handle_config_change_update_stats(compute, event):
 
 @subscribe(IVirtualCompute, IOwnerChangedEvent)
 def handle_ownership_change(model, event):
-    msg = 'Compute "%s" owner changed from "%s" to "%s"' % (model, event.oldowner, event.nextoner)
+    msg = 'Compute "%s" owner changed from "%s" to "%s"' % (model, event.oldowner, event.nextowner)
 
     oldowner = getUtility(IAuthentication).getPrincipal(event.oldowner)
     newowner = getUtility(IAuthentication).getPrincipal(event.nextowner)
