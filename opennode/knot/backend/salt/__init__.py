@@ -250,10 +250,11 @@ ACTIONS = {
 TIMEOUTS = {
     op.IMigrateVM: 3600,
     op.IDeployVM: 600,
-    op.IGetGuestMetrics: 5,
-    op.IGetHostMetrics: 5,
+    op.IGetGuestMetrics: 7,
+    op.IGetHostMetrics: 7,
     op.IShutdownVM: 630,
-    op.IStartVM: 30
+    op.IStartVM: 30,
+    op.IListVMS: 20
 }
 
 
