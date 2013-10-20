@@ -177,12 +177,16 @@ class ComputeView(ContainerView):
         if 'template' in data and not IVirtualCompute.providedBy(self.context):
             del data['template']
 
-        if 'owner' in data:
-            del data['owner']
-
         def filter_readonly_properties(pair):
             k, v = pair
-            return k not in ('ipv4_address', 'ipv6_address', 'nicknames', 'effective_state', 'templates')
+            return k not in ('ipv4_address', 'ipv6_address', 'nicknames', 'effective_state', 'templates',
+                             'license_activated', 'owner')
 
         data = dict(filter(filter_readonly_properties, data.iteritems()))
         return data
+
+    def render_PUT(self, request):
+        import logging; log = logging.getLogger(__name__)
+        r = super(ComputeView, self).render_PUT(self, request)
+        log.debug('license_activated=%s' % self.context.license_activated)
+        return r
