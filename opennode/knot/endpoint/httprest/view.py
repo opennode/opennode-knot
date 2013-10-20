@@ -184,9 +184,3 @@ class ComputeView(ContainerView):
 
         data = dict(filter(filter_readonly_properties, data.iteritems()))
         return data
-
-    def render_PUT(self, request):
-        import logging; log = logging.getLogger(__name__)
-        r = super(ComputeView, self).render_PUT(self, request)
-        log.debug('license_activated=%s' % self.context.license_activated)
-        return r
