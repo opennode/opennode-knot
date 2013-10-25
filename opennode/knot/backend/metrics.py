@@ -156,6 +156,7 @@ class VirtualComputeMetricGatherer(Adapter):
             log.msg("%s: error gathering VM metrics" % name, system='metrics', logLevel=logging.ERROR)
             if get_config().getboolean('debug', 'print_exceptions'):
                 log.err(system='metrics')
+            return
 
         if not metrics:
             log.msg('%s: no VM metrics received!' % name, system='metrics', logLevel=logging.WARNING)
