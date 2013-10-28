@@ -19,6 +19,7 @@ from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.stream import Metrics
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
+from opennode.oms.schema import _isdotted
 
 
 class MachinesView(ContainerView):
@@ -76,6 +77,12 @@ class VirtualizationContainerView(ContainerView, PreValidateHookMixin):
         for k, v in data.iteritems():
             if type(v) is bool:
                 data[k] = str(v)
+
+        # HACK: prevent invalid hostnames
+        data['hostname'] = data['hostname'] if _isdotted(data['hostname']) else None
+        if not data['hostname']:
+            return {'success': False,
+                    'errors': [{'id': 'hostname', 'msg': 'Invalid hostname supplied!'}]}
 
         form = RawDataValidatingFactory(data, Compute, marker=IVirtualCompute)
 
