@@ -17,9 +17,9 @@ from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.model.model.actions import ActionsContainer
 from opennode.oms.model.model.hooks import PreValidateHookMixin
 from opennode.oms.model.model.stream import Metrics
+from opennode.oms.model.schema import _isdotted
 from opennode.oms.util import JsonSetEncoder
 from opennode.oms.zodb import db
-from opennode.oms.schema import _isdotted
 
 
 class MachinesView(ContainerView):
