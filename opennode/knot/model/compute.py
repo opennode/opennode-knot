@@ -21,7 +21,7 @@ from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import IMarkable, IDisplayName
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
-from opennode.oms.model.schema import Path
+from opennode.oms.model.schema import Path, RestrictedHostname
 from opennode.oms.security.directives import permissions
 from opennode.oms.security.authentication import sudo
 from opennode.oms.util import adapter_value
@@ -44,7 +44,7 @@ class ISaltInstalled(IManageable):
 
 class ICompute(Interface):
     # Network parameters
-    hostname = schema.TextLine(title=u"Host name", min_length=1)
+    hostname = RestrictedHostname(title=u"Host name", min_length=1)
     mac_address = schema.TextLine(title=u'MAC address', min_length=17, max_length=23, required=False,
                                   description=u'MAC address, formatted as a set of colon-separated '
                                   'hexadecimal octet values')
