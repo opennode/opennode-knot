@@ -54,10 +54,10 @@ def test_operate_vm():
 def test_activate_compute():
     shutil.copy(os.path.join(opennode.knot.tests.__path__[0], 'u1.xml'), '/tmp/salt_vm_test_state.xml')
 
-    compute = make_compute(hostname=u'vm1', state=u'inactive')
+    compute = make_compute(hostname='vm1', state=u'inactive')
     compute.__name__ = '4dea22b31d52d8f32516782e98ab3fa0'
 
-    dom0 = make_compute(hostname=u'localhost', state=u'active')
+    dom0 = make_compute(hostname='localhost', state=u'active')
     dom0.__name__ = 'f907e3553a8c4cc5a6db1790b65f93f8'
     alsoProvides(dom0, ISaltInstalled)
 
@@ -68,7 +68,9 @@ def test_activate_compute():
     assert compute.state == 'inactive'
     compute.state = u'inactive'
 
-    RawDataApplier({'state': u'active'}, compute).apply()
+    form = RawDataApplier({'state': u'active'}, compute)
+    print form.errors
+    form.apply()
 
     root = ElementTree.parse('/tmp/salt_vm_test_state.xml')
     for node in root.findall('domain'):
