@@ -112,7 +112,7 @@ class ComputeAction(Action, PreValidateHookMixin):
     def lock_keys(self):
         """ Returns list of object-related 'hashes' to lock against. Overload in derived classes
         to add more objects """
-        return (canonical_path(self.context),)
+        return [canonical_path(self.context),]
 
     def locked(self):
         return any(key in self._lock_registry for key in self.lock_keys)
@@ -733,9 +733,9 @@ class UndeployAction(VComputeAction):
 
     @property
     def lock_keys(self):
-        return (canonical_path(self.context),
+        return [canonical_path(self.context),
                 canonical_path(self.context.__parent__),
-                canonical_path(self.context.__parent__.__parent__))
+                canonical_path(self.context.__parent__.__parent__)]
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
