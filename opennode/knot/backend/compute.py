@@ -860,9 +860,9 @@ class MigrateAction(VComputeAction):
 
     @property
     def lock_keys(self):
-        return (canonical_path(self.context),
+        return [canonical_path(self.context),
                 canonical_path(self.context.__parent__),
-                canonical_path(self.context.__parent__.__parent__)) + self._additional_keys
+                canonical_path(self.context.__parent__.__parent__)] + self._additional_keys
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
