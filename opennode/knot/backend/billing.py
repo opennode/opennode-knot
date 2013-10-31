@@ -79,7 +79,8 @@ class SqlDBUserStatsLogger(GlobalUtility):
                                          stats_data['memory_total'] / 1024.0,
                                          stats_data['vm_count'],
                                          stats_data['credit']))
-            log.debug('writing stats for %s is done!' % logdata['user'])
+
+            log.debug('writing stats for %(user)s is done!', logdata)
         except Exception:
             log.error('DB error', exc_info=sys.exc_info())
 
