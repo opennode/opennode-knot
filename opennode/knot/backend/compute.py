@@ -897,7 +897,7 @@ class MigrateAction(VComputeAction):
         log.msg('Initiating migration for %s to %s' % (name, destination_hostname), system='migrate')
 
         try:
-            if not (yield self._check_vm_pre(name, destination_hostname, destination_vms)):
+            if not (yield self._check_vm_pre(cmd, name, destination_hostname, destination_vms)):
                 return
 
             source_submitter = IVirtualizationContainerSubmitter(source_vms)
