@@ -172,21 +172,9 @@ class IPAddressStorable(netaddr.IPAddress):
     implements(IAttributeAnnotatable)
     __transient__ = False
 
-    _ctime = None
-    _mtime = None
-    _mtime_blacklist = ('inherit_permissions', 'owner', 'features', 'oid', 'metadata')
-
-    @property
-    def ctime(self):
-        if self._ctime is None:
-            self._ctime = time.time()
-        return self._ctime
-
     @property
     def mtime(self):
-        if self._mtime is None:
-            self._mtime = time.time()
-        return self._mtime
+        return self._p_mtime
 
     def __init__(self, parent, *args, **kw):
         self._ctime = self._mtime = time.time()
@@ -268,7 +256,9 @@ class IPv4Pool(Container):
         assert int(self.minimum) <= int(self.maximum),\
                 'Minimum IP value must be smaller or equal to max IP value'
 
+
 provideSubscriptionAdapter(ActionsContainerExtension, adapts=(IPv4Pool, ))
+
 
 class IPv4Pools(Container):
     __contains__ = IPv4Pool
