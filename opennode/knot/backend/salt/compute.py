@@ -6,9 +6,7 @@ from twisted.internet import defer
 from twisted.python import log
 
 from opennode.knot.backend.compute import format_error
-from opennode.knot.backend.compute import register_machine
-from opennode.knot.backend.sync import get_machine_by_uuid
-from opennode.knot.backend.syncaction import SyncAction
+from opennode.knot.backend.sync import SyncDaemonProcess
 from opennode.knot.model.compute import ICompute
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.knot.model.machines import IIncomingMachineRequest
@@ -17,6 +15,7 @@ from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.events import IModelDeletedEvent
+from opennode.oms.model.model.proc import Proc
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
@@ -61,14 +60,24 @@ class AcceptHostRequestAction(BaseHostRequestAction):
     _action = 'accept'
     _remote_option = '-a'
 
+    @classmethod
+    def find_daemon_in_proc(cls, daemontype):
+        for pid, process in Proc().tasks.iteritems():
+            if type(process.subject) is daemontype:
+                return process.subject
+
     @defer.inlineCallbacks
     def execute(self, cmd, args):
         yield BaseHostRequestAction.execute(self, cmd, args)
-        hostname = yield db.get(self.context, 'hostname')
-        # Acceptance of a new HN should trigger its syncing
-        uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
-        compute = yield get_machine_by_uuid(uuid)
-        yield SyncAction(compute).execute(DetachedProtocol(), object())
+
+        cmd.write('Syncing...\n')
+        syncdaemon = self.find_daemon_in_proc(SyncDaemonProcess)
+        oldpaused = syncdaemon.paused
+        try:
+            syncdaemon.paused = True
+            yield syncdaemon.sync()
+        finally:
+            syncdaemon.paused = oldpaused
 
 
 class RejectHostRequestAction(BaseHostRequestAction):
