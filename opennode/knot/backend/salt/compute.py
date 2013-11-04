@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import argparse
 import subprocess
 
 from grokcore.component import context, subscribe, baseclass
@@ -72,7 +73,7 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         log.msg('Host %s accepted. Syncing...\n' % hostname, system='action-accept')
         syncaction = SyncAction(compute)
         syncaction._do_not_enqueue = False
-        args = object()
+        args = argparse.Namespace()
         args.full = True
         yield syncaction.execute(DetachedProtocol(), args)
 
