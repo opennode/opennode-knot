@@ -72,7 +72,9 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         log.msg('Host %s accepted. Syncing...\n' % hostname, system='action-accept')
         syncaction = SyncAction(compute)
         syncaction._do_not_enqueue = False
-        yield syncaction.execute(DetachedProtocol(), object())
+        args = object()
+        args.full = True
+        yield syncaction.execute(DetachedProtocol(), args)
 
 
 class RejectHostRequestAction(BaseHostRequestAction):
