@@ -18,6 +18,7 @@ from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.events import IModelDeletedEvent
+from opennode.oms.util import async_sleep
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
@@ -69,8 +70,10 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         # Acceptance of a new HN should trigger its syncing
         uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
         compute = yield get_machine_by_uuid(uuid)
-        cmd.write('Host %s accepted. Syncing...\n' % hostname)
-        log.msg('Host %s accepted. Syncing...\n' % hostname, system='action-accept')
+        cmd.write('Host %s accepted. Syncing shortly...\n' % hostname)
+        log.msg('Host %s accepted. Syncing in 5 seconds...\n' % hostname, system='action-accept')
+        yield async_sleep(5)
+        log.msg('Syncing NOW...\n' % hostname, system='action-accept')
         syncaction = SyncAction(compute)
         syncaction._do_not_enqueue = False
         args = argparse.Namespace()
