@@ -71,9 +71,9 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
         compute = yield get_machine_by_uuid(uuid)
         cmd.write('Host %s accepted. Syncing shortly...\n' % hostname)
-        log.msg('Host %s accepted. Syncing in 5 seconds...\n' % hostname, system='action-accept')
+        log.msg('Host %s accepted. Syncing in 5 seconds...' % hostname, system='action-accept')
         yield async_sleep(5)
-        log.msg('Syncing NOW...\n' % hostname, system='action-accept')
+        log.msg('Syncing NOW...', system='action-accept')
         syncaction = SyncAction(compute)
         syncaction._do_not_enqueue = False
         args = argparse.Namespace()
