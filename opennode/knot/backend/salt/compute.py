@@ -68,6 +68,8 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         # Acceptance of a new HN should trigger its syncing
         uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
         compute = yield get_machine_by_uuid(uuid)
+        cmd.write('Host %s accepted. Syncing...\n' % hostname)
+        log.msg('Host %s accepted. Syncing...\n' % hostname, system='action-accept')
         syncaction = SyncAction(compute)
         syncaction._do_not_enqueue = False
         yield syncaction.execute(DetachedProtocol(), object())
