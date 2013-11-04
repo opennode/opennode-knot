@@ -74,8 +74,8 @@ class SyncAction(ComputeAction):
     def _execute(self, cmd, args):
         self._full = getattr(args, 'full', False)
 
-        log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
-                 system='sync-action')
+        log.msg('Executing SyncAction on %s (%s) (Full: %s)' % (self.context, canonical_path(self.context),
+                                                          self._full), system='sync-action')
 
         if any_stack_installed(self.context):
             yield self.sync_agent_version(self._full)
