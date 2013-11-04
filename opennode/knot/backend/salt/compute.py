@@ -69,10 +69,11 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         hostname = yield db.get(self.context, 'hostname')
         # Acceptance of a new HN should trigger its syncing
         uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
-        compute = yield get_machine_by_uuid(uuid)
         cmd.write('Host %s accepted. Syncing shortly...\n' % hostname)
         log.msg('Host %s accepted. Syncing in 5 seconds...' % hostname, system='action-accept')
         yield async_sleep(5)
+        compute = yield get_machine_by_uuid(uuid)
+        assert compute is not None, 'Machine not found after accept: %s' % uuid
         log.msg('Syncing NOW...', system='action-accept')
         syncaction = SyncAction(compute)
         syncaction._do_not_enqueue = False
