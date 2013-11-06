@@ -1,6 +1,5 @@
 import logging
 import netaddr
-import argparse
 
 from twisted.internet import defer
 from twisted.python import log
@@ -10,7 +9,7 @@ from zope.component import getUtility
 from opennode.knot.backend.compute import any_stack_installed
 from opennode.knot.backend.compute import ComputeAction
 from opennode.knot.backend.operation import IAgentVersion
-from opennode.knot.backend.operation import IListVMS
+from opennode.knot.backend.operation import IInfoVM
 from opennode.knot.backend.operation import IGetComputeInfo
 from opennode.knot.backend.operation import IGetVirtualizationContainers
 from opennode.knot.backend.operation import IGetLocalTemplates
@@ -80,19 +79,29 @@ class SyncAction(ComputeAction):
         if any_stack_installed(self.context):
             yield self.sync_agent_version(self._full)
             yield self.sync_hw(self._full)
-            yield self.ensure_vms(self._full)
+            try:
+                yield self.ensure_vms(self._full)
+            except Exception:
+                log.err(system='sync-action')
+
             if self._full:
-                yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
+                try:
+                    yield SyncTemplatesAction(self.context)._execute(DetachedProtocol(), object())
+                except Exception:
+                    log.err(system='sync-action')
         else:
             log.msg('No stacks installed on %s: %s' % (self.context, self.context.features))
 
-        default = yield self.default_console()
-        yield self.sync_consoles()
+        try:
+            default = yield self.default_console()
+            yield self.sync_consoles()
 
-        if IVirtualCompute.providedBy(self.context):
-            yield self._sync_virtual()
+            if IVirtualCompute.providedBy(self.context):
+                yield self._sync_virtual()
 
-        yield self._create_default_console(default)
+            yield self._create_default_console(default)
+        except Exception:
+            log.err(system='sync-action')
 
         @db.transact
         def set_additional_keys():
@@ -101,6 +110,7 @@ class SyncAction(ComputeAction):
                 self._additional_keys = (canonical_path(vms),)
 
         yield set_additional_keys()
+
         dl = yield self.reacquire()
         if dl is not None:
             return
@@ -206,13 +216,11 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def _sync_virtual(self):
         parent = yield db.get(self.context, '__parent__')
-        name = yield db.get(self.context, '__name__')
+        uuid = yield db.get(self.context, '__name__')
         submitter = IVirtualizationContainerSubmitter(parent)
-        vmlist = yield submitter.submit(IListVMS)
-        for vm in vmlist:
-            if vm['uuid'] == name:
-                yield self.sync_owner(vm)
-                yield self._sync_vm(vm)
+        vm = yield submitter.submit(IInfoVM, uuid)
+        yield self.sync_owner(vm)
+        yield self._sync_vm(vm)
 
     @db.transact
     def _sync_vm(self, vm):
@@ -332,9 +340,15 @@ class SyncAction(ComputeAction):
             res[u'total'] = sum([0.0] + res.values())
             return res
 
-        routes = yield IGetRoutes(self.context).run() if full else []
+        try:
+            routes = yield IGetRoutes(self.context).run() if full else []
+        except Exception:
+            routes = []
 
-        yield self._sync_hw(info, disk_info('total'), disk_info('used'), routes, uptime)
+        try:
+            yield self._sync_hw(info, disk_info('total'), disk_info('used'), routes, uptime)
+        except Exception:
+            log.err(system='sync-action')
 
     @db.transact
     def _sync_hw(self, info, disk_space, disk_usage, routes, uptime):
@@ -391,6 +405,8 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def ensure_vms(self, full):
+        """ Ensures that current HN model has all virtualization container objects """
+
         if (not any_stack_installed(self.context) or
             # if not full sync and there are virtualization containers available
             (not full and len(filter(lambda n: 'vms' in n, self.context.listnames())) > 0)):
@@ -426,9 +442,12 @@ class SyncAction(ComputeAction):
     @defer.inlineCallbacks
     def sync_vms(self):
         for vms in self.context.listcontent():
-            if not IVirtualizationContainer.providedBy(vms):
-                continue
-            yield SyncVmsAction(vms)._execute(DetachedProtocol(), object())
+            try:
+                if not IVirtualizationContainer.providedBy(vms):
+                    continue
+                yield SyncVmsAction(vms)._execute(DetachedProtocol(), object())
+            except Exception:
+                log.err(system='sync-action')
 
 
 class SyncTemplatesAction(ComputeAction):
