@@ -72,11 +72,10 @@ class SyncAction(ComputeAction):
 
     @defer.inlineCallbacks
     def _execute(self, cmd, args):
-        # XXX for some strange reason args is object()
-        if type(args) == argparse.Namespace:
-            self._full = args.full
-        log.msg('Executing SyncAction on %s (%s)' % (self.context, canonical_path(self.context)),
-                 system='sync-action')
+        self._full = getattr(args, 'full', False)
+
+        log.msg('Executing SyncAction on %s (%s) (Full: %s)' % (self.context, canonical_path(self.context),
+                                                          self._full), system='sync-action')
 
         if any_stack_installed(self.context):
             yield self.sync_agent_version(self._full)

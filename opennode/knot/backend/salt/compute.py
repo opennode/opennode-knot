@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import argparse
 import subprocess
 
 from grokcore.component import context, subscribe, baseclass
@@ -17,6 +18,7 @@ from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.events import IModelDeletedEvent
+from opennode.oms.util import async_sleep
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
 
@@ -67,8 +69,17 @@ class AcceptHostRequestAction(BaseHostRequestAction):
         hostname = yield db.get(self.context, 'hostname')
         # Acceptance of a new HN should trigger its syncing
         uuid = yield register_machine(hostname, mgt_stack=ISaltInstalled)
+        cmd.write('Host %s accepted. Syncing shortly...\n' % hostname)
+        log.msg('Host %s accepted. Syncing in 5 seconds...' % hostname, system='action-accept')
+        yield async_sleep(5)
         compute = yield get_machine_by_uuid(uuid)
-        yield SyncAction(compute).execute(DetachedProtocol(), object())
+        assert compute is not None, 'Machine not found after accept: %s' % uuid
+        log.msg('Syncing NOW...', system='action-accept')
+        syncaction = SyncAction(compute)
+        syncaction._do_not_enqueue = False
+        args = argparse.Namespace()
+        args.full = True
+        yield syncaction.execute(DetachedProtocol(), args)
 
 
 class RejectHostRequestAction(BaseHostRequestAction):
