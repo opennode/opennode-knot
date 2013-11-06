@@ -77,8 +77,13 @@ class SyncAction(ComputeAction):
                                                           self._full), system='sync-action')
 
         if any_stack_installed(self.context):
-            yield self.sync_agent_version(self._full)
+            try:
+                yield self.sync_agent_version(self._full)
+            except OperationRemoteError:
+                log.err(system='sync-action')
+
             yield self.sync_hw(self._full)
+
             try:
                 yield self.ensure_vms(self._full)
             except Exception:
