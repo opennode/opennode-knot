@@ -832,8 +832,7 @@ class MigrateAction(VComputeAction):
     def _check_vm_pre(self, cmd, name, destination_hostname, destination_vms):
         try:
             yield self._get_vm(destination_vms, name)
-            self._action_log(cmd,
-                             'Failed migration of %s to %s: destination already contains this VM'
+            self._action_log(cmd, 'Failed migration of %s to %s: destination already contains this VM'
                              % (name, destination_hostname))
             defer.returnValue(False)
         except OperationRemoteError:
