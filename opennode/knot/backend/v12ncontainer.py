@@ -63,7 +63,7 @@ class VirtualizationContainerSubmitter(Adapter):
 
 
 class ListVirtualizationContainerAction(Action):
-    """Lists the content of a virtualizationcontaineraction.
+    """Lists the content of a virtualizationcontainer.
     Usually the zodb will be in sync, but it can be useful to see real time info (perhaps just for test)."""
 
     context(IVirtualizationContainer)
