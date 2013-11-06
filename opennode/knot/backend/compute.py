@@ -457,7 +457,8 @@ class AllocateAction(ComputeAction):
             @db.transact
             def set_additional_keys():
                 self._additional_keys = [canonical_path(best), canonical_path(bestvmscontainer)]
-                yield set_additional_keys()
+
+            yield set_additional_keys()
 
             yield self.reacquire_until_clear()
 
@@ -883,6 +884,7 @@ class MigrateAction(VComputeAction):
         @db.transact
         def set_additional_keys():
             self._additional_keys = [canonical_path(destination_vms), canonical_path(destination)]
+
         yield set_additional_keys()
 
         yield self.reacquire_until_clear()
