@@ -99,15 +99,25 @@ class SyncDaemonProcess(DaemonProcess):
     @defer.inlineCallbacks
     def sync(self):
         log.msg('Synchronizing system users', system='sync')
-        yield self.gather_users()
+        try:
+            yield self.gather_users()
+        except Exception:
+            log.err(system='sync')
+
         log.msg('Synchronizing machines: %s' % (yield get_manageable_machine_hostnames()), system='sync')
         yield self.gather_machines()
+
         log.msg('Synchronizing vms for hangar', system='sync')
         yield self.gather_vms_for_hangar()
-        log.msg('Executing SyncActions w/ ping tests', system='sync')
-        yield self.execute_ping_tests()
-        log.msg('Synchronizing IP pools', system='sync')
-        yield self.gather_ippools()
+
+        try:
+            log.msg('Executing SyncActions w/ ping tests', system='sync')
+            yield self.execute_ping_tests()
+            log.msg('Synchronizing IP pools', system='sync')
+            yield self.gather_ippools()
+        except Exception:
+            log.err(system='sync')
+
         log.msg('Synchronizing user VM statistics', system='sync')
         yield self.gather_user_vm_stats()
 
@@ -138,7 +148,11 @@ class SyncDaemonProcess(DaemonProcess):
                             home[pobj.id].uid = pobj.uid
                         if pobj.groups != home[pobj.id].groups:
                             home[pobj.id].groups = pobj.groups
-        yield get_users()
+
+        try:
+            yield get_users()
+        except Exception:
+            log.err(system='sync')
 
     @defer.inlineCallbacks
     def gather_user_vm_stats(self):

@@ -17,7 +17,7 @@ import threading
 from opennode.knot.backend import subprocess
 from opennode.knot.backend.operation import IDeployVM
 from opennode.knot.backend.operation import IDestroyVM
-from opennode.knot.backend.operation import IListVMS
+from opennode.knot.backend.operation import IInfoVM
 from opennode.knot.backend.operation import IMigrateVM
 from opennode.knot.backend.operation import IRebootVM
 from opennode.knot.backend.operation import IResumeVM
@@ -457,7 +457,8 @@ class AllocateAction(ComputeAction):
             @db.transact
             def set_additional_keys():
                 self._additional_keys = [canonical_path(best), canonical_path(bestvmscontainer)]
-                yield set_additional_keys()
+
+            yield set_additional_keys()
 
             yield self.reacquire_until_clear()
 
@@ -635,21 +636,21 @@ class DeployAction(VComputeAction):
             raise e
 
     @defer.inlineCallbacks
-    def _get_vmlist(self, destination_vms):
+    def _get_vm(self, destination_vms, uuid):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
-        vmlist = yield dest_submitter.submit(IListVMS)
-        defer.returnValue(vmlist)
+        vm = yield dest_submitter.submit(IInfoVM, uuid)
+        defer.returnValue(vm)
 
     @defer.inlineCallbacks
     def _check_vm_post(self, cmd, name, destination_hostname, destination_vms):
-        vmlist = yield self._get_vmlist(destination_vms)
-
-        if not vmlist or (name not in map(lambda x: x['uuid'], vmlist)):
+        try:
+            yield self._get_vm(destination_vms, name)
+        except OperationRemoteError:
             self._action_log(cmd, 'Failed deployment of %s to %s: '
                              'VM not found in destination after deployment' % (name, destination_hostname))
             defer.returnValue(False)
-
-        defer.returnValue(True)
+        else:
+            defer.returnValue(True)
 
 
 class PreDeployHookKVM(GlobalUtility):
@@ -822,39 +823,31 @@ class MigrateAction(VComputeAction):
         return parser
 
     @defer.inlineCallbacks
-    def _get_vmlist(self, destination_vms):
+    def _get_vm(self, destination_vms, uuid):
         dest_submitter = IVirtualizationContainerSubmitter(destination_vms)
-        vmlist = yield dest_submitter.submit(IListVMS)
+        vmlist = yield dest_submitter.submit(IInfoVM, uuid)
         defer.returnValue(vmlist)
 
     @defer.inlineCallbacks
     def _check_vm_pre(self, cmd, name, destination_hostname, destination_vms):
-        vmlist = yield self._get_vmlist(destination_vms)
-
-        if (name in map(lambda x: x['uuid'], vmlist)):
-            self._action_log(cmd,
-                             'Failed migration of %s to %s: destination already contains this VM'
+        try:
+            yield self._get_vm(destination_vms, name)
+            self._action_log(cmd, 'Failed migration of %s to %s: destination already contains this VM'
                              % (name, destination_hostname))
             defer.returnValue(False)
-
-        if ((yield db.get(self.context, 'ctid')) in map(lambda x: x.get('ctid'), vmlist)):
-            self._action_log(cmd,
-                             'Failed migration of %s to %s: destination container ID conflict'
-                             % (name, destination_hostname))
-            defer.renderValue(False)
-
-        defer.returnValue(True)
+        except OperationRemoteError:
+            defer.returnValue(True)
 
     @defer.inlineCallbacks
     def _check_vm_post(self, cmd, name, destination_hostname, destination_vms):
-        vmlist = yield self._get_vmlist(destination_vms)
-
-        if (name not in map(lambda x: x['uuid'], vmlist)):
+        try:
+            yield self._get_vm(destination_vms, name)
+        except OperationRemoteError:
             self._action_log(cmd, 'Failed migration of %s to %s: VM not found in destination after migration'
                              % (name, destination_hostname))
             defer.returnValue(False)
-
-        defer.returnValue(True)
+        else:
+            defer.returnValue(True)
 
     _additional_keys = []
 
@@ -890,6 +883,7 @@ class MigrateAction(VComputeAction):
         @db.transact
         def set_additional_keys():
             self._additional_keys = [canonical_path(destination_vms), canonical_path(destination)]
+
         yield set_additional_keys()
 
         yield self.reacquire_until_clear()
@@ -947,13 +941,13 @@ class InfoAction(VComputeAction):
 
         submitter = IVirtualizationContainerSubmitter(parent)
         try:
-            for vm in (yield submitter.submit(IListVMS)):
-                if vm['uuid'] == name:
-                    max_key_len = max(len(key) for key in vm)
-                    for key, value in vm.items():
-                        cmd.write("%s %s\n" % ((key + ':').ljust(max_key_len), value))
+            vm = yield submitter.submit(IInfoVM, name)
+            max_key_len = max(len(key) for key in vm)
+            for key, value in vm.items():
+                cmd.write("%s %s\n" % ((key + ':').ljust(max_key_len), value))
         except Exception as e:
             cmd.write("%s\n" % format_error(e))
+            log.err(system='action-info')
 
 
 class StartComputeAction(VComputeAction):

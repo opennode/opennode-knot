@@ -243,7 +243,8 @@ ACTIONS = {
     op.IAgentVersion: 'test.version',
     op.IInstallPkg: 'pkg.install',
     op.IGetOwner: 'onode.vm_get_owner',
-    op.ISetOwner: 'onode.vm_set_owner'
+    op.ISetOwner: 'onode.vm_set_owner',
+    op.IInfoVM: 'onode.vm_info_vm',
 }
 
 

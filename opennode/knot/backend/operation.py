@@ -67,7 +67,11 @@ class IUndeployVM(IJob):
 
 
 class IListVMS(IJob):
-    """List vms"""
+    """List virtualization container"""
+
+
+class IInfoVM(IJob):
+    """ Get VM info """
 
 
 class IStartVM(IJob):
