@@ -375,8 +375,7 @@ class Compute(Container):
 
     routes = property(get_routes, set_routes)
 
-    @property
-    def ipv4_address(self):
+    def get_ipv4_address(self):
         if 'interfaces' not in self._items:
             return self._ipv4_address
 
@@ -387,11 +386,16 @@ class Compute(Container):
             return unicode(primaries[0])
 
         # No interface has been marked as primary, so let's just pick one
-
         addresses = [i.ipv4_address for i in self._items['interfaces'] if i.ipv4_address]
         if not addresses:
             return self._ipv4_address
         return unicode(addresses[0])
+
+    def set_ipv4_address_fallback(self, value):
+        """ Sets the fallback value of the IP address """
+        self._ipv4_address = value
+
+    ipv4_address = property(get_ipv4_address, set_ipv4_address_fallback)
 
     def __repr__(self):
         return '<Compute %s>' % self.__name__
