@@ -7,25 +7,24 @@ from twisted.internet import defer
 from twisted.python import log
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
+from zope.schema.vocabulary import SimpleVocabulary, SimpleTerm
 from zope.security.proxy import removeSecurityProxy
 from zope.securitypolicy.interfaces import IPrincipalRoleManager
 from zope.securitypolicy.rolepermission import rolePermissionManager
 
-from opennode.oms.config import get_config
 from opennode.oms.endpoint.ssh.cmd.base import Cmd
 from opennode.oms.endpoint.ssh.cmd.directives import command
 from opennode.oms.endpoint.ssh.cmdline import ICmdArgumentsSyntax
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
-from opennode.oms.endpoint.ssh.cmd.security import effective_perms
 from opennode.oms.endpoint.ssh.cmd.security import require_admins_only
 from opennode.oms.endpoint.ssh.cmd.security import SetAclMixin
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import RawDataApplier
+from opennode.oms.model.form import RawDataValidatingFactory
 from opennode.oms.model.model.base import IContainer, IIncomplete
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.schema import model_to_dict
 from opennode.oms.model.traversal import canonical_path, traverse1
-from opennode.oms.security.checker import get_interaction
 from opennode.oms.security.principals import Group
 from opennode.oms.security.permissions import Role
 from opennode.oms.zodb import db
@@ -69,7 +68,6 @@ class StopAllVmsCmd(Cmd):
         log.msg('Stopping done. %s VMs of "%s" stopped' % (len(computes), args.u), system='stopallvms')
 
 
-
 class ExportMetadataCmd(Cmd, SetAclMixin):
     implements(ICmdArgumentsSyntax)
     command('importexport')
@@ -77,7 +75,12 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
     serialize_action_map = {'json': json.dumps, 'yaml': yaml.dump}
     deserialize_action_map = {'json': json.loads, 'yaml': yaml.load}
 
-    traverse_paths = (('/machines/', True), ('/ippools/', False), ('/templates/', False))
+    traverse_paths = (('/machines/', True), ('/ippools/', False), ('/templates/', False),
+                      ('/home/', False))
+
+    type_blacklist = ('IncomingMachines',
+                      'ByNameContainer',
+                      'ActionsContainer')
 
     def arguments(self):
         parser = VirtualConsoleArgumentParser()
@@ -113,45 +116,96 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
             pdata = data.get(path)
             if container and pdata:
                 self.write('Importing %s (%s)...\n' % (path, 'recursive' if recursive else 'non-recursive'))
-                self.traverse_level_set(data, container, args.attributes,
+                self.traverse_level_set(pdata, container, args.attributes,
                                         recursive=recursive, maxlevel=args.max_depth)
 
     @db.assert_transact
     def traverse_level_set(self, data, container, attrs, recursive=False, maxlevel=5, level=0):
+        def import_cls(module, name):
+            mod = __import__(module)
+            for comp in module.split('.')[1:]:
+                mod = getattr(mod, comp)
+            return getattr(mod, name)
+
         for name, di in data.iteritems():
+            self.write('%s%s\n' % (' ' * level, name))
             element = container[name]
-            self._do_set(di, element, attrs=attrs)
-            if IContainer.providedBy(element):
-                if recursive and level < maxlevel:
-                    chdata = di.get('children')
+
+            if di['__name__'] in self.type_blacklist:
+                continue
+
+            if not element:
+                self.write('%s%s\n' % ('  ' * level, di.keys()))
+                cls = import_cls(di['__module__'], di['__name__'])
+                if cls.__transient__:
+                    continue
+                element = self._do_create_or_set(di, cls, attrs=attrs)
+                container.add(element)
+            elif element:
+                if element.__transient__:
+                    continue
+                self._do_create_or_set(di, element, attrs=attrs)
+
+            if IContainer.providedBy(element) and recursive and level < maxlevel:
+                chdata = di.get('children')
+                if chdata is not None:
                     self.traverse_level_set(chdata, element, attrs,
                                             recursive=recursive,
                                             maxlevel=maxlevel,
                                             level=level + 1)
 
+    attr_blacklist = ('__module__',
+                      '__name__',
+                      'children',
+                      'ctime',
+                      'features',
+                      'module',
+                      'mtime',
+                      'name',
+                      'owner',
+                      'permissions',
+                      'tags',
+                      'type',)
+
     @db.assert_transact
-    def _do_set(self, data, obj, attrs=[]):
-        data_filtered = dict(filter(lambda (k, v): k not in ('children', 'permissions', 'tags'),
+    def _do_create_or_set(self, data, cls_or_obj, attrs=[]):
+        if 'features' in data:
+            feature_set = data['features']
+        else:
+            feature_set = set()
+
+        data_filtered = dict(filter(lambda (k, v): k not in self.attr_blacklist,
                                     data.iteritems()))
+
+        DoesNotExist = "<NOVALUE>"
+
+        if isinstance(cls_or_obj, type):
+            form = RawDataValidatingFactory(data_filtered, cls_or_obj)
+            errmsg = ('ERROR: %s while importing data for %s\n' %
+                      ([(attr, data_filtered.get(attr, DoesNotExist), err) for attr, err in form.errors],
+                       cls_or_obj))
+            assert not form.errors, errmsg
+            obj = form.create(ignore_readonly=True)
+        else:
+            obj = cls_or_obj
+            form = RawDataApplier(data_filtered, obj)
+            errmsg = ('ERROR: %s while importing data for %s\n' %
+                      ([(attr, data_filtered.get(attr, DoesNotExist), err) for attr, err in form.errors],
+                       obj))
+            assert not form.errors, errmsg
+            form.apply(ignore_readonly=True)
 
         if 'owner' in attrs:
             obj.__owner__ = data_filtered['owner']
 
-        form = RawDataApplier(data_filtered, obj)
+        obj.features = feature_set
 
-        if not form.errors:
-            form.apply()
-        else:
-            self.write('WARNING: %s while importing data for %s' % (form.errors, obj))
+        #item = data.get('permissions', [])
+        #clear = []
+        #self.write('%s%s\n' % ('  ', item))
+        #self.set_acl(obj, False, item.get('allow', []), item.get('deny', []), clear)
 
-        for item in data.get('permissions', []):
-            # TODO: implement clearing ACL items only found in current object
-            # Current implementation just adds missing allow/deny items, clears nothing
-            #cur_acl = self._do_cat_acl(obj)
-            #clear = list(set(cur_acl['allow']).difference(item['allow']))
-            #clear.expand(list(set(cur_acl['deny']).difference(item['deny'])))
-            clear = []
-            self.set_acl(obj, False, item['allow'], item['deny'], clear)
+        return obj
 
     @db.ro_transact
     def export_data(self, args):
@@ -215,8 +269,8 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
                 def grants(i):
                     return ','.join('@%s' % i[0] for i in rolePermissionManager.getPermissionsForRole(i)
                                     if i[0] != 'oms.nothing')
-                return (typ, principal, ''.join('%s{%s}' %
-                                                (Role.role_to_nick.get(i, '(%s)' % i), grants(i))
+                return (typ, principal, ''.join('%s' %
+                                                (Role.role_to_nick.get(i, '(%s)' % i))
                                                 for i in sorted(perms)))
 
             if principal in user_allow:
@@ -237,8 +291,9 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
         if 'owner' in attrs or not attrs:
             data['owner'] = obj.__owner__
 
-        if 'type' in attrs or not attrs:
-            data['type'] = type(removeSecurityProxy(obj)).__name__
+        cls = type(removeSecurityProxy(obj))
+        data['__name__'] = cls.__name__
+        data['__module__'] = cls.__module__
 
         if 'permissions' in attrs or not attrs:
             data['permissions'] = self._do_cat_acl(obj)
