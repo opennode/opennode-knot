@@ -19,6 +19,7 @@ from opennode.oms.model.form import alsoProvides
 from opennode.oms.model.model.actions import ActionsContainerExtension
 from opennode.oms.model.model.base import Container
 from opennode.oms.model.model.base import IMarkable, IDisplayName
+from opennode.oms.model.model.base import require_admins
 from opennode.oms.model.model.search import ModelTags
 from opennode.oms.model.model.stream import MetricsContainerExtension, IMetrics
 from opennode.oms.model.schema import Path, RestrictedHostname
@@ -181,7 +182,7 @@ class Compute(Container):
 
     permissions(dict(hostname=('read', 'modify'),
                      mac_addr=('read', 'modify'),
-                     ipv4_address=('read', 'modify'),
+                     ipv4_address=('read', 'zope.Security'),
                      ipv6_address=('read', 'modify'),
                      nameservers=('read', 'modify'),
                      dns_domains=('read', 'modify'),
@@ -391,6 +392,7 @@ class Compute(Container):
             return self._ipv4_address
         return unicode(addresses[0])
 
+    @require_admins
     def set_ipv4_address_fallback(self, value):
         """ Sets the fallback value of the IP address """
         self._ipv4_address = value

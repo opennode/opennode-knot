@@ -6,6 +6,7 @@ from opennode.knot.model.template import ITemplate
 
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.cmd.security import SetAclMixin
+from opennode.oms.endpoint.ssh.cmd.security import require_admins_only_action
 from opennode.oms.model.model.actions import Action, action
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.security.acl import NoSuchPermission
@@ -38,6 +39,7 @@ class SetGlobalTemplatePermissionsAction(Action, SetAclMixin):
 
         return parser
 
+    @require_admins_only_action
     @db.transact
     def execute(self, cmd, args):
         self.write = cmd.write
