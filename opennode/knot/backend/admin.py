@@ -7,6 +7,7 @@ from twisted.internet import defer
 from twisted.python import log
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
+from zope.schema.interfaces import WrongType, RequiredMissing
 from zope.security.proxy import removeSecurityProxy
 from zope.securitypolicy.interfaces import IPrincipalRoleManager
 from zope.securitypolicy.rolepermission import rolePermissionManager
@@ -20,9 +21,11 @@ from opennode.oms.endpoint.ssh.cmd.security import SetAclMixin
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
 from opennode.oms.model.form import RawDataApplier
 from opennode.oms.model.form import RawDataValidatingFactory
+from opennode.oms.model.form import NoSchemaFound
 from opennode.oms.model.model.base import IContainer, IIncomplete
 from opennode.oms.model.model.symlink import follow_symlinks
 from opennode.oms.model.schema import model_to_dict
+from opennode.oms.model.schema import get_schema_fields
 from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.security.principals import Group
 from opennode.oms.security.permissions import Role
@@ -104,7 +107,6 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
 
     @db.transact
     def import_data(self, args):
-
         with open(args.filename, 'r') as f:
             serialized = f.read()
             data = self.deserialize_action_map.get(args.format)(serialized)
@@ -129,44 +131,92 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
             self.write('%s%s\n' % (' ' * level, name))
             element = container[name]
 
-            if di['__name__'] in self.type_blacklist:
+            if di['__classname__'] in self.type_blacklist:
+                continue
+
+            obj = import_cls(di['__module__'], di['__classname__']) if not element else element
+
+            if obj.__transient__:
+                continue
+
+            cobj = self._do_create_or_set(di, obj, attrs=attrs,
+                                          marker=getattr(container, '__contains__', None))
+
+            if cobj is None:
                 continue
 
             if not element:
-                self.write('%s%s\n' % ('  ' * level, di.keys()))
-                cls = import_cls(di['__module__'], di['__name__'])
-                if cls.__transient__:
-                    continue
-                element = self._do_create_or_set(di, cls, attrs=attrs)
-                container.add(element)
-            elif element:
-                if element.__transient__:
-                    continue
-                self._do_create_or_set(di, element, attrs=attrs)
+                container.add(cobj)
 
-            if IContainer.providedBy(element) and recursive and level < maxlevel:
+            if IContainer.providedBy(cobj) and recursive and level < maxlevel:
                 chdata = di.get('children')
                 if chdata is not None:
-                    self.traverse_level_set(chdata, element, attrs,
+                    self.traverse_level_set(chdata, cobj, attrs,
                                             recursive=recursive,
                                             maxlevel=maxlevel,
                                             level=level + 1)
 
     attr_blacklist = ('__module__',
                       '__name__',
+                      '__classname__',
                       'children',
                       'ctime',
                       'features',
                       'module',
                       'mtime',
-                      'name',
                       'owner',
                       'permissions',
                       'tags',
                       'type',)
 
+    def apply_form(self, form_class, data, obj, action, marker=None):
+        DoesNotExist = "<NOVALUE>"
+        def format_error_message(errors):
+            return ('ERROR: %s while importing data for %s\n' %
+                    ([(attr, data.get(attr, DoesNotExist), err) for attr, err in errors],
+                     obj))
+
+        form = form_class(data, obj, marker=marker)
+
+        if form.errors and any(map(lambda (f, err): isinstance(err, NoSchemaFound), form.errors)):
+            self.write('WARNING: import of %s failed: no schema is defined\n' % (obj))
+            return
+
+        wrong_type_errors = filter(lambda (f, err): isinstance(err, WrongType) and
+                                   data.get(f, DoesNotExist) is None, form.errors)
+
+        fields = dict(map(lambda (f, t, i): (f, t), get_schema_fields(obj, marker=marker)))
+
+        # Attempt to fix wrong type errors by setting default values of the respective types
+        for field_name, err in wrong_type_errors:
+            self.write('Attempting to fix field "%s" of %s with a WrontType error...  ' % (field_name, obj))
+            try:
+                field = fields[field_name]
+
+                if isinstance(field._type, tuple):
+                    default = field._type[0]()
+                else:
+                    default = field._type()
+
+                data[field_name] = default
+            except ValueError:
+                self.write('Failed!\n')
+            else:
+                self.write('Done.\n')
+
+        # List missing required fields
+        missing_fields = filter(lambda (f, err): isinstance(err, RequiredMissing), form.errors)
+        for field_name, err in missing_fields:
+            self.write('Missing required field: %s %s in %s' % (obj, field_name, data.keys()))
+
+        # Force renewal of the validation
+        delattr(form, '_errors')
+
+        assert not form.errors, format_error_message(form.errors)
+        return getattr(form, action)(ignore_readonly=True)
+
     @db.assert_transact
-    def _do_create_or_set(self, data, cls_or_obj, attrs=[]):
+    def _do_create_or_set(self, data, obj, attrs=[], marker=None):
         if 'features' in data:
             feature_set = data['features']
         else:
@@ -175,26 +225,19 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
         data_filtered = dict(filter(lambda (k, v): k not in self.attr_blacklist,
                                     data.iteritems()))
 
-        DoesNotExist = "<NOVALUE>"
+        if isinstance(obj, type):
+            obj = self.apply_form(RawDataValidatingFactory, data_filtered, obj, 'create', marker=marker)
 
-        if isinstance(cls_or_obj, type):
-            form = RawDataValidatingFactory(data_filtered, cls_or_obj)
-            errmsg = ('ERROR: %s while importing data for %s\n' %
-                      ([(attr, data_filtered.get(attr, DoesNotExist), err) for attr, err in form.errors],
-                       cls_or_obj))
-            assert not form.errors, errmsg
-            obj = form.create(ignore_readonly=True)
+            if obj is None:
+                return
         else:
-            obj = cls_or_obj
-            form = RawDataApplier(data_filtered, obj)
-            errmsg = ('ERROR: %s while importing data for %s\n' %
-                      ([(attr, data_filtered.get(attr, DoesNotExist), err) for attr, err in form.errors],
-                       obj))
-            assert not form.errors, errmsg
-            form.apply(ignore_readonly=True)
+            self.apply_form(RawDataApplier, data_filtered, obj, 'apply', marker=marker)
+
+        if '__name__' in data:
+            obj.__name__ = data['__name__']
 
         if 'owner' in attrs:
-            obj.__owner__ = data_filtered['owner']
+            obj.__owner__ = data['owner']
 
         obj.features = feature_set
 
@@ -240,7 +283,7 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
                 if not data:
                     continue
 
-                container_data[data['name']] = data
+                container_data[data['__name__']] = data
 
         return container_data
 
@@ -284,13 +327,13 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
 
         data = dict((key, value) for key, value in items if obj and (key in attrs or not attrs))
 
-        data['name'] = obj.__name__
+        data['__name__'] = obj.__name__
 
         if 'owner' in attrs or not attrs:
             data['owner'] = obj.__owner__
 
         cls = type(removeSecurityProxy(obj))
-        data['__name__'] = cls.__name__
+        data['__classname__'] = cls.__name__
         data['__module__'] = cls.__module__
 
         if 'permissions' in attrs or not attrs:
