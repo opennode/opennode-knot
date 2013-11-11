@@ -84,6 +84,7 @@ class RemoteSaltKeyAdapter(BaseSaltKeyAdapter):
         data = eval(output) if output else {}
         return data.get(ktype)
 
+
 def getKeyAdapter():
     remote_salt_key_cmd = get_config().getstring('salt', 'remote_key_command', None)
     if remote_salt_key_cmd:
@@ -96,7 +97,7 @@ class IncomingMachinesSalt(BaseIncomingMachines):
     __name__ = 'salt'
 
     def _get(self):
-        return getKeyAdapter().getUnacceptedKeyNames()
+        return getKeyAdapter().getUnacceptedKeyNames() or []
 
 
 class IncomingMachinesSaltInjector(ContainerInjector):
@@ -107,7 +108,7 @@ class IncomingMachinesSaltInjector(ContainerInjector):
 class RegisteredMachinesSalt(object):
 
     def _get(self):
-        return getKeyAdapter().getAcceptedKeyNames()
+        return getKeyAdapter().getAcceptedKeyNames() or []
 
 
 class SaltKeyManager(GlobalUtility):
@@ -115,7 +116,7 @@ class SaltKeyManager(GlobalUtility):
     name('saltkeymanager')
 
     def get_accepted_machines(self):
-        return RegisteredMachinesSalt()._get()
+        return RegisteredMachinesSalt()._get() or []
 
     @defer.inlineCallbacks
     def import_machines(self, accepted):
