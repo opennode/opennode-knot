@@ -7,7 +7,6 @@ from twisted.internet import defer
 from twisted.python import log
 from zope.authentication.interfaces import IAuthentication
 from zope.component import getUtility
-from zope.schema.vocabulary import SimpleVocabulary, SimpleTerm
 from zope.security.proxy import removeSecurityProxy
 from zope.securitypolicy.interfaces import IPrincipalRoleManager
 from zope.securitypolicy.rolepermission import rolePermissionManager
@@ -31,7 +30,6 @@ from opennode.oms.zodb import db
 
 from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.backend.compute import ShutdownComputeAction
-#from opennode.knot.model.template import ITemplate
 
 
 class StopAllVmsCmd(Cmd):
