@@ -241,10 +241,9 @@ class ExportMetadataCmd(Cmd, SetAclMixin):
 
         obj.features = feature_set
 
-        #item = data.get('permissions', [])
-        #clear = []
-        #self.write('%s%s\n' % ('  ', item))
-        #self.set_acl(obj, False, item.get('allow', []), item.get('deny', []), clear)
+        item = data.get('permissions', [])
+        clear = []
+        self.set_acl(obj, False, item.get('allow', []), item.get('deny', []), clear)
 
         return obj
 
