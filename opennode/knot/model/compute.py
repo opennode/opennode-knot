@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+import logging
 
 from grokcore.component import context
 from grokcore.component import Adapter, implements
@@ -26,6 +27,9 @@ from opennode.oms.model.schema import Path, RestrictedHostname
 from opennode.oms.security.directives import permissions
 from opennode.oms.security.authentication import sudo
 from opennode.oms.util import adapter_value
+
+
+log = logging.getLogger(__name__)
 
 
 M = 10 ** 6
@@ -401,6 +405,10 @@ class Compute(Container):
 
     def __repr__(self):
         return '<Compute %s>' % self.__name__
+
+    def set_owner(self, principal):
+        super(Compute, self).set_owner(principal)
+        log.info('%s changed owner to: %s', self.__name__, principal)
 
 
 class ComputeTags(ModelTags):
