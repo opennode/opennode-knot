@@ -228,10 +228,6 @@ class SyncAction(ComputeAction):
         yield self._sync_vm(vm)
 
     @db.transact
-    def _sync_vm(self, vm):
-        return self.sync_vm(vm)
-
-    @db.transact
     def sync_owner(self, vm):
         self.sync_owner_transact(vm)
 
@@ -262,7 +258,11 @@ class SyncAction(ComputeAction):
                     compute.apply()
             else:
                 log.msg('User not found: "%s" while restoring owner for %s. '
-                            'Leaving as-is' % (vm['owner'], compute), system='sync')
+                        'Leaving as-is' % (vm['owner'], compute), system='sync')
+
+    @db.transact
+    def _sync_vm(self, vm):
+        return self.sync_vm(vm)
 
     @db.assert_transact
     def sync_vm(self, vm):
