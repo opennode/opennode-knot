@@ -81,6 +81,8 @@ class SyncVmsAction(ComputeAction):
                 new_compute = Symlink(existing_machine.__name__, existing_machine)
                 self.context._add(new_compute)
             else:
+                log.msg('Adding virtual compute %s...' % vm_uuid,
+                        system='v12n-sync', logLevel=logging.WARNING)
                 new_compute = Compute(unicode(remote_vm['name']), unicode(remote_vm['state']))
                 new_compute.__name__ = vm_uuid
                 new_compute.template = unicode(remote_vm['template'])
@@ -106,7 +108,7 @@ class SyncVmsAction(ComputeAction):
             self.context[vm_uuid].state = u'inactive'
 
             if get_config().getboolean('sync', 'delete_on_sync'):
-                log.msg("Deleting compute %s" % vm_uuid, system='v12n')
+                log.msg("Deleting compute %s" % vm_uuid, system='v12n-sync', logLevel=logging.WARNING)
                 compute = self.context[vm_uuid]
                 del self.context[vm_uuid]
                 handle(compute, ModelDeletedEvent(self.context))
