@@ -26,7 +26,8 @@ from opennode.knot.model.compute import IVirtualCompute
 from opennode.knot.model.console import TtyConsole, SshConsole, OpenVzConsole, VncConsole
 from opennode.knot.model.network import NetworkInterface, NetworkRoute
 from opennode.knot.model.template import Template, Templates
-from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer, VirtualizationContainer
+from opennode.knot.model.virtualizationcontainer import IVirtualizationContainer
+from opennode.knot.model.virtualizationcontainer import VirtualizationContainer
 
 from opennode.oms.endpoint.ssh.cmdline import VirtualConsoleArgumentParser
 from opennode.oms.endpoint.ssh.detached import DetachedProtocol
@@ -73,8 +74,9 @@ class SyncAction(ComputeAction):
     def _execute(self, cmd, args):
         self._full = getattr(args, 'full', False)
 
-        log.msg('Executing SyncAction on %s (%s) (Full: %s)' % (self.context, canonical_path(self.context),
-                                                          self._full), system='sync-action')
+        log.msg('Executing SyncAction on %s (%s) (Full: %s)' % (self.context,
+                                                                canonical_path(self.context),
+                                                                self._full), system='sync-action')
 
         if any_stack_installed(self.context):
             try:
