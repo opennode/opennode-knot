@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 from grokcore.component import Adapter, context, baseclass
 from twisted.internet import defer, reactor
-from twisted.python import log
 from zope.interface import classImplements
 
 import cPickle
@@ -16,6 +15,9 @@ from opennode.knot.backend import subprocess
 from opennode.knot.model.compute import ISaltInstalled
 from opennode.oms.config import get_config
 from opennode.oms.zodb import db
+
+
+log = logging.getLogger(__name__)
 
 
 class SaltMultiprocessingClient(multiprocessing.Process):
@@ -35,12 +37,11 @@ class SaltMultiprocessingClient(multiprocessing.Process):
             client = LocalClient(c_path=get_config().getstring('salt', 'master_config_path',
                                                                '/etc/salt/master'))
             try:
-                log.msg('Running action against "%s": %s args: %s' % (self.hostname, self.action, self.args),
-                        system='salt-local', logLevel=logging.DEBUG)
+                log.debug('Running action against "%s": %s args: %s',
+                          self.hostname, self.action, self.args)
                 data = client.cmd(self.hostname, self.action, arg=self.args)
             except SystemExit as e:
-                log.msg('Failed action %s on host: %s (%s)' % (self.action, self.hostname, e),
-                        system='salt-local')
+                log.error('Failed action %s on host: %s (%s)', self.action, self.hostname, e)
                 self.q.put(cPickle.dumps({}))
             else:
                 pdata = cPickle.dumps(data)
@@ -51,7 +52,8 @@ class SaltMultiprocessingClient(multiprocessing.Process):
 
 
 def dict_to_kwargs(arg):
-    return ['%s=%s' % (k, str(v) if not type(v) in (list, tuple) else '"%s"' % v) for k, v in arg.iteritems()]
+    return ['%s=%s' % (k, str(v) if not type(v) in (list, tuple) else '"%s"' % v)
+            for k, v in arg.iteritems()]
 
 
 class SimpleSaltExecutor(object):
@@ -67,14 +69,13 @@ class SimpleSaltExecutor(object):
     @defer.inlineCallbacks
     def run(self, *args, **kwargs):
         self.args = args
-        log.msg('Running action against "%s": %s args: %s timeout: %s' % (self.hostname, self.action,
-                                                                          self.args, self.timeout),
-                system='salt-simple', logLevel=logging.DEBUG)
+        log.debug('Running action against "%s": %s args: %s timeout: %s',
+                  self.hostname, self.action, self.args, self.timeout)
         cmd = get_config().getstring('salt', 'remote_command', 'salt')
 
         killhook = kwargs.get('__killhook')
         if killhook:
-            killhook.addCallback(lambda r: log.msg('"%s" to "%s" aborted' % (self.action, self.hostname)))
+            killhook.addCallback(lambda r: log.warning('"%s" to "%s" aborted', self.action, self.hostname))
 
         timeout = ('--timeout=%s' % self.timeout) if self.timeout is not None else None
 
@@ -88,15 +89,14 @@ class SimpleSaltExecutor(object):
                           ['--no-color', '--out=json', timeout, self.hostname, self.action] + args)),
             killhook=killhook)
 
-        log.msg('Action "%s" to "%s" finished.' % (self.action, self.hostname),
-                system='salt-simple', logLevel=logging.DEBUG)
+        log.debug('Action "%s" to "%s" finished.', self.action, self.hostname)
         data = json.loads(output) if output else {}
         rdata = self._handle_errors(data)
         defer.returnValue(rdata)
 
     def _handle_errors(self, data):
         if type(data) is not dict:
-            raise TypeError('data received from salt is not dict: %s (%s)' % (type(data).__name__, data))
+            raise TypeError('Data received from salt is not dict: %s (%s)' % (type(data).__name__, data))
 
         hostkey = self.hostname if len(data.keys()) != 1 else data.keys()[0]
 
@@ -109,10 +109,14 @@ class SimpleSaltExecutor(object):
             yield data.strip().startswith('Missing arguments')
 
         if type(data[hostkey]) in (str, unicode) and str(data[hostkey]).startswith('Traceback'):
+            log.error('raising OperationRemoteError due to an unhandled remote exception on %s:%s(%s):\n%s',
+                      hostkey, self.action, self.args, data[hostkey])
             raise op.OperationRemoteError(msg="Remote error on %s:%s(%s)" % (hostkey, self.action, self.args),
                                           remote_tb=data[hostkey])
 
         if type(data[hostkey]) in (str, unicode) and any(error_conditions(str(data[hostkey]))):
+            log.error('raising OperationRemoteError due to an incorrect action call %s:%s(%s):\n%s',
+                      hostkey, self.action, self.args, str(data[hostkey]))
             raise op.OperationRemoteError(msg="Remote error on %s %s(%s): %s" %
                                           (hostkey, self.action, self.args, str(data[hostkey])))
 
@@ -163,8 +167,7 @@ class AsynchronousSaltExecutor(SaltExecutor):
             self._fire_events(results)
             return
         elif self.starttime + self.hard_timeout < now:
-            log.msg("Timeout while executing '%s' @ '%s'" % (self.action, self.hostname),
-                    system='salt-async')
+            log.warning("Timeout while executing '%s' @ '%s'" % (self.action, self.hostname))
             self._destroy_client()
             self.deferred.errback(op.OperationRemoteError(msg='Timeout waiting for response from %s (%s)' %
                                                           (self.hostname, self.action)))
