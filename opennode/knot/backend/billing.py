@@ -42,6 +42,9 @@ class SqlDBUserStatsLogger(GlobalUtility):
         return self._db.runOperation(op)
 
     def config(self):
+        if not get_config().getboolean('stats', 'enabled', True):
+            return defer.succeed(None)
+
         self.db_backend = get_config().getstring('stats', 'db_backend', 'sqlite3')
         self.db_conn_param = get_config().getstring('stats', 'db_conn_param', ':memory:').split(';')
         self.db_conn_kw = eval(get_config().getstring('stats', 'db_conn_kw', '{}'))
@@ -63,6 +66,8 @@ class SqlDBUserStatsLogger(GlobalUtility):
         try:
             if not hasattr(self, '_db'):
                 yield self.config()
+                if getattr(self, 'db_backend', None) is None:
+                    return
 
             logdata = {'user': user if type(user) in (str, unicode) else user.id}
             logdata.update(stats_data)
