@@ -11,7 +11,7 @@ OMS_ADMIN_USER=opennode
 
 function uservm {
 	grep "\ $1\ " $VMLIST_LOCATION |awk '{print $4 }'|sed -r "s:\x1B\[[0-9;]*[mK]::g" | tr '\@' ' ' | \
-	xargs -i echo ssh -p 6022 opennode@localhost "chown -R $2 /computes/"{}
+	tr '\n' ' ' | xargs -i echo ssh -p 6022 opennode@localhost "chown -R $2 /computes/"{}
 }
 
 # prepare a new oms_passwd
@@ -24,7 +24,7 @@ grep -v None $PASSWD_FILE | awk -F  ":" '{print $1, $4}' |tr ' ' ':'  > $UID_TMP
 ssh -p 6022 $OMS_ADMIN_USER@localhost ls -l /computes > $VMLIST_LOCATION
 
 # get a list of VMs of a certain user (with old username), generate an ssh comand for chowining to a new one
-for i in `cat $UID_TMP_FILE`; do
+cat $UID_TMP_FILE | while read i; do
 	old=$(echo $i | cut -f1 -d:)
 	uid=$(echo $i | cut -f2 -d:)
 	echo -e "\t Changing ownership $old => $uid"
@@ -32,4 +32,4 @@ for i in `cat $UID_TMP_FILE`; do
 done
 
 # replace old passwd file with a new one
-#mv new_oms_passwd oms_passwd
+mv -b $TMP_PASSWD_FILE $PASSWD_FILE
