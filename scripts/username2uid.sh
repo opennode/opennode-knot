@@ -32,4 +32,4 @@ cat $UID_TMP_FILE | while read i; do
 done
 
 # replace old passwd file with a new one
-mv -b $TMP_PASSWD_FILE $PASSWD_FILE
+#mv -b $TMP_PASSWD_FILE $PASSWD_FILE
