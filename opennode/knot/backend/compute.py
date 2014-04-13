@@ -349,7 +349,8 @@ class VComputeAction(ComputeAction):
                 'owner': self.context.__owner__,
                 'disk': self.context.diskspace.get('root', 10000.0) / 1024.0,
                 'vcpu': self.context.num_cores,
-                'mac_address': getattr(self.context, 'mac_address', None)}
+                'mac_address': getattr(self.context, 'mac_address', None),
+                'cpu_limit': int(self.context.cpu_limit * 100) }
 
 
 class DiskspaceInvalidConfigError(KeyError):
@@ -530,6 +531,13 @@ class DeployAction(VComputeAction):
             if getattr(self.context, 'root_password', None) is not None:
                 self.context.root_password = None
 
+        @db.transact
+        def adjust_cpulmit():
+            """Set cpulimit to a configured percentage * cores"""
+            cores = getattr(self.context, 'num_cores', 1)
+            cpu_limit_factor = get_config().getfloat('vms', 'cpu_limit', 80)
+            self.context.cpu_limit = int(cores * cpu_limit_factor)
+
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
 
@@ -550,6 +558,7 @@ class DeployAction(VComputeAction):
             log.msg('Deploying %s to %s: issuing agent command' % (self.context, target), system='deploy')
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
+            yield adjust_cpulmit()
 
             name = yield db.get(self.context, '__name__')
             hostname = yield db.get(self.context, 'hostname')

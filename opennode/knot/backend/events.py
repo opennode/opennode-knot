@@ -169,8 +169,7 @@ def handle_virtual_compute_config_change_request(compute, event):
     if compute_type != 'openvz':
         return
 
-    update_param_whitelist = ['cpu_limit',
-                              'diskspace',
+    update_param_whitelist = ['diskspace',
                               'memory',
                               'num_cores',
                               'swap_size']
@@ -190,6 +189,13 @@ def handle_virtual_compute_config_change_request(compute, event):
     params_to_update = map(lambda (k, v): (k, param_modifier.get(k, lambda x: x)(v)), params_to_update)
     params_to_update = map(lambda (k, v): (k, unit_corrections_coeff.get(k) * v
                                             if k in unit_corrections_coeff else v), params_to_update)
+
+    cores_setting = filter(lambda(k, v): k == 'num_cores')
+    if len(cores_setting) == 1:
+        # adjust cpu_limit to follow the number of cores as well
+        params_to_update.append(('cpu_limit',
+                                 int(cores_setting[0][1] * get_config().getfloat('vms',
+                                                                           'cpu_limit', 50))))
 
     submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:
