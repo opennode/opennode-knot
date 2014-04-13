@@ -536,7 +536,9 @@ class DeployAction(VComputeAction):
             """Set cpulimit to a configured percentage * cores"""
             cores = getattr(self.context, 'num_cores', 1)
             cpu_limit_factor = get_config().getfloat('vms', 'cpu_limit', 80)
-            self.context.cpu_limit = int(cores * cpu_limit_factor)
+            cpu_limit = int(cores * cpu_limit_factor)
+            log.msg("Updating cpulimit to %s" % cpu_limit, system='deploy')
+            self.context.cpu_limit = cpu_limit
 
         target = (args if IVirtualizationContainer.providedBy(args)
                   else (yield db.get(self.context, '__parent__')))
