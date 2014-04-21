@@ -532,11 +532,11 @@ class DeployAction(VComputeAction):
                 self.context.root_password = None
 
         @db.transact
-        def adjust_cpulmit():
+        def adjust_cpulimit():
             """Set cpulimit to a configured percentage * cores"""
             cores = getattr(self.context, 'num_cores', 1)
             cpu_limit_factor = get_config().getfloat('vms', 'cpu_limit', 80)
-            cpu_limit = int(cores * cpu_limit_factor)
+            cpu_limit = cores * cpu_limit_factor / 100.0
             log.msg("Updating cpulimit to %s" % cpu_limit, system='deploy')
             self.context.cpu_limit = cpu_limit
 
@@ -560,7 +560,7 @@ class DeployAction(VComputeAction):
             log.msg('Deploying %s to %s: issuing agent command' % (self.context, target), system='deploy')
             res = yield IVirtualizationContainerSubmitter(target).submit(IDeployVM, vm_parameters)
             yield cleanup_root_password()
-            yield adjust_cpulmit()
+            yield adjust_cpulimit()
 
             name = yield db.get(self.context, '__name__')
             hostname = yield db.get(self.context, 'hostname')

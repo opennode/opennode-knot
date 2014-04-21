@@ -190,13 +190,18 @@ def handle_virtual_compute_config_change_request(compute, event):
     params_to_update = map(lambda (k, v): (k, unit_corrections_coeff.get(k) * v
                                             if k in unit_corrections_coeff else v), params_to_update)
 
-    cores_setting = filter(lambda(k, v): k == 'num_cores')
+    @db.transact
+    def update_vm_limits(cpu_limit):
+        c.cpu_limit = cpu_limit
+    
+    cores_setting = filter(lambda(k, v): k == 'num_cores', params_to_update)
     if len(cores_setting) == 1:
         # adjust cpu_limit to follow the number of cores as well
-        cpu_limit = int(cores_setting[0][1] * get_config().getfloat('vms', 'cpu_limit', 50))
+        cpu_limit = int(cores_setting[0][1] * get_config().getfloat('vms', 'cpu_limit', 80))
         log.msg("Updating cpulimit to %s" % cpu_limit, system='vm-configuration-update')
 
         params_to_update.append(('cpu_limit', cpu_limit))
+        yield update_vm_limits(cpu_limit)
 
     submitter = IVirtualizationContainerSubmitter((yield db.get(compute, '__parent__')))
     try:

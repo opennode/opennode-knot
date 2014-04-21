@@ -148,6 +148,7 @@ class ICompute(Interface):
 class IVirtualCompute(Interface):
     """A virtual compute."""
     template = Path(title=u"Template", base_path='../templates/by-name/', relative_to=Path.PARENT)
+    # 0 <= cpu_limit <= 1
     cpu_limit = schema.Float(title=u"CPU Limit", description=u"CPU usage limit", required=False)
     ctid = schema.Int(title=u'OpenVZ CTID', description=u'OpenVZ CTID (applies only to OpenVZ VMs)',
                       required=False, default=101)
