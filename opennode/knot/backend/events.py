@@ -1,3 +1,5 @@
+import logging
+
 from grokcore.component import subscribe
 from twisted.internet import defer
 from twisted.internet import task
@@ -30,6 +32,8 @@ from opennode.oms.model.traversal import canonical_path, traverse1
 from opennode.oms.security.authentication import sudo
 from opennode.oms.util import blocking_yield
 from opennode.oms.zodb import db
+
+logger = logging.getLogger(__name__)
 
 
 @defer.inlineCallbacks
@@ -192,7 +196,8 @@ def handle_virtual_compute_config_change_request(compute, event):
 
     @db.transact
     def update_vm_limits(cpu_limit):
-        c.cpu_limit = cpu_limit
+        logger.debug("Setting cpu_limit to %s, previous value %s" % (cpu_limit / 100.0, c.cpu_limit))
+        c.cpu_limit = cpu_limit / 100.0
     
     cores_setting = filter(lambda(k, v): k == 'num_cores', params_to_update)
     if len(cores_setting) == 1:
