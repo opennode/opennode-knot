@@ -16,7 +16,7 @@ setup(
         "setuptools",  # Redundant but removes a warning
         "opennode.oms.core",
         "ping==0.2",
-        "salt==0.16.0",
+        "salt==3003.3",
         "mysql-python"
         ],
 )
